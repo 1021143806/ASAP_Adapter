@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimController — 风淋门/区域管控 模拟器</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --card: #161b22;
+  --card-border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --success: #3fb950;
+  --warning: #d29922;
+  --danger: #f85149;
+  --door-closed: #8b949e;
+  --door-open: #3fb950;
+  --door-fault: #f85149;
+  --door-transition: #d29922;
+  --radius: 10px;
+  --shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 16px;
+}
+
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px; padding: 12px 20px;
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.header h1 { font-size: 18px; font-weight: 600; }
+.header-badge { font-size: 12px; color: var(--text-muted); }
+.badge-dot { display:inline-block; width:8px; height:8px; border-radius:50%;
+             background:var(--success); margin-right:6px; }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.full { grid-column: 1 / -1; }
+
+.card {
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);
+}
+.card-title {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 12px;
+}
+
+/* 门卡片 */
+.door-row { display: flex; gap: 12px; }
+.door-card {
+  flex: 1; padding: 14px; border-radius: 8px;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--card-border);
+  text-align: center; transition: all 0.3s;
+}
+.door-card .icon { font-size: 32px; margin-bottom: 6px; }
+.door-card .name { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+.door-card .state {
+  font-size: 15px; font-weight: 700;
+  padding: 4px 12px; border-radius: 6px;
+  display: inline-block; margin-bottom: 8px;
+}
+.door-card .actions { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; }
+
+.state-closed { color: var(--door-closed); background: rgba(139,148,158,0.1); }
+.state-open { color: var(--door-open); background: rgba(63,185,80,0.1); }
+.state-fault { color: var(--door-fault); background: rgba(248,81,73,0.1); }
+.state-opening, .state-closing { color: var(--warning); background: rgba(210,153,34,0.1);
+  animation: pulse 1s infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.tag-closed { border-left: 3px solid var(--door-closed); }
+.tag-open { border-left: 3px solid var(--door-open); }
+.tag-fault { border-left: 3px solid var(--door-fault); }
+.tag-opening, .tag-closing { border-left: 3px solid var(--warning); }
+
+/* 按钮 */
+.btn {
+  padding: 5px 10px; border-radius: 6px; border: 1px solid var(--card-border);
+  background: transparent; color: var(--text); font-size: 11px;
+  cursor: pointer; transition: all 0.15s; font-family: inherit;
+}
+.btn:hover { background: rgba(255,255,255,0.06); }
+.btn:active { transform: scale(0.95); }
+.btn-primary { border-color: var(--accent); color: var(--accent); }
+.btn-primary:hover { background: var(--accent); color: #fff; }
+.btn-success { border-color: var(--success); color: var(--success); }
+.btn-success:hover { background: var(--success); color: #fff; }
+.btn-danger { border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover { background: var(--danger); color: #fff; }
+.btn-warning { border-color: var(--warning); color: var(--warning); }
+.btn-warning:hover { background: var(--warning); color: #000; }
+.btn-sm { padding: 3px 7px; font-size: 10px; }
+
+/* 区域 */
+.zone-info { display: flex; flex-direction: column; gap: 8px; }
+.zone-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 10px; background: rgba(255,255,255,0.02);
+  border-radius: 6px; border: 1px solid var(--card-border);
+}
+.zone-row .label { font-size: 12px; color: var(--text-muted); }
+.zone-row .value { font-size: 13px; font-weight: 600; }
+
+/* 配置面板 */
+.config-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.config-row label { font-size: 12px; color: var(--text-muted); min-width: 80px; }
+.config-row input {
+  background: rgba(255,255,255,0.05); border: 1px solid var(--card-border);
+  border-radius: 4px; padding: 4px 8px; color: var(--text);
+  font-size: 12px; width: 60px;
+}
+.config-row input:focus { outline: none; border-color: var(--accent); }
+
+/* 日志 */
+.log-container {
+  height: 200px; overflow-y: auto; font-family: "SF Mono", "Menlo", monospace;
+  font-size: 11px; line-height: 1.6;
+  background: rgba(0,0,0,0.3); border-radius: 6px;
+  padding: 8px; border: 1px solid var(--card-border);
+}
+.log-entry { padding: 1px 0; border-bottom: 1px solid rgba(255,255,255,0.02); color: var(--text-muted); }
+.log-entry .t { color: rgba(255,255,255,0.25); margin-right: 6px; }
+.log-entry .cat { display: inline-block; width: 50px; font-weight: 600; }
+.log-entry .cat.control { color: var(--accent); }
+.log-entry .cat.query { color: var(--text-muted); }
+.log-entry .cat.transition { color: var(--success); }
+.log-entry .cat.zone { color: var(--warning); }
+.log-entry .cat.fault { color: var(--danger); }
+.log-entry .cat.manual { color: #d2a8ff; }
+.log-entry .cat.config { color: var(--text-muted); }
+.log-entry .cat.system { color: var(--warning); }
+
+/* Checkbox switch */
+.switch { position: relative; display: inline-block; width: 36px; height: 20px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+  background: #30363d; transition: 0.2s; border-radius: 20px;
+}
+.slider:before {
+  content: ""; position: absolute; height: 14px; width: 14px;
+  left: 3px; bottom: 3px; background: #fff; transition: 0.2s; border-radius: 50%;
+}
+input:checked + .slider { background: var(--accent); }
+input:checked + .slider:before { transform: translateX(16px); }
+
+@media (max-width: 700px) {
+  .grid { grid-template-columns: 1fr; }
+  .door-row { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>SimController</h1>
+    <div class="header-badge"><span class="badge-dot"></span>5112 · 风淋门+区域管控模拟器</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <span id="serverStatus" style="font-size:11px;color:var(--success);">运行中</span>
+    <button class="btn btn-danger btn-sm" onclick="resetSim()">重置</button>
+  </div>
+</div>
+
+<div class="grid">
+  <!-- 门状态 -->
+  <div class="card">
+    <div class="card-title">🚪 门状态</div>
+    <div class="door-row">
+      <div class="door-card tag-closed" id="outerCard">
+        <div class="icon">🚪</div>
+        <div class="name">外门 DOOR_OUTER</div>
+        <div class="state state-closed" id="outerStateText">关闭</div>
+        <div style="font-size:10px;color:var(--text-muted);">
+          AGV: <span id="outerAgv">-</span>
+          &nbsp;|&nbsp; 指令: <span id="outerCmd">0</span>
+        </div>
+        <div class="actions" style="margin-top:8px;">
+          <button class="btn btn-success btn-sm" onclick="setDoor('DOOR_OUTER','1')">开门</button>
+          <button class="btn btn-warning btn-sm" onclick="setDoor('DOOR_OUTER','0')">关门</button>
+          <button class="btn btn-danger btn-sm" onclick="injectFault('DOOR_OUTER')">故障</button>
+        </div>
+      </div>
+      <div class="door-card tag-closed" id="innerCard">
+        <div class="icon">🚪</div>
+        <div class="name">内门 DOOR_INNER</div>
+        <div class="state state-closed" id="innerStateText">关闭</div>
+        <div style="font-size:10px;color:var(--text-muted);">
+          AGV: <span id="innerAgv">-</span>
+          &nbsp;|&nbsp; 指令: <span id="innerCmd">0</span>
+        </div>
+        <div class="actions" style="margin-top:8px;">
+          <button class="btn btn-success btn-sm" onclick="setDoor('DOOR_INNER','1')">开门</button>
+          <button class="btn btn-warning btn-sm" onclick="setDoor('DOOR_INNER','0')">关门</button>
+          <button class="btn btn-danger btn-sm" onclick="injectFault('DOOR_INNER')">故障</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 区域管控 -->
+  <div class="card">
+    <div class="card-title">📍 区域管控</div>
+    <div class="zone-info">
+      <div class="zone-row">
+        <span class="label">区域ID</span>
+        <span class="value" id="zoneId">-</span>
+      </div>
+      <div class="zone-row">
+        <span class="label">占用状态</span>
+        <span class="value" id="zoneState" style="color:var(--success);">空闲</span>
+      </div>
+      <div class="zone-row">
+        <span class="label">占用者</span>
+        <span class="value" id="zoneOccupiedBy" style="font-size:12px;">-</span>
+      </div>
+      <div class="zone-row">
+        <span class="label">Permission ID</span>
+        <span class="value" id="zonePerm" style="font-size:11px;color:var(--text-muted);">-</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+        <button class="btn btn-danger btn-sm" onclick="setZoneBusy(true)">强制占用</button>
+        <button class="btn btn-success btn-sm" onclick="setZoneBusy(false)">释放区域</button>
+        <label class="switch" title="始终返回繁忙">
+          <input type="checkbox" id="alwaysBusyToggle" onchange="toggleAlwaysBusy()">
+          <span class="slider"></span>
+        </label>
+        <span style="font-size:10px;color:var(--text-muted);">始终繁忙</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="grid">
+  <!-- 配置面板 -->
+  <div class="card">
+    <div class="card-title">⚙ 模拟配置</div>
+    <div class="config-row">
+      <label>开门延时</label>
+      <input type="number" id="openDelay" value="2" min="0" step="0.5">
+      <span style="font-size:11px;color:var(--text-muted);">秒</span>
+      <button class="btn btn-sm" onclick="applyDelays()" style="margin-left:8px;">应用</button>
+    </div>
+    <div class="config-row">
+      <label>关门延时</label>
+      <input type="number" id="closeDelay" value="2" min="0" step="0.5">
+      <span style="font-size:11px;color:var(--text-muted);">秒</span>
+    </div>
+    <div class="config-row">
+      <label>ASAP 地址</label>
+      <input type="text" id="asapUrl" value="http://localhost:5012" style="width:200px;">
+      <span style="font-size:11px;color:var(--text-muted);">(指向 ASAP 供测试)</span>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+      💡 将 ASAP 配置中 angel.base_url 设为 <code id="simSelfUrl">http://localhost:5112</code>
+    </div>
+  </div>
+
+  <!-- 快速测试 -->
+  <div class="card">
+    <div class="card-title">🧪 快速操作</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      <button class="btn btn-primary" onclick="quickTest()">▶ 模拟风淋流程</button>
+      <button class="btn btn-warning" onclick="quickTestWithConflict()">⚠ 模拟区域冲突</button>
+      <button class="btn btn-danger" onclick="quickTestFault()">🔥 模拟门故障</button>
+    </div>
+    <div id="quickTestResult" style="margin-top:8px;font-size:11px;color:var(--text-muted);"></div>
+  </div>
+</div>
+
+<!-- 日志 -->
+<div class="card full">
+  <div class="card-title" style="display:flex;justify-content:space-between;">
+    <span>📋 请求日志</span>
+    <button class="btn btn-sm" onclick="document.getElementById('logContainer').innerHTML=''">清除</button>
+  </div>
+  <div class="log-container" id="logContainer"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+//  SimController WebUI Logic
+// ═══════════════════════════════════════
+
+function init() {
+  updateStatus();
+  setInterval(updateStatus, 1000);
+}
+
+async function api(path, opts = {}) {
+  const resp = await fetch(path, opts);
+  return resp.json();
+}
+
+// ── 状态更新 ──────────────────────────
+
+async function updateStatus() {
+  try {
+    const data = await api("/api/sim/status");
+    renderDoors(data);
+    renderZone(data);
+    renderConfig(data);
+    renderLogs(data);
+  } catch (e) {
+    document.getElementById("serverStatus").textContent = "连接失败";
+    document.getElementById("serverStatus").style.color = "var(--danger)";
+  }
+}
+
+function renderDoors(data) {
+  renderDoor("outer", data.outer_door);
+  renderDoor("inner", data.inner_door);
+}
+
+function renderDoor(pos, door) {
+  const state = door.state;
+  const card = document.getElementById(`${pos}Card`);
+  const stateText = document.getElementById(`${pos}StateText`);
+  const agv = document.getElementById(`${pos}Agv`);
+  const cmd = document.getElementById(`${pos}Cmd`);
+
+  card.className = "door-card";
+  stateText.className = "state";
+
+  let label, cls, icon;
+  switch (state) {
+    case "1": case "OPENED":
+      label = "已打开"; cls = "state-open"; icon = "tag-open";
+      break;
+    case "0": case "CLOSED":
+      label = "已关闭"; cls = "state-closed"; icon = "tag-closed";
+      break;
+    case "2": case "FAULT":
+      label = "故 障"; cls = "state-fault"; icon = "tag-fault";
+      break;
+    case "opening":
+      label = "打开中"; cls = "state-opening"; icon = "tag-opening";
+      break;
+    case "closing":
+      label = "关闭中"; cls = "state-closing"; icon = "tag-closing";
+      break;
+    default:
+      label = state; cls = "state-closed"; icon = "tag-closed";
+  }
+
+  card.classList.add(icon);
+  stateText.textContent = label;
+  stateText.className = "state " + cls;
+  agv.textContent = door.robot_name || "-";
+  cmd.textContent = door.command || "0";
+}
+
+function renderZone(data) {
+  const z = data.zone;
+  document.getElementById("zoneId").textContent = z.zone_id || "-";
+  const zs = document.getElementById("zoneState");
+  if (z.state === "occupied") {
+    zs.textContent = "已占用";
+    zs.style.color = "var(--warning)";
+  } else {
+    zs.textContent = "空闲";
+    zs.style.color = "var(--success)";
+  }
+  document.getElementById("zoneOccupiedBy").textContent = z.occupied_by || "-";
+  document.getElementById("zonePerm").textContent = z.permission_id || "-";
+}
+
+function renderConfig(data) {
+  const cfg = data.config;
+  document.getElementById("openDelay").value = cfg.auto_open_delay || 2;
+  document.getElementById("closeDelay").value = cfg.auto_close_delay || 2;
+  document.getElementById("alwaysBusyToggle").checked = cfg.zone_always_busy || false;
+  document.getElementById("simSelfUrl").textContent =
+    `${window.location.protocol}//${window.location.host}`;
+}
+
+function renderLogs(data) {
+  const logs = data.request_log || [];
+  const container = document.getElementById("logContainer");
+  if (logs.length === 0) return;
+
+  // Only append new logs
+  const existing = container.children.length;
+  for (let i = existing; i < logs.length; i++) {
+    const entry = logs[i];
+    const div = document.createElement("div");
+    div.className = "log-entry";
+    div.innerHTML = `
+      <span class="t">${entry.time}</span>
+      <span class="cat ${entry.category}">${entry.category}</span>
+      <span style="color:var(--accent);margin-right:6px;">${entry.target}</span>
+      ${entry.message}
+    `;
+    container.appendChild(div);
+  }
+  container.scrollTop = container.scrollHeight;
+}
+
+// ── 手动控制 ──────────────────────────
+
+async function setDoor(doorId, state) {
+  await api(`/api/sim/door/set?door_id=${doorId}&state=${state}`, { method: "POST" });
+  await updateStatus();
+}
+
+async function injectFault(doorId) {
+  const data = await api(`/api/sim/door/fault?door_id=${doorId}&enable=true`, { method: "POST" });
+  await updateStatus();
+  // 3秒后自动清除
+  setTimeout(async () => {
+    await api(`/api/sim/door/fault?door_id=${doorId}&enable=false`, { method: "POST" });
+    await updateStatus();
+  }, 3000);
+}
+
+async function setZoneBusy(busy) {
+  await api(`/api/sim/zone/busy?busy=${busy}&client=webui_trigger`, { method: "POST" });
+  await updateStatus();
+}
+
+async function toggleAlwaysBusy() {
+  const busy = document.getElementById("alwaysBusyToggle").checked;
+  await api(`/api/sim/zone/busy?busy=${busy}`, { method: "POST" });
+  await updateStatus();
+}
+
+async function applyDelays() {
+  const openD = parseFloat(document.getElementById("openDelay").value) || 2;
+  const closeD = parseFloat(document.getElementById("closeDelay").value) || 2;
+  await api(`/api/sim/config/delays?open_delay=${openD}&close_delay=${closeD}`, { method: "POST" });
+  await updateStatus();
+}
+
+async function resetSim() {
+  await api("/api/sim/reset", { method: "POST" });
+  await updateStatus();
+  addLog("system", "全部", "模拟器已重置");
+}
+
+// ── 快速测试 ──────────────────────────
+
+async function quickTest() {
+  const result = document.getElementById("quickTestResult");
+  result.innerHTML = "▶ 执行风淋流程模拟...";
+  const steps = [
+    ["申请区域", "/api/zones/enter", { zone_id: "air_shower_room", client_id: "AGV001" }],
+    ["开外门", "/acs/door/DOOR_OUTER", { doorSerial: "DOOR_OUTER", command: "1", Direction: "1", RobotName: "AGV001" }],
+  ];
+
+  for (const [name, path, body] of steps) {
+    const url = `${document.getElementById("asapUrl").value}${path}`;
+    try {
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      result.innerHTML += `<br>${name}: ${JSON.stringify(data).slice(0,80)}...`;
+    } catch (e) {
+      result.innerHTML += `<br>${name}: ❌ ${e.message}`;
+    }
+  }
+}
+
+async function quickTestWithConflict() {
+  await setZoneBusy(true);
+  document.getElementById("quickTestResult").innerHTML =
+    "⚠ 区域已强制占用，ASAP 请求区域应返回 409";
+  setTimeout(() => {
+    setZoneBusy(false);
+    document.getElementById("quickTestResult").innerHTML += "<br>↻ 区域已释放";
+  }, 5000);
+}
+
+async function quickTestFault() {
+  document.getElementById("quickTestResult").innerHTML = "🔥 注入外门故障 (3秒后自动恢复)...";
+  await injectFault("DOOR_OUTER");
+}
+
+function addLog(cat, target, msg) {
+  const container = document.getElementById("logContainer");
+  const time = new Date().toLocaleTimeString();
+  const div = document.createElement("div");
+  div.className = "log-entry";
+  div.innerHTML = `<span class="t">${time}</span><span class="cat ${cat}">${cat}</span><span style="color:var(--accent);margin-right:6px;">${target}</span>${msg}`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASAP Adapter — 风淋门区域管控</title>
+<style>
+/* ═══════════════════════════════════════
+   全局变量 & 主题
+   ═══════════════════════════════════════ */
+:root {
+  --bg-gradient: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #16213e 100%);
+  --card-bg: rgba(255,255,255,0.06);
+  --card-border: rgba(255,255,255,0.10);
+  --card-shadow: 0 8px 32px rgba(0,0,0,0.37);
+  --text-primary: #f0f0f0;
+  --text-secondary: rgba(255,255,255,0.60);
+  --text-muted: rgba(255,255,255,0.35);
+  --accent: #5e9eff;
+  --accent-glow: rgba(94,158,255,0.25);
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --state-idle: #6b7280;
+  --state-running: #5e9eff;
+  --state-error: #f87171;
+  --state-done: #34d399;
+}
+
+[data-theme="light"] {
+  --bg-gradient: linear-gradient(135deg, #e8ecf1 0%, #dbe1e8 50%, #f0f2f5 100%);
+  --card-bg: rgba(255,255,255,0.55);
+  --card-border: rgba(255,255,255,0.40);
+  --card-shadow: 0 8px 32px rgba(0,0,0,0.08);
+  --text-primary: #1a1a2e;
+  --text-secondary: rgba(0,0,0,0.55);
+  --text-muted: rgba(0,0,0,0.30);
+  --accent: #3b82f6;
+  --accent-glow: rgba(59,130,246,0.15);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+               "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg-gradient);
+  color: var(--text-primary);
+  min-height: 100vh;
+  padding: 20px;
+  transition: background 0.3s, color 0.3s;
+}
+
+/* 玻璃卡片 */
+.glass {
+  background: var(--card-bg);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  box-shadow: var(--card-shadow);
+  padding: 20px;
+  transition: all 0.3s ease;
+}
+
+/* 布局 */
+.app-container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  margin-bottom: 20px;
+}
+
+.header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.header-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.online { background: var(--success); box-shadow: 0 0 8px rgba(52,211,153,0.5); }
+.status-dot.busy { background: var(--warning); box-shadow: 0 0 8px rgba(251,191,36,0.5); }
+.status-dot.error { background: var(--danger); box-shadow: 0 0 8px rgba(248,113,113,0.5); }
+.status-dot.offline { background: #6b7280; }
+
+.theme-toggle {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-primary);
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.theme-toggle:hover { background: var(--accent-glow); border-color: var(--accent); }
+
+/* Dashboard 网格 */
+.dashboard {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+
+/* 状态机进度 */
+.state-machine { grid-column: 1 / -1; }
+
+.steps-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 8px 0;
+}
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 60px;
+  position: relative;
+}
+
+.step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--card-bg);
+  border: 2px solid var(--card-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: all 0.4s ease;
+  z-index: 1;
+  margin-bottom: 6px;
+}
+
+.step-dot.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 16px var(--accent-glow);
+  transform: scale(1.15);
+}
+
+.step-dot.done {
+  border-color: var(--success);
+  background: var(--success);
+  color: #fff;
+}
+
+.step-dot.error {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
+}
+
+.step-line {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--card-border);
+  z-index: 0;
+}
+
+.step-line.done { background: var(--success); }
+.step-line.running { background: linear-gradient(90deg, var(--accent) 50%, var(--card-border) 50%); }
+
+.step-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.2;
+  max-width: 64px;
+  word-break: break-all;
+}
+
+/* 门状态面板 */
+.door-panel { display: flex; flex-direction: column; }
+
+.door-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  flex: 1;
+}
+
+.door-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 14px;
+  transition: all 0.3s;
+}
+
+.door-card.open { border-color: var(--success); }
+.door-card.closed { border-color: var(--text-muted); }
+.door-card.fault { border-color: var(--danger); animation: pulse 1s infinite; }
+
+.door-name {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.door-icon {
+  font-size: 20px;
+  opacity: 0.7;
+}
+
+.door-status-text {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.door-status-value {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 4px 0;
+}
+
+.door-status-value.open { color: var(--success); }
+.door-status-value.closed { color: var(--text-secondary); }
+.door-status-value.fault { color: var(--danger); }
+
+.door-controls {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  backdrop-filter: blur(8px);
+}
+
+.btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn:active { transform: scale(0.96); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn:hover:disabled { background: var(--card-bg); color: var(--text-primary); border-color: var(--card-border); }
+
+.btn-success { border-color: var(--success); color: var(--success); }
+.btn-success:hover { background: var(--success); color: #fff; }
+
+.btn-danger { border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover { background: var(--danger); color: #fff; }
+
+.btn-warning { border-color: var(--warning); color: var(--warning); }
+.btn-warning:hover { background: var(--warning); color: #000; }
+
+/* 区域控制面板 */
+.zone-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zone-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+}
+
+.zone-label { font-size: 12px; color: var(--text-secondary); }
+
+.zone-value {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.zone-value.available { color: var(--success); }
+.zone-value.occupied { color: var(--warning); }
+.zone-value.granted { color: var(--accent); }
+.zone-value.released { color: var(--success); }
+.zone-value.unknown { color: var(--text-muted); }
+
+.flow-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+/* 日志面板 */
+.log-panel {
+  margin-top: 16px;
+}
+
+.log-container {
+  height: 200px;
+  overflow-y: auto;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 12px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+}
+
+.log-entry {
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-entry .time { color: var(--text-muted); margin-right: 8px; }
+.log-entry .level { font-weight: 600; margin-right: 8px; }
+.log-entry .level.INFO { color: var(--accent); }
+.log-entry .level.WARN { color: var(--warning); }
+.log-entry .level.ERROR { color: var(--danger); }
+.log-entry .level.DEBUG { color: var(--text-muted); }
+
+/* 全宽日志 */
+.log-panel-full { grid-column: 1 / -1; }
+
+/* 响应式 */
+@media (max-width: 900px) {
+  .dashboard { grid-template-columns: 1fr; }
+  .door-cards { grid-template-columns: 1fr; }
+  .steps-row { gap: 2px; }
+  .step-item { min-width: 40px; }
+  .step-label { display: none; }
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 2px; }
+
+/* 加载过渡 */
+.fade-in { animation: fadeIn 0.4s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  <!-- Header -->
+  <header class="header glass">
+    <div>
+      <h1>ASAP Adapter</h1>
+      <div style="font-size:12px;color:var(--text-muted);">风淋门 · 区域管控协议适配器</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="header-badge">
+        <span class="status-dot online" id="connDot"></span>
+        <span id="connStatus">已连接</span>
+      </div>
+      <span style="font-size:12px;color:var(--text-muted);" id="clock"></span>
+      <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
+    </div>
+  </header>
+
+  <!-- Dashboard -->
+  <div class="dashboard">
+    <!-- 状态机进度 -->
+    <div class="glass state-machine">
+      <div class="card-title">风淋流程状态</div>
+      <div class="steps-row" id="stepsRow"></div>
+      <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <span style="font-size:13px;font-weight:600;" id="stateLabel">空闲</span>
+          <span style="font-size:11px;color:var(--text-muted);margin-left:8px;" id="agvLabel"></span>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-success" onclick="startFlow()" id="btnStart">▶ 启动流程</button>
+          <button class="btn btn-danger" onclick="cancelFlow()" id="btnCancel" disabled>⏹ 取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 门状态 -->
+    <div class="glass door-panel">
+      <div class="card-title">门状态</div>
+      <div class="door-cards" id="doorCards">
+        <div class="door-card" id="outerDoor">
+          <div class="door-name"><span class="door-icon">🚪</span>外门</div>
+          <div class="door-status-value closed" id="outerDoorStatus">--</div>
+          <div class="door-status-text" id="outerDoorText">未知</div>
+          <div class="door-controls">
+            <button class="btn btn-success" onclick="manualOpen('DOOR_OUTER')" disabled>开门</button>
+            <button class="btn btn-warning" onclick="manualClose('DOOR_OUTER')" disabled>关门</button>
+          </div>
+        </div>
+        <div class="door-card" id="innerDoor">
+          <div class="door-name"><span class="door-icon">🚪</span>内门</div>
+          <div class="door-status-value closed" id="innerDoorStatus">--</div>
+          <div class="door-status-text" id="innerDoorText">未知</div>
+          <div class="door-controls">
+            <button class="btn btn-success" onclick="manualOpen('DOOR_INNER')" disabled>开门</button>
+            <button class="btn btn-warning" onclick="manualClose('DOOR_INNER')" disabled>关门</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 区域 & 控制 -->
+    <div class="glass">
+      <div class="card-title">区域管控</div>
+      <div class="zone-info">
+        <div class="zone-row">
+          <span class="zone-label">区域ID</span>
+          <span class="zone-value" id="zoneId">--</span>
+        </div>
+        <div class="zone-row">
+          <span class="zone-label">占用状态</span>
+          <span class="zone-value unknown" id="zoneStatus">--</span>
+        </div>
+        <div class="zone-row">
+          <span class="zone-label">被占用者</span>
+          <span class="zone-value" id="zoneOccupiedBy" style="font-size:12px;">--</span>
+        </div>
+        <div class="zone-row">
+          <span class="zone-label">当前AGV</span>
+          <span class="zone-value" id="currentAgv" style="font-size:12px;">--</span>
+        </div>
+      </div>
+      <div class="flow-controls">
+        <button class="btn" onclick="refreshStatus()">🔄 刷新</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RCS 配置信息 -->
+  <div class="glass log-panel-full">
+    <div class="card-title">🔗 RCS 第三方对接配置</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+      请将 RCS/WDCS 系统的 <code style="background:var(--card-bg);padding:1px 6px;border-radius:4px;">access_config</code> 表配置为以下地址：
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+        <span class="zone-label">控制接口 (door_control_relation_id)</span>
+        <code class="zone-value" id="rcsControlUrl" style="font-size:11px;word-break:break-all;cursor:pointer;" onclick="copyText(this)">http://HOST:5012/api/rcs/controlDoor</code>
+        <span style="font-size:9px;color:var(--text-muted);">POST · RCS → ASAP</span>
+      </div>
+      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+        <span class="zone-label">状态查询 (door_status_relation_id)</span>
+        <code class="zone-value" id="rcsStatusUrl" style="font-size:11px;word-break:break-all;cursor:pointer;" onclick="copyText(this)">http://HOST:5012/api/rcs/doorStatus</code>
+        <span style="font-size:9px;color:var(--text-muted);">POST · RCS → ASAP</span>
+      </div>
+      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+        <span class="zone-label">状态上报 (ASAP → RCS)</span>
+        <code class="zone-value" id="rcsReportUrl" style="font-size:11px;word-break:break-all;color:var(--text-muted);">配置在 env.toml</code>
+        <span style="font-size:9px;color:var(--text-muted);">POST · ASAP → RCS /changeDoorStatus</span>
+      </div>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text-muted);">
+      <span>🔑 <code>control_way = 4</code> (第三方系统)</span>
+      <span>🚪 <code>door_type = 2</code> (风淋门)</span>
+      <span>🩺 <code>/actuator/health</code> → <code>1000</code></span>
+      <span>💡 模拟器: <a href="http://localhost:5112" target="_blank" style="color:var(--accent);">http://localhost:5112</a></span>
+    </div>
+  </div>
+
+  <!-- 事件日志 -->
+  <div class="glass log-panel log-panel-full">
+    <div class="card-title" style="display:flex;justify-content:space-between;">
+      <span>事件日志</span>
+      <button class="btn" onclick="clearLog()" style="font-size:10px;padding:3px 8px;">清除</button>
+    </div>
+    <div class="log-container" id="logContainer"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+//  WebUI 主逻辑
+// ═══════════════════════════════════════
+
+const STEPS = [
+  "空闲", "申请区域", "开外门", "等外门开",
+  "AGV进入", "关外门", "等外门关", "风淋中",
+  "开内门", "等内门开", "AGV驶离", "关内门",
+  "等内门关", "释放区域",
+];
+
+const stateStepMap = {
+  IDLE: 0, REQUEST_ZONE: 1, OPEN_OUTER_DOOR: 2, WAIT_OUTER_DOOR_OPEN: 3,
+  AGV_ENTERING: 4, CLOSE_OUTER_DOOR: 5, WAIT_OUTER_DOOR_CLOSE: 6,
+  SHOWERING: 7, OPEN_INNER_DOOR: 8, WAIT_INNER_DOOR_OPEN: 9,
+  AGV_EXITING: 10, CLOSE_INNER_DOOR: 11, WAIT_INNER_DOOR_CLOSE: 12,
+  RELEASE_ZONE: 13, ERROR: -1,
+};
+
+let currentState = "IDLE";
+let currentStep = 0;
+let sseConnected = false;
+
+// ── 初始化 ──────────────────────────────
+
+function init() {
+  renderSteps();
+  updateClock();
+  setInterval(updateClock, 1000);
+  connectSSE();
+  setRcsUrls();
+}
+
+function renderSteps() {
+  const row = document.getElementById("stepsRow");
+  row.innerHTML = STEPS.map((label, i) => {
+    const first = i === 0;
+    const last = i === STEPS.length - 1;
+    const lineClass = last ? "" : "step-line";
+    return `
+      <div class="step-item" data-step="${i}">
+        ${last ? "" : `<div class="${lineClass}" id="line-${i}"></div>`}
+        <div class="step-dot" id="dot-${i}">${i}</div>
+        <div class="step-label">${label}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+function updateSteps(stepIdx, state) {
+  for (let i = 0; i < STEPS.length; i++) {
+    const dot = document.getElementById(`dot-${i}`);
+    const line = document.getElementById(`line-${i}`);
+    if (!dot) continue;
+
+    dot.classList.remove("active", "done", "error");
+
+    if (state === "ERROR") {
+      if (i === stepIdx) {
+        dot.classList.add("error");
+      }
+    } else if (i < stepIdx) {
+      dot.classList.add("done");
+    } else if (i === stepIdx) {
+      dot.classList.add("active");
+    }
+
+    if (line) {
+      line.classList.remove("done", "running");
+      if (i < stepIdx) {
+        line.classList.add("done");
+      } else if (i === stepIdx && state !== "ERROR") {
+        line.classList.add("running");
+      }
+    }
+  }
+}
+
+// ── SSE ──────────────────────────────────
+
+function connectSSE() {
+  const evtSource = new EventSource("/api/sse/events");
+
+  evtSource.onopen = () => {
+    sseConnected = true;
+    document.getElementById("connDot").className = "status-dot online";
+    document.getElementById("connStatus").textContent = "已连接";
+  };
+
+  evtSource.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      handleEvent(msg);
+    } catch (e) {
+      // ignore heartbeats
+    }
+  };
+
+  evtSource.onerror = () => {
+    sseConnected = false;
+    document.getElementById("connDot").className = "status-dot offline";
+    document.getElementById("connStatus").textContent = "已断开";
+    setTimeout(connectSSE, 3000);
+  };
+}
+
+function handleEvent(msg) {
+  switch (msg.event_type) {
+    case "snapshot":
+      updateDashboard(msg.data);
+      break;
+    case "state_change":
+    case "door_opened":
+    case "door_closed":
+    case "door_control":
+    case "zone_granted":
+    case "zone_released":
+    case "shower_complete":
+    case "agv_entered":
+    case "agv_exited":
+    case "flow_complete":
+      // Re-fetch full status on any event
+      fetchStatus();
+      addLog(msg);
+      break;
+  }
+}
+
+// ── Dashboard 更新 ──────────────────────
+
+function updateDashboard(data) {
+  // State
+  currentState = data.state || "IDLE";
+  currentStep = data.current_step || 0;
+
+  document.getElementById("stateLabel").textContent =
+    currentState === "IDLE" ? "空闲" :
+    currentState === "ERROR" ? "异常" :
+    STEPS[currentStep] || currentState;
+
+  document.getElementById("agvLabel").textContent =
+    data.current_agv ? `AGV: ${data.current_agv}` : "";
+
+  updateSteps(currentStep, currentState);
+
+  // Buttons
+  const busy = currentState !== "IDLE" && currentState !== "ERROR";
+  document.getElementById("btnStart").disabled = busy;
+  document.getElementById("btnCancel").disabled = !busy;
+
+  // Manual control disabled during active flow
+  document.querySelectorAll(".door-controls .btn").forEach(b => b.disabled = busy);
+
+  // Connection status
+  const isError = currentState === "ERROR";
+  document.getElementById("connDot").className =
+    isError ? "status-dot error" : "status-dot online";
+
+  // Outer door
+  if (data.outer_door) {
+    updateDoorCard("outer", data.outer_door);
+  }
+
+  // Inner door
+  if (data.inner_door) {
+    updateDoorCard("inner", data.inner_door);
+  }
+
+  // Zone
+  if (data.zone) {
+    document.getElementById("zoneId").textContent = data.zone.zone_id || "--";
+    const zs = document.getElementById("zoneStatus");
+    zs.textContent = data.zone.status || "--";
+    zs.className = "zone-value " + (data.zone.status || "unknown");
+    document.getElementById("zoneOccupiedBy").textContent =
+      data.zone.occupied_by || "--";
+  }
+
+  document.getElementById("currentAgv").textContent =
+    data.current_agv || "--";
+}
+
+function updateDoorCard(pos, door) {
+  const status = door.door_status || "UNKNOWN";
+  const card = document.getElementById(`${pos}Door`);
+  const statusEl = document.getElementById(`${pos}DoorStatus`);
+  const textEl = document.getElementById(`${pos}DoorText`);
+
+  card.className = "door-card";
+
+  let statusText, valueText, cls;
+  switch (status) {
+    case "OPENED":
+    case "1":
+      cls = "open"; statusText = "已打开"; valueText = "开"; break;
+    case "CLOSED":
+    case "0":
+      cls = "closed"; statusText = "已关闭"; valueText = "关"; break;
+    case "FAULT":
+    case "2":
+      cls = "fault"; statusText = "故障"; valueText = "故"; break;
+    default:
+      cls = ""; statusText = "未知"; valueText = "?";
+  }
+
+  card.classList.add(cls);
+  statusEl.textContent = valueText;
+  statusEl.className = "door-status-value " + cls;
+  textEl.textContent = statusText;
+}
+
+// ── HTTP 请求 ───────────────────────────
+
+async function fetchStatus() {
+  try {
+    const resp = await fetch("/api/asap/status");
+    const data = await resp.json();
+    updateDashboard(data);
+  } catch (e) {
+    console.error("获取状态失败:", e);
+  }
+}
+
+async function startFlow() {
+  try {
+    await fetch("/api/asap/start", { method: "POST" });
+    addLog({ event_type: "command", data: { msg: "手动启动风淋流程" } });
+    await fetchStatus();
+  } catch (e) {
+    console.error("启动失败:", e);
+  }
+}
+
+async function cancelFlow() {
+  try {
+    await fetch("/api/asap/cancel", { method: "POST" });
+    addLog({ event_type: "command", data: { msg: "手动取消风淋流程" } });
+    await fetchStatus();
+  } catch (e) {
+    console.error("取消失败:", e);
+  }
+}
+
+async function manualOpen(doorId) {
+  try {
+    const resp = await fetch(`/api/asap/manual/open?door_id=${doorId}`, { method: "POST" });
+    addLog({ event_type: "command", data: { msg: `手动开门: ${doorId}` } });
+    await fetchStatus();
+  } catch (e) {
+    console.error("开门失败:", e);
+  }
+}
+
+async function manualClose(doorId) {
+  try {
+    const resp = await fetch(`/api/asap/manual/close?door_id=${doorId}`, { method: "POST" });
+    addLog({ event_type: "command", data: { msg: `手动关门: ${doorId}` } });
+    await fetchStatus();
+  } catch (e) {
+    console.error("关门失败:", e);
+  }
+}
+
+async function refreshStatus() {
+  await fetchStatus();
+  addLog({ event_type: "command", data: { msg: "手动刷新状态" } });
+}
+
+// ── 日志 ──────────────────────────────────
+
+function addLog(msg) {
+  const container = document.getElementById("logContainer");
+  const entry = document.createElement("div");
+  entry.className = "log-entry fade-in";
+
+  const time = msg.timestamp
+    ? new Date(msg.timestamp).toLocaleTimeString()
+    : new Date().toLocaleTimeString();
+
+  let level = "INFO";
+  let text = "";
+
+  switch (msg.event_type) {
+    case "snapshot": return;
+    case "state_change": text = `状态: ${msg.data?.from || ""} → ${msg.data?.to || ""}`; break;
+    case "door_opened": text = `${msg.data?.door_id} 已打开`; break;
+    case "door_closed": text = `${msg.data?.door_id} 已关闭`; break;
+    case "door_control": text = `${msg.data?.door_id} ${msg.data?.action === "open" ? "开门" : "关门"}`; break;
+    case "zone_granted": text = `区域授权: ${msg.data?.permission_id}`; break;
+    case "zone_released": text = "区域已释放"; break;
+    case "shower_complete": text = "风淋完成"; break;
+    case "agv_entered": text = `AGV(${msg.data?.agv}) 进入`; break;
+    case "agv_exited": text = `AGV(${msg.data?.agv}) 驶离`; break;
+    case "flow_complete": text = "流程完成"; level = "INFO"; break;
+    case "command": text = `操作: ${msg.data?.msg || ""}`; break;
+    case "heartbeat": return;
+    default: text = msg.event_type + ": " + JSON.stringify(msg.data || {}); break;
+  }
+
+  entry.innerHTML = `<span class="time">${time}</span><span class="level ${level}">${level}</span>${text}`;
+  container.appendChild(entry);
+  container.scrollTop = container.scrollHeight;
+
+  // 限制日志条目
+  while (container.children.length > 200) {
+    container.removeChild(container.firstChild);
+  }
+}
+
+function clearLog() {
+  document.getElementById("logContainer").innerHTML = "";
+}
+
+// ── 时钟 ──────────────────────────────────
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById("clock").textContent =
+    now.toLocaleTimeString("zh-CN", { hour12: false });
+}
+
+// ── 主题切换 ──────────────────────────────
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  document.querySelector(".theme-toggle").textContent =
+    next === "dark" ? "🌙" : "☀️";
+  localStorage.setItem("theme", next);
+}
+
+// 恢复主题
+(function() {
+  const saved = localStorage.getItem("theme");
+  if (saved) {
+    document.documentElement.setAttribute("data-theme", saved);
+    document.querySelector(".theme-toggle").textContent =
+      saved === "dark" ? "🌙" : "☀️";
+  }
+})();
+
+// ── RCS 配置地址 ─────────────────────────
+
+function setRcsUrls() {
+  const host = window.location.host;  // HOST:5012
+  document.getElementById("rcsControlUrl").textContent =
+    `http://${host}/api/rcs/controlDoor`;
+  document.getElementById("rcsStatusUrl").textContent =
+    `http://${host}/api/rcs/doorStatus`;
+
+  // 从 env.toml 读配置（通过 API 获取），但这里仅显示模板
+  fetch("/api/asap/status")
+    .then(r => r.json())
+    .catch(() => {});
+}
+
+function copyText(el) {
+  const text = el.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = el.style.color;
+    el.style.color = "var(--success)";
+    el.textContent = "✓ 已复制";
+    setTimeout(() => {
+      el.style.color = orig;
+      // restore text - but we don't have original, just reload the url
+      setRcsUrls();
+    }, 1500);
+  }).catch(() => {});
+}
+
+// ── 启动 ──────────────────────────────────
+init();
+</script>
+</body>
+</html>

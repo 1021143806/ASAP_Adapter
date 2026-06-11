@@ -5,6 +5,7 @@
 以及模拟器管理端点（供 WebUI 调用）。
 """
 
+import json
 import logging
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse
@@ -35,14 +36,22 @@ def create_router(sim: SimController) -> APIRouter:
     @router.post("/acs/door/{door_id}")
     async def control_door(door_id: str, req: AngelControlRequest):
         """控制门 (POST)"""
+        req_dict = req.model_dump(exclude_none=True)
         result = sim.control_door(door_id, req.command,
                                   req.Direction or "", req.RobotName or "")
+        sim._log("control", door_id,
+                 f"指令={req.command} dir={req.Direction or '-'} agv={req.RobotName or '-'}",
+                 req_body=req_dict, resp_body=result)
         return result
 
     @router.get("/acs/door/{door_id}")
     async def query_door(door_id: str):
         """查询门状态 (GET)"""
-        return sim.query_door(door_id)
+        result = sim.query_door(door_id)
+        sim._log("query", door_id,
+                 f"状态={result.get('doorStatus','?')}",
+                 req_body={"door_id": door_id}, resp_body=result)
+        return result
 
     # ═══════════════════════════════════════════
     #  区域管控协议
@@ -51,7 +60,12 @@ def create_router(sim: SimController) -> APIRouter:
     @router.post("/api/zones/enter")
     async def zone_enter(req: ZoneEnterRequest, request: Request):
         """请求进入区域"""
+        req_dict = req.model_dump(exclude_none=True)
         body, status_code = sim.zone_enter(req.zone_id, req.client_id)
+        resp_dict = body if status_code == 409 else body
+        sim._log("zone", req.zone_id,
+                 f"进入 client={req.client_id} → {status_code}",
+                 req_body=req_dict, resp_body=resp_dict)
         if status_code == 409:
             return ZoneEnterConflict(**body)
         return body
@@ -59,13 +73,20 @@ def create_router(sim: SimController) -> APIRouter:
     @router.post("/api/zones/exit")
     async def zone_exit(req: ZoneExitRequest):
         """退出区域"""
+        req_dict = req.model_dump(exclude_none=True)
         body, _ = sim.zone_exit(req.zone_id, req.client_id)
+        sim._log("zone", req.zone_id,
+                 f"退出 client={req.client_id}",
+                 req_body=req_dict, resp_body=body)
         return body
 
     @router.get("/api/zones/status")
     async def zone_status(zone_id: str):
         """查询区域状态"""
-        return sim.zone_status(zone_id)
+        result = sim.zone_status(zone_id)
+        sim._log("zone", zone_id, f"查询",
+                 req_body={"zone_id": zone_id}, resp_body=result)
+        return result
 
     # ═══════════════════════════════════════════
     #  模拟器管理 (WebUI 调用)

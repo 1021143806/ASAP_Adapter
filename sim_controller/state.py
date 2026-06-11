@@ -267,13 +267,20 @@ class SimController:
 
     # ── 日志 ──────────────────────────────────
 
-    def _log(self, category: str, target: str, message: str):
-        """记录请求日志"""
+    _log_counter = 0
+
+    def _log(self, category: str, target: str, message: str,
+             req_body: dict = None, resp_body: dict = None):
+        """记录请求日志，含完整报文"""
+        self._log_counter += 1
         entry = {
+            "id": self._log_counter,
             "time": datetime.now().strftime("%H:%M:%S.%f")[:12],
             "category": category,
             "target": target,
             "message": message,
+            "request": req_body,
+            "response": resp_body,
         }
         self.request_log.append(entry)
         logger.debug("[%s] %s %s: %s", category, target, message)

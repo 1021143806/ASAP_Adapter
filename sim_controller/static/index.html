@@ -135,9 +135,13 @@ body {
   background: rgba(0,0,0,0.3); border-radius: 6px;
   padding: 8px; border: 1px solid var(--card-border);
 }
-.log-entry { padding: 1px 0; border-bottom: 1px solid rgba(255,255,255,0.02); color: var(--text-muted); }
-.log-entry .t { color: rgba(255,255,255,0.25); margin-right: 6px; }
-.log-entry .cat { display: inline-block; width: 50px; font-weight: 600; }
+.log-entry {
+  display: flex; align-items: center; gap: 4px;
+  padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.02);
+  color: var(--text-muted);
+}
+.log-entry .t { color: rgba(255,255,255,0.25); margin-right: 4px; flex-shrink: 0; }
+.log-entry .cat { display: inline-block; width: 42px; font-weight: 600; flex-shrink: 0; }
 .log-entry .cat.control { color: var(--accent); }
 .log-entry .cat.query { color: var(--text-muted); }
 .log-entry .cat.transition { color: var(--success); }
@@ -146,6 +150,64 @@ body {
 .log-entry .cat.manual { color: #d2a8ff; }
 .log-entry .cat.config { color: var(--text-muted); }
 .log-entry .cat.system { color: var(--warning); }
+.log-entry .msg {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.log-entry .detail-btn {
+  flex-shrink: 0; background: none; border: 1px solid var(--card-border);
+  border-radius: 4px; color: var(--text-muted); font-size: 9px;
+  padding: 1px 6px; cursor: pointer; transition: all 0.15s;
+  font-family: inherit; line-height: 1.5; opacity: 0.5;
+}
+.log-entry:hover .detail-btn { opacity: 1; }
+.log-entry .detail-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.log-entry .detail-btn.no-data { opacity: 0.2; cursor: default; }
+
+/* 报文详情弹窗 */
+.modal-overlay {
+  display: none; position: fixed; z-index: 1000;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+  align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: 12px; max-width: 700px; width: 90%;
+  max-height: 80vh; display: flex; flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 18px; border-bottom: 1px solid var(--card-border);
+}
+.modal-header h3 { font-size: 14px; font-weight: 600; }
+.modal-close {
+  background: none; border: none; color: var(--text-muted);
+  font-size: 18px; cursor: pointer; padding: 4px; line-height: 1;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body {
+  padding: 14px 18px; overflow-y: auto; flex: 1;
+  font-family: "SF Mono", "Menlo", monospace; font-size: 12px;
+  line-height: 1.5;
+}
+.modal-body .section-title {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--text-muted); margin: 10px 0 4px; font-weight: 600;
+}
+.modal-body .section-title:first-child { margin-top: 0; }
+.modal-body pre {
+  background: rgba(0,0,0,0.3); border: 1px solid var(--card-border);
+  border-radius: 6px; padding: 10px; overflow-x: auto; margin: 0;
+  white-space: pre-wrap; word-break: break-all;
+  color: var(--text);
+}
+.modal-body .label {
+  display: inline-block; background: rgba(88,166,255,0.1);
+  color: var(--accent); font-size: 10px; padding: 1px 6px;
+  border-radius: 4px; margin-bottom: 4px;
+}
 
 /* Checkbox switch */
 .switch { position: relative; display: inline-block; width: 36px; height: 20px; }
@@ -401,17 +463,26 @@ function renderLogs(data) {
   const existing = container.children.length;
   for (let i = existing; i < logs.length; i++) {
     const entry = logs[i];
+    const hasPayload = entry.request || entry.response;
     const div = document.createElement("div");
     div.className = "log-entry";
     div.innerHTML = `
       <span class="t">${entry.time}</span>
       <span class="cat ${entry.category}">${entry.category}</span>
-      <span style="color:var(--accent);margin-right:6px;">${entry.target}</span>
-      ${entry.message}
+      <span class="msg"><span style="color:var(--accent);margin-right:4px;">${entry.target}</span>${escHtml(entry.message)}</span>
+      <button class="detail-btn ${hasPayload ? '' : 'no-data'}"
+        onclick="${hasPayload ? `showLogDetail(${entry.id})` : ''}"
+        title="${hasPayload ? '查看完整报文' : '无报文数据'}">📄</button>
     `;
     container.appendChild(div);
   }
   container.scrollTop = container.scrollHeight;
+}
+
+function escHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
 }
 
 // ── 手动控制 ──────────────────────────
@@ -508,5 +579,84 @@ function addLog(cat, target, msg) {
 
 init();
 </script>
+<!-- 报文详情弹窗 -->
+<div class="modal-overlay" id="detailModal" onclick="if(event.target===this)closeDetail()">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">报文详情</h3>
+      <button class="modal-close" onclick="closeDetail()">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+// 报文详情弹窗
+function showLogDetail(logId) {
+  // 从页面上取日志条目数据 — 必须从最新状态快照取
+  fetch("/api/sim/status")
+    .then(r => r.json())
+    .then(data => {
+      const logs = data.request_log || [];
+      const entry = logs.find(e => e.id === logId);
+      if (!entry) return;
+
+      const title = `[${entry.category}] ${entry.target}`;
+      document.getElementById("modalTitle").textContent = title;
+
+      let html = "";
+
+      // 请求体
+      if (entry.request) {
+        html += `<div class="section-title">📤 请求 (${entry.category})</div>`;
+        html += `<pre>${syntaxHighlight(entry.request)}</pre>`;
+      } else {
+        html += `<div class="section-title">📤 请求</div>`;
+        html += `<pre style="color:var(--text-muted);">无请求体</pre>`;
+      }
+
+      // 响应体
+      if (entry.response) {
+        html += `<div class="section-title">📥 响应</div>`;
+        html += `<pre>${syntaxHighlight(entry.response)}</pre>`;
+      } else {
+        html += `<div class="section-title">📥 响应</div>`;
+        html += `<pre style="color:var(--text-muted);">无响应体</pre>`;
+      }
+
+      // 元信息
+      html += `<div class="section-title">ℹ 元信息</div>`;
+      html += `<pre style="color:var(--text-muted); font-size:11px;">`;
+      html += `时间: ${entry.time}\n`;
+      html += `类别: ${entry.category}\n`;
+      html += `目标: ${entry.target}\n`;
+      html += `日志ID: ${entry.id}`;
+      html += `</pre>`;
+
+      document.getElementById("modalBody").innerHTML = html;
+      document.getElementById("detailModal").classList.add("open");
+    })
+    .catch(() => {});
+}
+
+function closeDetail() {
+  document.getElementById("detailModal").classList.remove("open");
+}
+
+function syntaxHighlight(obj) {
+  const json = JSON.stringify(obj, null, 2);
+  // 简单着色：将 JSON key 染成蓝色，string 值染绿，数字染黄
+  return json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"([^"]+)":/g, '<span style="color:var(--accent);">"$1"</span>:')
+    .replace(/: "([^"]+)"/g, ': <span style="color:var(--success);">"$1"</span>')
+    .replace(/: (\d+)/g, ': <span style="color:var(--warning);">$1</span>');
+}
+
+// 点击 ESC 关闭弹窗
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Escape") closeDetail();
+});
+</script>
+
 </body>
 </html>

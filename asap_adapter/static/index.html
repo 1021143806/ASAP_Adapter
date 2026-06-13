@@ -446,6 +446,7 @@ body {
         <span id="connStatus">已连接</span>
       </div>
       <span style="font-size:12px;color:var(--text-muted);" id="clock"></span>
+      <button id="simToggleBtn" class="btn btn-success btn-sm" onclick="toggleSimMode()" style="font-size:10px;padding:3px 8px;" title="启用后 Door/Zone 指向模拟器">🔌 未启用</button>
       <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
     </div>
   </header>
@@ -794,6 +795,8 @@ function init() {
   refreshDoorStatus();
   setInterval(refreshDoorStatus, 3000);
   simRefresh();
+  checkSimStatus();
+  setInterval(checkSimStatus, 5000);
 }
 
 // ── 视图切换 ──────────────────────────
@@ -1160,8 +1163,6 @@ async function simRefresh() {
     }
     simRefreshLogs();
   } catch (e) {
-    document.getElementById("simLogContainer").innerHTML =
-      '<div style="color:var(--danger);padding:10px;text-align:center;">❌ 模拟器未启用，请先点右上角「启用模拟」</div>';
   }
 }
 
@@ -1178,6 +1179,42 @@ function simUpdateDoor(pos, door) {
   card.className = "door-card " + cls;
   stateEl.textContent = label;
   stateEl.className = "door-status-value " + cls;
+}
+
+// ── 模拟器开关 ──────────────────────────
+async function checkSimStatus() {
+  try {
+    const resp = await fetch("/api/asap/sim/status");
+    const data = await resp.json();
+    const btn = document.getElementById("simToggleBtn");
+    if (data.enabled) {
+      btn.textContent = "🔌 已启用";
+      btn.className = "btn btn-sm";
+      btn.style.background = "rgba(52,211,153,0.2)";
+      btn.style.color = "var(--success)";
+      btn.style.border = "1px solid rgba(52,211,153,0.3)";
+    } else {
+      btn.textContent = "🔌 未启用";
+      btn.className = "btn btn-sm";
+      btn.style.background = "rgba(107,114,128,0.2)";
+      btn.style.color = "var(--text-muted)";
+      btn.style.border = "1px solid var(--card-border)";
+    }
+  } catch (e) { /* ignore */ }
+}
+
+async function toggleSimMode() {
+  try {
+    const resp = await fetch("/api/asap/sim/status");
+    const data = await resp.json();
+    if (data.enabled) {
+      await fetch("/api/asap/sim/disable", { method: "POST" });
+    } else {
+      await fetch("/api/asap/sim/enable", { method: "POST" });
+    }
+    await checkSimStatus();
+    simRefresh();
+  } catch (e) { /* ignore */ }
 }
 
 async function simSetDoor(doorId, state) {

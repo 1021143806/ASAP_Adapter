@@ -423,7 +423,9 @@ def create_router(app: FastAPI) -> APIRouter:
             raise HTTPException(status_code=500, detail=f"执行升级异常: {str(e)}")
 
         if result["success"]:
-            us.trigger_restart(delay=3)
+            # 直接退出进程，依靠 supervisor autorestart 拉起（不依赖 upgrade_service 的缓存代码）
+            import threading as _t
+            _t.Thread(target=lambda: (_t.Event().wait(3), os._exit(0)), daemon=True).start()
             return {"success": True, "message": result["message"],
                     "backup": result.get("backup", "")}
         else:
@@ -435,7 +437,8 @@ def create_router(app: FastAPI) -> APIRouter:
         from . import upgrade_service as us
         result = us.do_rollback(backup_name)
         if result["success"]:
-            us.trigger_restart(delay=3)
+            import threading as _t
+            _t.Thread(target=lambda: (_t.Event().wait(3), os._exit(0)), daemon=True).start()
             return {"success": True, "message": result["message"]}
         else:
             raise HTTPException(status_code=500, detail=result.get("error", "回滚失败"))

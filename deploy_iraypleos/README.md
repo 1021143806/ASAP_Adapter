@@ -8,11 +8,13 @@
 
 ```
 deploy_iraypleos/
-├── deploy_iraypleos.sh          # 主部署脚本（幂等）
-├── README.md                    # 本文档
-└── vendor_packages3.9/          # 离线包仓库（Python 3.9 兼容）
-    ├── requirements_asap_fixed.txt   # 版本锁定的依赖清单
-    └── *.whl                         # 离线 wheel 包
+├── deploy_iraypleos.sh            # 主部署脚本（幂等）
+├── prepare_portable_python.sh     # 便携 Python 制作工具（在开发机运行）
+├── README.md                      # 本文档
+└── vendor_packages3.9/            # 离线包仓库（Python 3.9 兼容）
+    ├── requirements_asap_fixed.txt     # 版本锁定的依赖清单
+    ├── *.whl                          # 离线 wheel 包
+    └── python3.9/                     # [可选] 便携 Python 3.9 (由 prepare_portable_python.sh 生成)
 ```
 
 ## 架构设计
@@ -36,6 +38,7 @@ deploy_iraypleos/
 
 | 原则 | 实现 |
 |------|------|
+| **零依赖部署** | 目标机器无需预装 Python，脚本自动检测并安装（便携包/包管理器） |
 | **完全离线** | 所有依赖以 `.whl` 文件存储在 `vendor_packages3.9/` 中，安装时使用 `--no-index --find-links` |
 | **幂等部署** | 脚本可反复执行，先清理旧 venv 再重建，不依赖环境状态 |
 | **版本锁定** | `requirements_asap_fixed.txt` 精确锁死版本号 |
@@ -45,13 +48,40 @@ deploy_iraypleos/
 
 | 步骤 | 操作 | 说明 |
 |------|------|------|
-| 1 | 环境检查 | 验证 Python 版本、用户权限、项目路径 |
-| 2 | vendor 检查 | 扫描关键包是否存在 |
-| 3 | 创建 venv | `python3 -m venv venv`，清理旧环境 |
-| 4 | 安装依赖 | 批量安装 → 失败则逐个安装 |
-| 5 | 导入验证 | 验证 `fastapi`、`uvicorn`、`httpx` 等可导入 |
-| 6 | Supervisor 配置 | 不存在时自动创建 |
-| 7 | 启动服务 | `supervisorctl restart` → 直接 `nohup` |
+| 0 | Python 检测 | 自动检测 `python3`/`python3.9`/`python`，版本需 ≥ 3.9 |
+| 0b | Python 安装 | 未找到时自动尝试：便携包 → yum → dnf → apt-get |
+| 1 | vendor 检查 | 扫描关键 wheel 包是否存在 |
+| 2 | 创建 venv | 使用检测到的 Python 创建虚拟环境 |
+| 3 | 安装依赖 | 批量 `--no-index` 安装 → 失败则逐个安装 |
+| 4 | 导入验证 | 验证 `fastapi`、`uvicorn`、`httpx` 等可导入 |
+| 5 | Supervisor 配置 | 不存在时自动创建 |
+| 6 | 启动服务 | `supervisorctl restart` → 直接 `nohup` |
+
+## 便携 Python 3.9
+
+如果目标机器完全 **没有 Python 3.9** 且无包管理器，可以使用便携 Python 包：
+
+**1. 在开发机上制作便携包：**
+
+```bash
+bash deploy_iraypleos/prepare_portable_python.sh
+```
+
+脚本会自动在 `vendor_packages3.9/python3.9/` 下创建一个完整的便携 Python 3.9 环境。
+
+**2. 将整个项目 rsync/scp 到目标机器：**
+
+```bash
+rsync -avz ASAP_Adapter/ user@target:/path/to/ASAP_Adapter
+```
+
+**3. 在目标机器运行部署脚本：**
+
+```bash
+bash deploy_iraypleos/deploy_iraypleos.sh
+```
+
+脚本会自动检测并使用 `vendor_packages3.9/python3.9/bin/python3`。
 
 ## 依赖清单
 

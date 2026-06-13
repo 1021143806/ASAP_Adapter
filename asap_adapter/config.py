@@ -141,13 +141,24 @@ def load_config(path: Optional[str] = None) -> AppConfig:
             with open(overrides_path, "r", encoding="utf-8") as f:
                 overrides = json.load(f)
 
-            # 只覆盖 [rcs] 段（当前所有可热更新的配置）
+            # ── 加载所有可热更新的配置段 ──
+            # RCS
             rcs_overrides = overrides.get("rcs", {})
             for key in ("change_status_url", "report_interval", "door_code_mapping"):
                 if key in rcs_overrides:
                     setattr(cfg.rcs, key, rcs_overrides[key])
 
-            # 可扩展: 后续新增其他可热更新配置段时在此添加
+            # AB 门
+            angel_overrides = overrides.get("angel", {})
+            for key in ("base_url",):
+                if key in angel_overrides:
+                    setattr(cfg.angel, key, angel_overrides[key])
+
+            # 区域管控
+            zone_overrides = overrides.get("zone", {})
+            for key in ("enter_url", "exit_url", "status_url"):
+                if key in zone_overrides:
+                    setattr(cfg.zone, key, zone_overrides[key])
         except Exception as e:
             print(f"[Config] 加载 overrides.json 失败: {e}")
 

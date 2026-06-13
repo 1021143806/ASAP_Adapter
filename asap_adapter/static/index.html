@@ -260,6 +260,13 @@ body {
   letter-spacing: 0.5px;
 }
 
+.door-rcs-status {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin: 2px 0 4px;
+  font-family: "SF Mono", "Fira Code", monospace;
+}
+
 .door-icon {
   font-size: 20px;
   opacity: 0.7;
@@ -463,11 +470,12 @@ body {
 
     <!-- 门状态 -->
     <div class="glass door-panel">
-      <div class="card-title">🚪 门状态</div>
+      <div class="card-title">🚪 门状态 <span id="doorCodeMapping" style="font-size:10px;font-weight:400;color:var(--text-muted);"></span></div>
       <div class="door-cards" id="doorCards">
         <div class="door-card" id="outerDoor">
-          <div class="door-name"><span class="door-icon">🚪</span>外门</div>
+          <div class="door-name"><span class="door-icon">🚪</span>外门 <span style="font-size:10px;color:var(--text-muted);font-weight:400;" id="outerDoorId">(DOOR_OUTER)</span></div>
           <div class="door-code" id="outerDoorCode">─</div>
+          <div class="door-rcs-status" id="outerRcsStatus"></div>
           <div class="door-status-value closed" id="outerDoorStatus">--</div>
           <div class="door-status-text" id="outerDoorText">未知</div>
           <div class="door-controls">
@@ -476,8 +484,9 @@ body {
           </div>
         </div>
         <div class="door-card" id="innerDoor">
-          <div class="door-name"><span class="door-icon">🚪</span>内门</div>
+          <div class="door-name"><span class="door-icon">🚪</span>内门 <span style="font-size:10px;color:var(--text-muted);font-weight:400;" id="innerDoorId">(DOOR_INNER)</span></div>
           <div class="door-code" id="innerDoorCode">─</div>
+          <div class="door-rcs-status" id="innerRcsStatus"></div>
           <div class="door-status-value closed" id="innerDoorStatus">--</div>
           <div class="door-status-text" id="innerDoorText">未知</div>
           <div class="door-controls">
@@ -876,15 +885,45 @@ function updateDashboard(data) {
     data.current_agv || "--";
 }
 
+// ── 门编码映射提示 ──────────────────────
+function updateDoorMapping() {
+  const el = document.getElementById("doorCodeMapping");
+  const outerCode = document.getElementById("outerDoorCode");
+  const innerCode = document.getElementById("innerDoorCode");
+  const oCode = outerCode ? outerCode.textContent.replace("#", "") : "?";
+  const iCode = innerCode ? innerCode.textContent.replace("#", "") : "?";
+  if (oCode && iCode && oCode !== "─" && iCode !== "─") {
+    el.textContent = `外门:${oCode} | 内门:${iCode}`;
+  } else {
+    el.textContent = "";
+  }
+}
+
 function updateDoorCard(pos, door) {
   const status = door.door_status || "UNKNOWN";
   const card = document.getElementById(`${pos}Door`);
   const statusEl = document.getElementById(`${pos}DoorStatus`);
   const textEl = document.getElementById(`${pos}DoorText`);
   const codeEl = document.getElementById(`${pos}DoorCode`);
+  const rcsEl = document.getElementById(`${pos}RcsStatus`);
 
   // 门编码（RCS doorCode）
   if (codeEl) codeEl.textContent = door.door_code ? `#${door.door_code}` : "─";
+  // 门 ID
+  const idEl = document.getElementById(`${pos}DoorId`);
+  if (idEl) idEl.textContent = `(${door.door_id || pos.toUpperCase()})`;
+  // RCS 状态（0=离线, 1=开, 2=关）
+  if (rcsEl) {
+    let rcsStatus = "?";
+    if (status === "OPENED" || status === "1") rcsStatus = "status: 1 (开)";
+    else if (status === "CLOSED" || status === "0") rcsStatus = "status: 2 (关)";
+    else if (status === "FAULT" || status === "2") rcsStatus = "status: 0 (离线/故障)";
+    else rcsStatus = "status: 0 (未知)";
+    rcsEl.textContent = rcsStatus;
+  }
+
+  // 更新映射提示
+  updateDoorMapping();
 
   card.className = "door-card";
 

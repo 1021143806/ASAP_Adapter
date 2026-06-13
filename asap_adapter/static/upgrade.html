@@ -169,6 +169,7 @@ body {
     <nav style="display:flex;gap:4px;">
       <a href="/" class="nav-tab">📊 仪表盘</a>
       <a href="/upgrade" class="nav-tab nav-tab-active">⬆ 升级</a>
+      <a href="http://localhost:5112/" class="nav-tab" target="_blank" id="navSimulator">🎮 模拟器</a>
     </nav>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
@@ -469,6 +470,13 @@ function rollback(backupName) {
 
 loadVersion();
 loadRecords();
+
+// 修正模拟器地址为当前主机
+(function() {
+  const host = window.location.hostname;
+  const el = document.getElementById('navSimulator');
+  if (el) el.href = `http://${host}:5112/`;
+})();
 </script>
 </body>
 </html>

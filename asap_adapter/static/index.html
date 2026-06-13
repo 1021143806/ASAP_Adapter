@@ -421,6 +421,7 @@ body {
       <nav style="display:flex;gap:4px;margin-left:12px;">
         <a href="/" class="nav-tab nav-tab-active">📊 仪表盘</a>
         <a href="/upgrade" class="nav-tab">⬆ 升级</a>
+        <a href="http://localhost:5112/" class="nav-tab" target="_blank" id="navSimulator">🎮 模拟器</a>
       </nav>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
@@ -588,6 +589,14 @@ function init() {
   setInterval(updateClock, 1000);
   connectSSE();
   setRcsUrls();
+  fixSimulatorUrl();
+}
+
+function fixSimulatorUrl() {
+  const host = window.location.hostname;
+  const port = 5112;
+  const el = document.getElementById('navSimulator');
+  if (el) el.href = `http://${host}:${port}/`;
 }
 
 function renderSteps() {

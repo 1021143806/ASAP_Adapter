@@ -380,6 +380,8 @@ async function api(path, opts = {}) {
 async function updateStatus() {
   try {
     const data = await api("/sim/api/sim/status");
+    document.getElementById("serverStatus").textContent = "运行中";
+    document.getElementById("serverStatus").style.color = "var(--success)";
     renderDoors(data);
     renderZone(data);
     renderConfig(data);

@@ -558,6 +558,72 @@ body {
     </div>
   </div>
 
+  <!-- AB 自动门配置 -->
+  <div class="glass log-panel-full">
+    <div class="card-title">🚪 AB 自动门对接配置</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+      ASAP → Angel AB 自动门 HTTP 接口地址
+    </div>
+    <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+      <span class="zone-label">AB 门 base URL</span>
+      <div style="display:flex;gap:6px;margin-top:4px;">
+        <input type="text" id="angelBaseUrlInput"
+          style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
+                 font-family:inherit;outline:none;"
+          placeholder="http://172.31.43.181:8080"
+          onfocus="this.style.borderColor='var(--accent)'"
+          onblur="this.style.borderColor='var(--card-border)'">
+        <button class="btn btn-success btn-sm" onclick="saveAngelUrl()">保存</button>
+        <span id="angelSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 区域管控对接配置 -->
+  <div class="glass log-panel-full">
+    <div class="card-title">📡 区域管控对接配置</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+      ASAP → 区域管控系统 HTTP 接口地址
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+        <span class="zone-label">进入区域 (enter)</span>
+        <input type="text" id="zoneEnterInput"
+          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
+                 font-family:inherit;outline:none;margin-top:4px;"
+          placeholder="/api/zones/enter"
+          onfocus="this.style.borderColor='var(--accent)'"
+          onblur="this.style.borderColor='var(--card-border)'">
+      </div>
+      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+        <span class="zone-label">退出区域 (exit)</span>
+        <input type="text" id="zoneExitInput"
+          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
+                 font-family:inherit;outline:none;margin-top:4px;"
+          placeholder="/api/zones/exit"
+          onfocus="this.style.borderColor='var(--accent)'"
+          onblur="this.style.borderColor='var(--card-border)'">
+      </div>
+      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+        <span class="zone-label">状态查询 (status)</span>
+        <input type="text" id="zoneStatusInput"
+          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
+                 font-family:inherit;outline:none;margin-top:4px;"
+          placeholder="/api/zones/status"
+          onfocus="this.style.borderColor='var(--accent)'"
+          onblur="this.style.borderColor='var(--card-border)'">
+      </div>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-success btn-sm" onclick="saveZoneUrls()">保存</button>
+      <span id="zoneSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+    </div>
+  </div>
+
   <!-- 事件日志 -->
   <div class="glass log-panel log-panel-full">
     <div class="card-title" style="display:flex;justify-content:space-between;">
@@ -600,6 +666,8 @@ function init() {
   setInterval(updateClock, 1000);
   connectSSE();
   setRcsUrls();
+  loadAngelConfig();
+  loadZoneConfig();
   fixSimulatorUrl();
 }
 
@@ -972,6 +1040,73 @@ async function saveRcsUrl() {
     btn.disabled = false;
     btn.textContent = "保存";
   }
+}
+
+// ── AB 门配置 ──────────────────────────
+async function saveAngelUrl() {
+  const url = document.getElementById("angelBaseUrlInput").value.trim();
+  const status = document.getElementById("angelSaveStatus");
+  if (!url) { status.textContent = "✗ URL 不能为空"; status.style.display = "inline"; status.style.color = "var(--danger)"; return; }
+  try {
+    const resp = await fetch("/api/asap/config/angel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ base_url: url }),
+    });
+    const data = await resp.json();
+    status.textContent = "✓ 已保存";
+    status.style.display = "inline";
+    status.style.color = "var(--success)";
+    setTimeout(() => { status.style.display = "none"; }, 3000);
+  } catch (e) {
+    status.textContent = "✗ 保存失败";
+    status.style.display = "inline";
+    status.style.color = "var(--danger)";
+  }
+}
+
+function loadAngelConfig() {
+  fetch("/api/asap/config/angel")
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById("angelBaseUrlInput").value = data.base_url || "";
+    })
+    .catch(() => {});
+}
+
+// ── 区域管控配置 ────────────────────────
+async function saveZoneUrls() {
+  const enter = document.getElementById("zoneEnterInput").value.trim();
+  const exit = document.getElementById("zoneExitInput").value.trim();
+  const status = document.getElementById("zoneStatusInput").value.trim();
+  const st = document.getElementById("zoneSaveStatus");
+  try {
+    const resp = await fetch("/api/asap/config/zone", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enter_url: enter, exit_url: exit, status_url: status }),
+    });
+    await resp.json();
+    st.textContent = "✓ 已保存";
+    st.style.display = "inline";
+    st.style.color = "var(--success)";
+    setTimeout(() => { st.style.display = "none"; }, 3000);
+  } catch (e) {
+    st.textContent = "✗ 保存失败";
+    st.style.display = "inline";
+    st.style.color = "var(--danger)";
+  }
+}
+
+function loadZoneConfig() {
+  fetch("/api/asap/config/zone")
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById("zoneEnterInput").value = data.enter_url || "";
+      document.getElementById("zoneExitInput").value = data.exit_url || "";
+      document.getElementById("zoneStatusInput").value = data.status_url || "";
+    })
+    .catch(() => {});
 }
 
 function copyText(el) {

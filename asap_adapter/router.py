@@ -41,11 +41,35 @@ class RcsConfigUpdate(BaseModel):
 
 class LogQueryRequest(BaseModel):
     """日志查询请求"""
-    module: Optional[str] = Field(None, description="按模块名过滤（如 state_machine, door_client, zone_client）")
-    level: Optional[str] = Field(None, description="按级别过滤（DEBUG, INFO, WARNING, ERROR）")
+    module: Optional[str] = Field(None, description="按模块名过滤")
+    level: Optional[str] = Field(None, description="按级别过滤")
     keyword: Optional[str] = Field(None, description="关键词搜索")
     limit: int = Field(100, ge=1, le=1000, description="返回条数")
     offset: int = Field(0, ge=0, description="从尾部跳过的行数")
+
+
+class AngelConfigUpdate(BaseModel):
+    """AB 门配置更新"""
+    base_url: str = ""
+
+
+class ZoneConfigUpdate(BaseModel):
+    """区域管控配置更新"""
+    enter_url: str = ""
+    exit_url: str = ""
+    status_url: str = ""
+
+
+class AngelConfigUpdate(BaseModel):
+    """AB 门配置更新"""
+    base_url: str = ""
+
+
+class ZoneConfigUpdate(BaseModel):
+    """区域管控配置更新"""
+    enter_url: str = ""
+    exit_url: str = ""
+    status_url: str = ""
 
 logger = logging.getLogger(__name__)
 
@@ -248,6 +272,65 @@ def create_router(app: FastAPI) -> APIRouter:
             "status": "ok",
             "change_status_url": rcs.config.change_status_url,
             "report_interval": rcs.config.report_interval,
+        }
+
+    # ── AB 门配置管理 ───────────────────────
+
+    @router.get("/api/asap/config/angel")
+    async def get_angel_config(request: Request):
+        """获取 AB 门配置"""
+        cfg = request.app.state.config
+        return {
+            "base_url": cfg.angel.base_url,
+        }
+
+    @router.post("/api/asap/config/angel")
+    async def update_angel_config(request: Request, cfg: AngelConfigUpdate):
+        """更新 AB 门配置（运行时生效，持久化到 overrides.json）"""
+        config = request.app.state.config
+        if cfg.base_url:
+            config.angel.base_url = cfg.base_url
+            from .config import save_override
+            save_override("angel", "base_url", cfg.base_url)
+            # 重建 DoorClient 的 httpx 客户端
+            request.app.state.door.set_sim_mode(False)
+            logger.info("AB门配置已更新: base_url=%s", cfg.base_url)
+        return {"status": "ok", "base_url": config.angel.base_url}
+
+    # ── 区域管控配置管理 ────────────────────
+
+    @router.get("/api/asap/config/zone")
+    async def get_zone_config(request: Request):
+        """获取区域管控配置"""
+        cfg = request.app.state.config
+        return {
+            "enter_url": cfg.zone.enter_url,
+            "exit_url": cfg.zone.exit_url,
+            "status_url": cfg.zone.status_url,
+        }
+
+    @router.post("/api/asap/config/zone")
+    async def update_zone_config(request: Request, cfg: ZoneConfigUpdate):
+        """更新区域管控配置（运行时生效，持久化到 overrides.json）"""
+        config = request.app.state.config
+        if cfg.enter_url:
+            config.zone.enter_url = cfg.enter_url
+            from .config import save_override
+            save_override("zone", "enter_url", cfg.enter_url)
+        if cfg.exit_url:
+            config.zone.exit_url = cfg.exit_url
+            from .config import save_override
+            save_override("zone", "exit_url", cfg.exit_url)
+        if cfg.status_url:
+            config.zone.status_url = cfg.status_url
+            from .config import save_override
+            save_override("zone", "status_url", cfg.status_url)
+        logger.info("区域管控配置已更新")
+        return {
+            "status": "ok",
+            "enter_url": config.zone.enter_url,
+            "exit_url": config.zone.exit_url,
+            "status_url": config.zone.status_url,
         }
 
     # ── 日志查询 ──────────────────────────────

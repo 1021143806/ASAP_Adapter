@@ -791,6 +791,8 @@ function init() {
   loadRcsLogs();
   setInterval(loadRcsLogs, 3000);
   fixSimulatorUrl();
+  refreshDoorStatus();
+  setInterval(refreshDoorStatus, 3000);
   simRefresh();
 }
 
@@ -807,6 +809,18 @@ function switchView(name) {
 function fixSimulatorUrl() {
   // 模拟器已集成到页面内，无需外部链接
 }
+
+async function refreshDoorStatus() {
+  try {
+    const resp = await fetch("/api/asap/refresh-doors", { method: "POST" });
+    const data = await resp.json();
+    if (data.outer_door) updateDoorCard("outer", data.outer_door);
+    if (data.inner_door) updateDoorCard("inner", data.inner_door);
+  } catch (e) {
+    // ignore
+  }
+}
+
 
 // ── 模拟器控制 ──────────────────────────
 let simTimer = null;

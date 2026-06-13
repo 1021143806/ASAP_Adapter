@@ -309,6 +309,25 @@ def create_router(app: FastAPI) -> APIRouter:
         except (DoorClientError, ZoneClientError) as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+    @router.post("/api/asap/refresh-doors")
+    async def refresh_doors(request: Request):
+        """主动刷新门状态（向真实设备/模拟器查询当前状态，更新缓存）"""
+        sm = _get_sm(request)
+        outer_id = sm.config.angel.outer_door_id
+        inner_id = sm.config.angel.inner_door_id
+        try:
+            outer_status = await sm.query_door_status(outer_id)
+        except Exception:
+            outer_status = None
+        try:
+            inner_status = await sm.query_door_status(inner_id)
+        except Exception:
+            inner_status = None
+        return {
+            "outer_door": sm._status.outer_door.model_dump(),
+            "inner_door": sm._status.inner_door.model_dump(),
+        }
+
     # ── RCS 配置管理 ──────────────────────────
 
     @router.get("/api/asap/config/rcs")

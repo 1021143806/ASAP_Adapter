@@ -390,6 +390,19 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 2px; }
 
+/* 导航标签 */
+.nav-tab {
+  color: var(--text-muted); text-decoration: none; font-size: 12px;
+  padding: 5px 12px; border-radius: 8px;
+  border: 1px solid transparent; transition: all 0.2s;
+  font-weight: 500; white-space: nowrap;
+}
+.nav-tab:hover { background: var(--card-bg); border-color: var(--card-border); color: var(--text-primary); }
+.nav-tab-active {
+  background: var(--accent-glow); border-color: var(--accent);
+  color: var(--accent); font-weight: 600;
+}
+
 /* 加载过渡 */
 .fade-in { animation: fadeIn 0.4s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -400,16 +413,21 @@ body {
 <div class="app-container">
   <!-- Header -->
   <header class="header glass">
-    <div>
-      <h1>ASAP Adapter</h1>
-      <div style="font-size:12px;color:var(--text-muted);">风淋门 · 区域管控协议适配器</div>
+    <div style="display:flex;align-items:center;gap:16px;">
+      <div>
+        <h1>ASAP Adapter</h1>
+        <div style="font-size:12px;color:var(--text-muted);">风淋门 · 区域管控协议适配器</div>
+      </div>
+      <nav style="display:flex;gap:4px;margin-left:12px;">
+        <a href="/" class="nav-tab nav-tab-active">📊 仪表盘</a>
+        <a href="/upgrade" class="nav-tab">⬆ 升级</a>
+      </nav>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
       <div class="header-badge">
         <span class="status-dot online" id="connDot"></span>
         <span id="connStatus">已连接</span>
       </div>
-      <a href="/upgrade" style="color:var(--text-muted);text-decoration:none;font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--card-border);">⬆ 升级</a>
       <span style="font-size:12px;color:var(--text-muted);" id="clock"></span>
       <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
     </div>

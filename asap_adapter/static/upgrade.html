@@ -123,6 +123,18 @@ body {
   text-align: left; padding: 8px 10px; color: var(--text-muted);
   border-bottom: 1px solid var(--card-border); font-weight: 600;
 }
+.nav-tab {
+  color: var(--text-muted); text-decoration: none; font-size: 12px;
+  padding: 5px 12px; border-radius: 8px;
+  border: 1px solid transparent; transition: all 0.2s;
+  font-weight: 500; white-space: nowrap;
+}
+.nav-tab:hover { background: rgba(255,255,255,0.05); border-color: var(--card-border); color: var(--text); }
+.nav-tab-active {
+  background: rgba(88,166,255,0.12); border-color: var(--accent);
+  color: var(--accent); font-weight: 600;
+}
+
 .record-table td { padding: 8px 10px; border-bottom: 1px solid rgba(48,54,61,0.5); vertical-align: middle; }
 .record-table tr:hover td { background: rgba(255,255,255,0.02); }
 .version-tag { font-family: "SF Mono", monospace; font-size: 12px; }
@@ -152,8 +164,16 @@ body {
 <body>
 
 <div class="header">
-  <h1>⬆ 升级管理</h1>
-  <a href="/">← 返回仪表盘</a>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <h1>ASAP Adapter</h1>
+    <nav style="display:flex;gap:4px;">
+      <a href="/" class="nav-tab">📊 仪表盘</a>
+      <a href="/upgrade" class="nav-tab nav-tab-active">⬆ 升级</a>
+    </nav>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span style="font-size:11px;color:var(--text-muted);">升级管理</span>
+  </div>
 </div>
 
 <!-- 当前版本 -->

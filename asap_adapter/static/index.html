@@ -821,252 +821,11 @@ async function refreshDoorStatus() {
   }
 }
 
-
-// ── 模拟器控制 ──────────────────────────
-let simTimer = null;
-
-async function simRefresh() {
-  try {
-    const resp = await fetch("/sim/api/sim/status");
-    const data = await resp.json();
-    // 门状态
-    simUpdateDoor("Outer", data.outer_door);
-    simUpdateDoor("Inner", data.inner_door);
-    // 区域
-    document.getElementById("simZoneId").textContent = data.zone?.zone_id || "-";
-    const zs = document.getElementById("simZoneState");
-    const zb = document.getElementById("simZoneBy");
-    if (data.zone?.state === "occupied" || data.zone?.status === "occupied") {
-      zs.textContent = "被占用";
-      zs.style.color = "var(--warning)";
-      zb.textContent = data.zone?.occupied_by || "-";
-    } else {
-      zs.textContent = "空闲";
-      zs.style.color = "var(--success)";
-      zb.textContent = "-";
-    }
-    // 日志
-    simRefreshLogs();
-  } catch (e) {
-    document.getElementById("simLogContainer").innerHTML =
-      '<div style="color:var(--danger);padding:10px;text-align:center;">❌ 模拟器未启用，请先点右上角「启用模拟」</div>';
-  }
+function toggleDetail(el) {
+  const detail = el.querySelector(".req-detail");
+  if (detail) detail.style.display = detail.style.display === "none" ? "block" : "none";
 }
 
-function simUpdateDoor(pos, door) {
-  const card = document.getElementById(`sim${pos}Card`);
-  const stateEl = document.getElementById(`sim${pos}State`);
-  if (!card || !stateEl) return;
-  const state = door?.state || "0";
-  let label, cls;
-  if (state === "1" || state === "OPENED") { label = "打开"; cls = "open"; }
-  else if (state === "0" || state === "CLOSED") { label = "关闭"; cls = "closed"; }
-  else if (state === "2" || state === "FAULT") { label = "故障 ⚠"; cls = "fault"; }
-  else { label = "过渡中"; cls = "closed"; }
-  card.className = "door-card " + cls;
-  stateEl.textContent = label;
-  stateEl.className = "door-status-value " + cls;
-}
-
-async function simSetDoor(doorId, state) {
-  await fetch(`/sim/api/sim/door/set?door_id=${doorId}&state=${state}`, { method: "POST" });
-  simRefresh();
-}
-
-async function simFault(doorId) {
-  await fetch(`/sim/api/sim/door/fault?door_id=${doorId}&enable=true`, { method: "POST" });
-  setTimeout(() => {
-    fetch(`/sim/api/sim/door/fault?door_id=${doorId}&enable=false`, { method: "POST" }).then(() => simRefresh());
-  }, 2000);
-  simRefresh();
-}
-
-async function simZoneBusy(busy) {
-  await fetch(`/sim/api/sim/zone/busy?busy=${busy}&client=webui`, { method: "POST" });
-  simRefresh();
-}
-
-async function simReset() {
-  await fetch("/sim/api/sim/reset", { method: "POST" });
-  simRefresh();
-}
-
-async function simRefreshLogs() {
-  try {
-    const resp = await fetch("/sim/api/sim/logs");
-    const data = await resp.json();
-    const container = document.getElementById("simLogContainer");
-    if (!data.logs || data.logs.length === 0) {
-      container.innerHTML = '<div style="color:var(--text-muted);padding:10px;text-align:center;">暂无请求日志</div>';
-      return;
-    }
-    let html = "";
-    for (const entry of data.logs.slice().reverse().slice(0, 30)) {
-      const reqStr = entry.request ? JSON.stringify(entry.request) : "";
-      const respStr = entry.response ? JSON.stringify(entry.response) : "";
-      html += `<div style="padding:4px 6px;border-bottom:1px solid var(--card-border);font-size:10px;">
-        <span style="color:var(--text-muted);">${entry.time}</span>
-        <span style="color:var(--accent);margin:0 4px;">${entry.category}</span>
-        <span>${entry.target}</span>
-        <span style="color:var(--text-secondary);">${entry.message}</span>
-        <div style="padding-left:12px;word-break:break-all;color:var(--text-muted);">${reqStr ? '📤 ' + reqStr : ''}</div>
-        <div style="padding-left:12px;word-break:break-all;color:var(--success);">${respStr ? '📥 ' + respStr : ''}</div>
-      </div>`;
-    }
-    container.innerHTML = html;
-  } catch (e) {
-    // ignore
-  }
-}
-
-function renderSteps() {
-  const row = document.getElementById("stepsRow");
-  row.innerHTML = STEPS.map((label, i) => {
-    const first = i === 0;
-    const last = i === STEPS.length - 1;
-    const lineClass = last ? "" : "step-line";
-    return `
-      <div class="step-item" data-step="${i}">
-        ${last ? "" : `<div class="${lineClass}" id="line-${i}"></div>`}
-        <div class="step-dot" id="dot-${i}">${i}</div>
-        <div class="step-label">${label}</div>
-      </div>
-    `;
-  }).join("");
-}
-
-function updateSteps(stepIdx, state) {
-  for (let i = 0; i < STEPS.length; i++) {
-    const dot = document.getElementById(`dot-${i}`);
-    const line = document.getElementById(`line-${i}`);
-    if (!dot) continue;
-
-    dot.classList.remove("active", "done", "error");
-
-    if (state === "ERROR") {
-      if (i === stepIdx) {
-        dot.classList.add("error");
-      }
-    } else if (i < stepIdx) {
-      dot.classList.add("done");
-    } else if (i === stepIdx) {
-      dot.classList.add("active");
-    }
-
-    if (line) {
-      line.classList.remove("done", "running");
-      if (i < stepIdx) {
-        line.classList.add("done");
-      } else if (i === stepIdx && state !== "ERROR") {
-        line.classList.add("running");
-      }
-    }
-  }
-}
-
-// ── SSE ──────────────────────────────────
-
-function connectSSE() {
-  const evtSource = new EventSource("/api/sse/events");
-
-  evtSource.onopen = () => {
-    sseConnected = true;
-    document.getElementById("connDot").className = "status-dot online";
-    document.getElementById("connStatus").textContent = "已连接";
-  };
-
-  evtSource.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-      handleEvent(msg);
-    } catch (e) {
-      // ignore heartbeats
-    }
-  };
-
-  evtSource.onerror = () => {
-    sseConnected = false;
-    document.getElementById("connDot").className = "status-dot offline";
-    document.getElementById("connStatus").textContent = "已断开";
-    setTimeout(connectSSE, 3000);
-  };
-}
-
-function handleEvent(msg) {
-  switch (msg.event_type) {
-    case "snapshot":
-      updateDashboard(msg.data);
-      break;
-    case "state_change":
-    case "door_opened":
-    case "door_closed":
-    case "door_control":
-    case "zone_granted":
-    case "zone_released":
-    case "shower_complete":
-    case "agv_entered":
-    case "agv_exited":
-    case "flow_complete":
-      // Re-fetch full status on any event
-      fetchStatus();
-      addLog(msg);
-      break;
-  }
-}
-
-// ── Dashboard 更新 ──────────────────────
-
-function updateDashboard(data) {
-  // State
-  currentState = data.state || "IDLE";
-  currentStep = data.current_step || 0;
-
-  document.getElementById("stateLabel").textContent =
-    currentState === "IDLE" ? "空闲" :
-    currentState === "ERROR" ? "异常" :
-    STEPS[currentStep] || currentState;
-
-  document.getElementById("agvLabel").textContent =
-    data.current_agv ? `AGV: ${data.current_agv}` : "";
-
-  updateSteps(currentStep, currentState);
-
-  // Buttons
-  const busy = currentState !== "IDLE" && currentState !== "ERROR";
-  document.getElementById("btnStart").disabled = busy;
-  document.getElementById("btnCancel").disabled = !busy;
-
-  // Manual control disabled during active flow
-  document.querySelectorAll(".door-controls .btn").forEach(b => b.disabled = busy);
-
-  // Connection status
-  const isError = currentState === "ERROR";
-  document.getElementById("connDot").className =
-    isError ? "status-dot error" : "status-dot online";
-
-  // Outer door
-  if (data.outer_door) {
-    updateDoorCard("outer", data.outer_door);
-  }
-
-  // Inner door
-  if (data.inner_door) {
-    updateDoorCard("inner", data.inner_door);
-  }
-
-  // Zone
-  if (data.zone) {
-    document.getElementById("zoneId").textContent = data.zone.zone_id || "--";
-    const zs = document.getElementById("zoneStatus");
-    zs.textContent = data.zone.status || "--";
-    zs.className = "zone-value " + (data.zone.status || "unknown");
-    document.getElementById("zoneOccupiedBy").textContent =
-      data.zone.occupied_by || "--";
-  }
-
-  document.getElementById("currentAgv").textContent =
-    data.current_agv || "--";
-}
 
 // ── 门编码映射提示 ──────────────────────
 function updateDoorMapping() {
@@ -1382,6 +1141,95 @@ function loadZoneConfig() {
     .catch(() => {});
 }
 
+// ── 模拟器控制 ──────────────────────────
+async function simRefresh() {
+  try {
+    const resp = await fetch("/sim/api/sim/status");
+    const data = await resp.json();
+    simUpdateDoor("Outer", data.outer_door);
+    simUpdateDoor("Inner", data.inner_door);
+    document.getElementById("simZoneId").textContent = data.zone?.zone_id || "-";
+    const zs = document.getElementById("simZoneState");
+    const zb = document.getElementById("simZoneBy");
+    if (data.zone?.state === "occupied" || data.zone?.status === "occupied") {
+      zs.textContent = "被占用"; zs.style.color = "var(--warning)";
+      zb.textContent = data.zone?.occupied_by || "-";
+    } else {
+      zs.textContent = "空闲"; zs.style.color = "var(--success)";
+      zb.textContent = "-";
+    }
+    simRefreshLogs();
+  } catch (e) {
+    document.getElementById("simLogContainer").innerHTML =
+      '<div style="color:var(--danger);padding:10px;text-align:center;">❌ 模拟器未启用，请先点右上角「启用模拟」</div>';
+  }
+}
+
+function simUpdateDoor(pos, door) {
+  const card = document.getElementById(`sim${pos}Card`);
+  const stateEl = document.getElementById(`sim${pos}State`);
+  if (!card || !stateEl) return;
+  const state = door?.state || "0";
+  let label, cls;
+  if (state === "1" || state === "OPENED") { label = "打开"; cls = "open"; }
+  else if (state === "0" || state === "CLOSED") { label = "关闭"; cls = "closed"; }
+  else if (state === "2" || state === "FAULT") { label = "故障 ⚠"; cls = "fault"; }
+  else { label = "过渡中"; cls = "closed"; }
+  card.className = "door-card " + cls;
+  stateEl.textContent = label;
+  stateEl.className = "door-status-value " + cls;
+}
+
+async function simSetDoor(doorId, state) {
+  await fetch(`/sim/api/sim/door/set?door_id=${doorId}&state=${state}`, { method: "POST" });
+  simRefresh();
+}
+
+async function simFault(doorId) {
+  await fetch(`/sim/api/sim/door/fault?door_id=${doorId}&enable=true`, { method: "POST" });
+  setTimeout(() => fetch(`/sim/api/sim/door/fault?door_id=${doorId}&enable=false`, { method: "POST" }).then(() => simRefresh()), 2000);
+  simRefresh();
+}
+
+async function simZoneBusy(busy) {
+  await fetch(`/sim/api/sim/zone/busy?busy=${busy}&client=webui`, { method: "POST" });
+  simRefresh();
+}
+
+async function simReset() {
+  await fetch("/sim/api/sim/reset", { method: "POST" });
+  simRefresh();
+}
+
+async function simRefreshLogs() {
+  try {
+    const resp = await fetch("/sim/api/sim/logs");
+    const data = await resp.json();
+    const container = document.getElementById("simLogContainer");
+    if (!data.logs || data.logs.length === 0) {
+      container.innerHTML = '<div style="color:var(--text-muted);padding:10px;text-align:center;">暂无请求日志</div>'; return;
+    }
+    let html = "";
+    for (const entry of data.logs.slice().reverse().slice(0, 30)) {
+      const reqStr = entry.request ? JSON.stringify(entry.request, null, 2) : "";
+      const respStr = entry.response ? JSON.stringify(entry.response, null, 2) : "";
+      html += `<div style="padding:4px 6px;border-bottom:1px solid var(--card-border);cursor:pointer;" onclick="toggleDetail(this)">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span style="color:var(--text-muted);font-size:10px;">${entry.time}</span>
+          <span style="font-size:9px;font-weight:600;color:var(--accent);background:rgba(94,158,255,0.1);padding:0 4px;border-radius:3px;">${entry.category}</span>
+          <span style="color:var(--text-primary);font-size:10px;">${entry.target}</span>
+          <span style="color:var(--text-secondary);font-size:10px;margin-left:auto;">${entry.message}</span>
+        </div>
+        <div class="req-detail" style="display:none;margin-top:4px;padding:6px;background:rgba(0,0,0,0.15);border-radius:6px;font-size:10px;font-family:monospace;">
+          ${reqStr ? `<div style="color:var(--text-muted);">📤 请求体:</div><pre style="margin:0;color:var(--text-secondary);white-space:pre-wrap;">${escapeHtml(reqStr)}</pre>` : ""}
+          ${respStr ? `<div style="color:var(--text-muted);margin-top:4px;">📥 响应体:</div><pre style="margin:0;color:var(--success);white-space:pre-wrap;">${escapeHtml(respStr)}</pre>` : ""}
+        </div>
+      </div>`;
+    }
+    container.innerHTML = html;
+  } catch (e) { /* ignore */ }
+}
+
 // ── RCS 请求日志 ────────────────────────
 async function loadRcsLogs() {
   try {
@@ -1396,18 +1244,22 @@ async function loadRcsLogs() {
     }
     let html = "";
     for (const entry of data.logs.slice().reverse()) {
-      const cat = entry.category === "control" ? "🎮" : "🔍";
-      const reqStr = entry.request ? JSON.stringify(entry.request) : "";
-      const respStr = entry.response ? (typeof entry.response === 'string' ? entry.response : JSON.stringify(entry.response)) : "";
-      html += `<div style="padding:4px 6px;border-bottom:1px solid var(--card-border);">
-        <span style="color:var(--text-muted);font-size:10px;">${entry.time}</span>
-        <span style="margin:0 4px;">${cat}</span>
-        <span style="color:var(--accent);font-size:10px;">${entry.endpoint}</span>
-        <div style="color:var(--text-secondary);font-size:10px;padding-left:16px;word-break:break-all;">
-          ${escapeHtml(reqStr)}
+      const method = entry.method || "POST";
+      const reqStr = entry.request ? JSON.stringify(entry.request, null, 2) : "";
+      const respStr = entry.response ? (typeof entry.response === 'string' ? entry.response : JSON.stringify(entry.response, null, 2)) : "";
+      const statusIcon = entry.status >= 200 && entry.status < 300 ? "✅" : "❌";
+      html += `<div style="padding:4px 6px;border-bottom:1px solid var(--card-border);cursor:pointer;" onclick="toggleDetail(this)" title="点击展开/收起报文详情">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span style="color:var(--text-muted);font-size:10px;white-space:nowrap;">${entry.time}</span>
+          <span style="font-size:9px;font-weight:600;color:var(--accent);background:rgba(94,158,255,0.1);padding:0 4px;border-radius:3px;">${method}</span>
+          <span style="color:var(--text-primary);font-size:10px;word-break:break-all;">${entry.endpoint}</span>
+          <span style="margin-left:auto;font-size:10px;">${statusIcon} ${entry.status}</span>
         </div>
-        <div style="color:var(--success);font-size:10px;padding-left:16px;word-break:break-all;">
-          → ${escapeHtml(respStr)}
+        <div class="req-detail" style="display:none;margin-top:4px;padding:6px;background:rgba(0,0,0,0.15);border-radius:6px;font-size:10px;font-family:'SF Mono','Fira Code',monospace;">
+          <div style="color:var(--text-muted);margin-bottom:2px;">📤 请求体:</div>
+          <pre style="margin:0;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;">${escapeHtml(reqStr || "(无请求体)")}</pre>
+          <div style="color:var(--text-muted);margin:4px 0 2px;">📥 响应体 (${entry.status}):</div>
+          <pre style="margin:0;color:var(--success);white-space:pre-wrap;word-break:break-all;">${escapeHtml(respStr || "(无响应体)")}</pre>
         </div>
       </div>`;
     }

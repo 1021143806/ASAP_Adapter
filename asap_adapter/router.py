@@ -68,7 +68,7 @@ class AngelConfigUpdate(BaseModel):
 # ── 请求日志记录 ──────────────────────────
 
 def _log_req(request: Request, category: str, endpoint: str,
-             req_body: dict, resp_body, resp_status: int = 200):
+             req_body: dict, resp_body, resp_status: int = 200, method: str = "POST"):
     """记录 RCS 请求日志到 app.state.request_log"""
     from datetime import datetime
     log = request.app.state.request_log
@@ -77,9 +77,10 @@ def _log_req(request: Request, category: str, endpoint: str,
     request.app.state.request_log_counter = ctr
     entry = {
         "id": ctr,
-        "time": datetime.now().strftime("%H:%M:%S"),
+        "time": datetime.now().strftime("%H:%M:%S.%f")[:12],
         "category": category,
         "endpoint": endpoint,
+        "method": method,
         "request": req_body,
         "response": resp_body if isinstance(resp_body, dict) else str(resp_body),
         "status": resp_status,

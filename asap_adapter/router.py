@@ -12,13 +12,15 @@ import asyncio
 import json
 import logging
 import os
-from typing import AsyncGenerator
+import re
+from typing import AsyncGenerator, Optional
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, PlainTextResponse
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .models import (
     AngelDoorStatus,
@@ -32,6 +34,15 @@ class RcsConfigUpdate(BaseModel):
     """RCS 配置更新请求"""
     change_status_url: str = ""
     report_interval: float = 0.5
+
+
+class LogQueryRequest(BaseModel):
+    """日志查询请求"""
+    module: Optional[str] = Field(None, description="按模块名过滤（如 state_machine, door_client, zone_client）")
+    level: Optional[str] = Field(None, description="按级别过滤（DEBUG, INFO, WARNING, ERROR）")
+    keyword: Optional[str] = Field(None, description="关键词搜索")
+    limit: int = Field(100, ge=1, le=1000, description="返回条数")
+    offset: int = Field(0, ge=0, description="从尾部跳过的行数")
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +246,61 @@ def create_router(app: FastAPI) -> APIRouter:
             "change_status_url": rcs.config.change_status_url,
             "report_interval": rcs.config.report_interval,
         }
+
+    # ── 日志查询 ──────────────────────────────
+
+    @router.post("/api/asap/logs")
+    async def query_logs(req: LogQueryRequest, request: Request):
+        """查询运行日志（支持按模块/级别/关键词过滤）"""
+        # 日志文件路径: 相对路径基于项目根目录（app.state.config 中存储）
+        app_cfg = request.app.state.config
+        log_path_str = app_cfg.log.file
+        log_file = Path(log_path_str)
+        if not log_file.is_absolute():
+            # 项目根目录 = config.py 所在目录的父目录
+            base_dir = Path(__file__).resolve().parent.parent
+            log_file = base_dir / log_file
+
+        if not log_file.exists():
+            return {"total": 0, "lines": []}
+
+        # 日志行正则: 时间 | 级别 | 模块 | 消息
+        log_pattern = re.compile(
+            r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} \| (\w+) \s*\| (.+?) \s*\| (.+)$"
+        )
+
+        raw_lines = log_file.read_text(encoding="utf-8", errors="replace").splitlines()
+
+        # 从尾部 offset 开始取
+        start = max(0, len(raw_lines) - req.offset - req.limit)
+        end = len(raw_lines) - req.offset if req.offset > 0 else len(raw_lines)
+        candidate_lines = raw_lines[start:end]
+
+        matched = []
+        for line in candidate_lines:
+            m = log_pattern.match(line)
+            if not m:
+                continue
+            level, module, message = m.group(1), m.group(2), m.group(3)
+
+            # 过滤级别
+            if req.level and level.upper() != req.level.upper():
+                continue
+            # 过滤模块（子串匹配）
+            if req.module and req.module.lower() not in module.lower():
+                continue
+            # 关键词搜索
+            if req.keyword and req.keyword.lower() not in message.lower():
+                continue
+
+            matched.append({
+                "line": line,
+                "level": level,
+                "module": module,
+                "message": message,
+            })
+
+        return {"total": len(matched), "lines": matched[-req.limit:]}
 
     # ── 升级管理 ──────────────────────────────
 

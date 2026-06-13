@@ -300,19 +300,14 @@ start_service() {
             log_ok "服务已在 Supervisor 中运行"
             return
         fi
-        log_warn "Supervisor 未运行，尝试直接启动..."
+
+        # Supervisor 启动失败，查看日志给出指引
+        log_error "Supervisor 启动失败"
+        tail -10 "$LOG_DIR/${SERVICE_NAME}.log" 2>/dev/null || true
+        die "请检查日志后手动启动: supervisorctl start $SERVICE_NAME"
     fi
 
-    # 直接启动
-    nohup "$VENV_PATH/bin/python" "$PROJECT_DIR/app.py" \
-        > "$LOG_DIR/${SERVICE_NAME}_direct.log" 2>&1 &
-    sleep 2
-
-    if pgrep -f "python.*app.py" >/dev/null; then
-        log_ok "已通过直接启动方式运行"
-    else
-        die "服务启动失败，请查看日志: $LOG_DIR/${SERVICE_NAME}_direct.log"
-    fi
+    die "未找到 supervisorctl，请安装 Supervisor 后手动启动"
 }
 
 # ── ── ── ── ── ── ── ── ── ── ── ── ──

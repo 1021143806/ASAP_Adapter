@@ -40,6 +40,20 @@ class DoorClient:
     async def close(self):
         await self._client.aclose()
 
+    def set_sim_mode(self, enabled: bool):
+        """切换模拟模式，重定向到本地模拟端点"""
+        if enabled:
+            new_base = "http://127.0.0.1:5012/sim"
+        else:
+            new_base = self.config.base_url
+        # 重新创建 httpx 客户端以更新 base_url（httpx 的 base_url 不可变）
+        self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(10.0),
+            base_url=new_base,
+        )
+        logger.info("DoorClient %s 模拟模式: base_url=%s",
+                     "启用" if enabled else "关闭", new_base)
+
     def _build_url(self, door_id: str) -> str:
         return f"/acs/door/{door_id}"
 

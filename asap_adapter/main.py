@@ -7,6 +7,7 @@ ASAP Adapter 主入口
   - RCS 对接接口
   - 风淋流程控制
   - WebUI 仪表盘
+  - 内置模拟器（/sim/ 路径，WebUI 中启动/关闭）
 """
 
 import logging
@@ -28,6 +29,12 @@ from .state_machine import StateMachine
 from .router import create_router
 from .logger import setup_logging
 
+# ── 模拟器（全局单例，模块加载时初始化） ──
+from sim_controller.state import SimController
+from sim_controller.router import create_router as create_sim_router
+
+_sim_controller = SimController()
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,6 +49,11 @@ def create_app(config: AppConfig) -> FastAPI:
         zone = ZoneClient(config.zone)
         rcs = RcsReporter(config.rcs)
         sm = StateMachine(config, door, zone, rcs)
+
+        # ── 模拟器状态 ────────────────────
+        app.state.sim_controller = _sim_controller
+        app.state.sim_enabled = False
+        app.state._orig_door_base_url = config.angel.base_url
 
         # 初始化 SSE 事件总线
         sse_clients: list = []
@@ -87,12 +99,14 @@ def create_app(config: AppConfig) -> FastAPI:
     )
 
     # ── 路由 ──────────────────────────────
-    # 路由在 lifespan 之后注册，但 router 实际使用 sm 是通过闭包，
-    # 真正调用时 sm 已经存在于 app.state 中。
-    # 因此 router 内部通过依赖注入获取 sm。
     from .router import create_router as _create_router
     router = _create_router(app)
     app.include_router(router)
+
+    # ── 模拟器路由（始终挂载 /sim，默认关闭） ─
+    sim_router = create_sim_router(_sim_controller)
+    app.include_router(sim_router, prefix="/sim")
+    logger.info("模拟器路由已挂载到 /sim")
 
     # ── WebUI 静态文件 ───────────────────
     static_dir = Path(__file__).parent / "static"
@@ -106,6 +120,13 @@ def create_app(config: AppConfig) -> FastAPI:
         @app.get("/upgrade")
         async def upgrade_page():
             return FileResponse(str(static_dir / "upgrade.html"))
+
+        # 模拟器 WebUI
+        sim_static_dir = Path(__file__).parent.parent / "sim_controller" / "static"
+        if sim_static_dir.exists():
+            @app.get("/sim")
+            async def sim_page():
+                return FileResponse(str(sim_static_dir / "index.html"))
 
     return app
 

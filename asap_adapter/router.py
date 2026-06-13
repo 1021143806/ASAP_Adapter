@@ -28,6 +28,9 @@ from .models import (
     RcsStatusQueryRequest, RcsStatusQueryResponse, RcsStatusData,
 )
 from .state_machine import StateMachine, DoorClientError, ZoneClientError
+from .door_client import DoorClient
+from .zone_client import ZoneClient
+from .config import AppConfig
 
 
 class RcsConfigUpdate(BaseModel):
@@ -301,6 +304,64 @@ def create_router(app: FastAPI) -> APIRouter:
             })
 
         return {"total": len(matched), "lines": matched[-req.limit:]}
+
+    # ── 模拟器控制 ──────────────────────────
+
+    @router.post("/api/asap/sim/enable")
+    async def sim_enable(request: Request):
+        """启用模拟器模式（DoorClient/ZoneClient 重定向到本地模拟端点）"""
+        if request.app.state.sim_enabled:
+            return {"status": "ok", "message": "模拟器已启用"}
+        door: DoorClient = request.app.state.door
+        zone: ZoneClient = request.app.state.zone
+        config: AppConfig = request.app.state.config
+        # 保存原始 URL（仅首次）
+        if not hasattr(request.app.state, "_orig_zone_cfg"):
+            request.app.state._orig_zone_cfg = {
+                "enter_url": config.zone.enter_url,
+                "exit_url": config.zone.exit_url,
+                "status_url": config.zone.status_url,
+            }
+        # 重定向 door 到本地模拟端点
+        door.set_sim_mode(True)
+        # 重定向 zone 到本地模拟端点
+        config.zone.enter_url = f"http://127.0.0.1:{config.server.port}/sim/api/zones/enter"
+        config.zone.exit_url = f"http://127.0.0.1:{config.server.port}/sim/api/zones/exit"
+        config.zone.status_url = f"http://127.0.0.1:{config.server.port}/sim/api/zones/status"
+        # 重置模拟器状态
+        request.app.state.sim_controller.reset_all()
+        request.app.state.sim_enabled = True
+        logger.info("模拟器已启用")
+        return {"status": "ok", "message": "模拟器已启用，Door/Zone 已重定向到本地仿真"}
+
+    @router.post("/api/asap/sim/disable")
+    async def sim_disable(request: Request):
+        """关闭模拟器模式（恢复生产环境配置）"""
+        if not request.app.state.sim_enabled:
+            return {"status": "ok", "message": "模拟器已关闭"}
+        door: DoorClient = request.app.state.door
+        config: AppConfig = request.app.state.config
+        # 恢复原始 door URL
+        door.set_sim_mode(False)
+        # 恢复原始 zone URL
+        orig = getattr(request.app.state, "_orig_zone_cfg", None)
+        if orig:
+            config.zone.enter_url = orig["enter_url"]
+            config.zone.exit_url = orig["exit_url"]
+            config.zone.status_url = orig["status_url"]
+        request.app.state.sim_enabled = False
+        logger.info("模拟器已关闭，恢复生产环境配置")
+        return {"status": "ok", "message": "模拟器已关闭，已恢复生产环境配置"}
+
+    @router.get("/api/asap/sim/status")
+    async def sim_status(request: Request):
+        """获取模拟器状态（是否启用、模拟器快照）"""
+        enabled = request.app.state.sim_enabled
+        snap = request.app.state.sim_controller.snapshot()
+        return {
+            "enabled": enabled,
+            "simulator": snap.model_dump(),
+        }
 
     # ── 升级管理 ──────────────────────────────
 

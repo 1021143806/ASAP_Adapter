@@ -65,6 +65,10 @@ def create_app(config: AppConfig) -> FastAPI:
         sse_clients: list = []
         app.state.sse_clients = sse_clients
 
+        # 初始化 RCS 请求日志（循环缓冲区，保留最近 200 条）
+        app.state.request_log = []
+        app.state.request_log_counter = 0
+
         async def _on_event(event):
             payload = event.model_dump_json()
             dead = []

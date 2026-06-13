@@ -93,7 +93,7 @@ code	String	响应状态码	必须	“200”	“200”：正常
 
 ```Shell
 # 1. 请求进入区域（独占式，该区域A方占用后，其它方不允许进入，许可后未调用退出区域之前，A方多个车辆均可进入）
-POST /api/zones/enter HTTP/1.1
+POST http://ip:port/api/zones/enter HTTP/1.1
 Content-Type: application/json
 
 {

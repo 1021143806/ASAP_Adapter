@@ -65,6 +65,31 @@ class AngelConfigUpdate(BaseModel):
     base_url: str = ""
 
 
+# ── 请求日志记录 ──────────────────────────
+
+def _log_req(request: Request, category: str, endpoint: str,
+             req_body: dict, resp_body, resp_status: int = 200):
+    """记录 RCS 请求日志到 app.state.request_log"""
+    from datetime import datetime
+    log = request.app.state.request_log
+    ctr = request.app.state.request_log_counter
+    ctr += 1
+    request.app.state.request_log_counter = ctr
+    entry = {
+        "id": ctr,
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "category": category,
+        "endpoint": endpoint,
+        "request": req_body,
+        "response": resp_body if isinstance(resp_body, dict) else str(resp_body),
+        "status": resp_status,
+    }
+    log.append(entry)
+    # 超过 200 条时丢弃最早的
+    while len(log) > 200:
+        log.pop(0)
+
+
 class ZoneConfigUpdate(BaseModel):
     """区域管控配置更新"""
     enter_url: str = ""
@@ -151,35 +176,66 @@ def create_router(app: FastAPI) -> APIRouter:
         当 status=1(开门) 时启动完整风淋流程
         当 status=2(关门) 时执行手动关门
         """
+        from datetime import datetime
         sm = _get_sm(request)
+        sm._status.rcs_query_count += 1
+        action = "开门" if req.status == 1 else "关门" if req.status == 2 else f"status={req.status}"
+        sm._status.rcs_last_query = (
+            f"{datetime.now().strftime('%H:%M:%S')} "
+            f"控制 doorCode={req.doorCode} {action}"
+        )
         logger.info("RCS控制请求: door=%s status=%d agv=%s",
                     req.doorCode, req.status, req.deviceCode)
+
+        req_dict = req.model_dump(exclude_none=True)
 
         if req.status == 1:
             success = await sm.start(agv_id=req.deviceCode)
             if not success:
-                return RcsDoorControlResponse(
+                resp = RcsDoorControlResponse(
                     code=2001,
                     msg=f"风淋流程忙碌中，当前状态: {sm.state.value}",
                 )
-            return RcsDoorControlResponse(msg="风淋流程已启动")
+                _log_req(request, "control", "/api/rcs/controlDoor",
+                         req_dict, resp.model_dump(), 200)
+                return resp
+            resp = RcsDoorControlResponse(msg="风淋流程已启动")
+            _log_req(request, "control", "/api/rcs/controlDoor",
+                     req_dict, resp.model_dump(), 200)
+            return resp
 
         elif req.status == 2:
             try:
                 door_id = _door_code_to_id(req.doorCode, sm)
                 await sm.manual_close_door(door_id)
-                return RcsDoorControlResponse(msg=f"门[{door_id}]已关闭")
+                resp = RcsDoorControlResponse(msg=f"门[{door_id}]已关闭")
             except (DoorClientError, ZoneClientError) as e:
-                return RcsDoorControlResponse(code=2002, msg=f"关门失败: {e}")
+                resp = RcsDoorControlResponse(code=2002, msg=f"关门失败: {e}")
+            _log_req(request, "control", "/api/rcs/controlDoor",
+                     req_dict, resp.model_dump(), 200)
+            return resp
 
-        return RcsDoorControlResponse(code=2003, msg=f"未知状态: {req.status}")
+        resp = RcsDoorControlResponse(code=2003, msg=f"未知状态: {req.status}")
+        _log_req(request, "control", "/api/rcs/controlDoor",
+                 req_dict, resp.model_dump(), 200)
+        return resp
 
     # ── RCS 门状态查询 ────────────────────────
 
     @router.post("/api/rcs/doorStatus")
     async def rcs_door_status(req: RcsStatusQueryRequest, request: Request):
         """RCS 门状态查询"""
+        from datetime import datetime
         sm = _get_sm(request)
+        # 更新查询统计
+        sm._status.rcs_query_count += 1
+        sm._status.rcs_last_query = (
+            f"{datetime.now().strftime('%H:%M:%S')} "
+            f"doorCode={req.doorCode}"
+        )
+
+        req_dict = req.model_dump(exclude_none=True)
+
         try:
             door_id = _door_code_to_id(req.doorCode, sm)
             status = await sm.query_door_status(door_id)
@@ -190,13 +246,23 @@ def create_router(app: FastAPI) -> APIRouter:
             elif status == AngelDoorStatus.CLOSED:
                 rcs_status = 2
 
-            return RcsStatusQueryResponse(
-                data=RcsStatusData(status=rcs_status),
-            )
+            resp = RcsStatusQueryResponse(data=RcsStatusData(status=rcs_status))
+            _log_req(request, "query", "/api/rcs/doorStatus",
+                     req_dict, resp.model_dump(), 200)
+            return resp
         except (DoorClientError, ZoneClientError) as e:
-            return RcsStatusQueryResponse(code=9999, msg=str(e))
+            resp = RcsStatusQueryResponse(code=9999, msg=str(e))
+            _log_req(request, "query", "/api/rcs/doorStatus",
+                     req_dict, resp.model_dump(), 200)
+            return resp
 
     # ── ASAP 管理接口 ─────────────────────────
+
+    @router.get("/api/asap/request-log")
+    async def get_request_log(request: Request, limit: int = 50):
+        """获取 RCS 请求日志"""
+        log = request.app.state.request_log
+        return {"total": len(log), "logs": log[-limit:]}
 
     @router.get("/api/asap/status")
     async def get_asap_status(request: Request):

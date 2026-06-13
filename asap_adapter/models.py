@@ -230,6 +230,8 @@ class AirShowerStatus(BaseModel):
     started_at: Optional[str] = None
     error_message: str = ""
     last_event: str = ""
+    rcs_query_count: int = 0
+    rcs_last_query: str = ""
 
 
 class StateEvent(BaseModel):

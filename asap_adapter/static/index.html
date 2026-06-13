@@ -1401,7 +1401,7 @@ function updateZoneDashboard(data) {
     const fsEl = document.getElementById("zoneFlowState");
     if (fsEl) {
       const s = data.state || "idle";
-      const labels = { idle: "空闲", entering: "进入中", inside: "区域内", q001_closed: "等待退出", exiting: "退出中", error: "异常" };
+      const labels = { idle: "空闲", entering: "进入中", inside: "区域内", q001_closed: "等待出口", q002_opened: "AGV在出口", exiting: "退出中", error: "异常" };
       fsEl.textContent = labels[s] || s;
     }
     updateZoneDoorCard("zoneEntry", data.entry_door_code || "q001", data.entry_door_status || "2");

@@ -1,12 +1,13 @@
 """
 配置加载模块
 从 TOML 文件加载配置，运行时配置覆盖静态配置。
-优先级: runtime.toml > overrides.json > env.toml > 默认值
+优先级: /data/config.toml > runtime.toml > env.toml > 默认值
 
 文件说明:
-  - config/env.toml       — 静态项目配置（server/log/duration/超时），修改需重启
-  - config/runtime.toml   — 运行时配置（地址/URL/映射），修改即时生效（文件编辑器）
-  - config/overrides.json — 运行时配置（兼容，可视化编辑器写入），即时生效
+  - config/env.toml       — 静态项目配置（server/log），修改需重启
+  - /data/config.toml     — 统一运行时配置（含版本号），修改即时生效
+  - config/runtime.toml   — 运行时配置（兼容旧版），修改即时生效
+  - config/overrides.json — 运行时覆盖（兼容旧版），可视化编辑器写入
 """
 
 import os
@@ -152,6 +153,9 @@ def load_config(path: Optional[str] = None) -> AppConfig:
 
     # 3. overrides.json（向后兼容，覆盖前两者）
     _load_overrides(cfg, os.path.join(base_dir, "config", "overrides.json"))
+
+    # 4. /data/config.toml（统一运行时配置，最高优先级）
+    _load_unified(cfg)
 
     return cfg
 

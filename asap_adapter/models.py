@@ -9,9 +9,9 @@
 """
 
 from enum import Enum
-from typing import Optional, Any
+from typing import Optional, Any, Union
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ═══════════════════════════════════════════
@@ -136,6 +136,13 @@ class RcsDoorControlRequest(BaseModel):
     payLoad: str = Field(default="", description="负载重量")
     thirdOrderId: str = Field(default="", description="第三方订单号")
     entryPoint: str = Field(default="", description="入口节点")
+
+    @field_validator('orderId', mode='before')
+    @classmethod
+    def empty_str_to_zero(cls, v):
+        if v == "" or v is None:
+            return 0
+        return v
 
 
 class RcsDoorControlResponse(BaseModel):

@@ -3,9 +3,10 @@
 
 独立于风淋流程，专用于 q001/q002 虚拟门与区域进入/退出 API 的映射。
 RCS 门控制映射：
-  - q001 status=1 → 进入区域 (POST /api/zones/enter)
-  - q001 status=2 → AGV 已进入，标记 q001 关
-  - q002 status=2 → 退出区域 (POST /api/zones/exit)
+  - q001 status=1 → 进入区域 (POST /api/zones/enter)，上报 q001 开
+  - q001 status=2 → AGV 已进入，标记 q001 关，上报 RCS
+  - q002 status=1 → AGV 到达出口，q002 开
+  - q002 status=2 → 退出区域 (POST /api/zones/exit)，上报 RCS
 """
 
 import asyncio
@@ -25,7 +26,8 @@ class ZoneFlowState(str, Enum):
     IDLE = "idle"
     ENTERING = "entering"          # 正在请求进入区域（轮询+进入）
     INSIDE = "inside"              # 区域内，q001 已上报开
-    Q001_CLOSED = "q001_closed"    # q001 已关，等待 q002 触发退出
+    Q001_CLOSED = "q001_closed"    # q001 已关，等待 q002 开
+    Q002_OPENED = "q002_opened"    # q002 已开，AGV 在出口等待
     EXITING = "exiting"            # 正在退出区域
     ERROR = "error"
 
@@ -154,9 +156,19 @@ class ZoneStateMachine:
             return True, "进入区域流程已启动"
 
         elif door_code == exit_:
-            # q002 的 open 在区域管控中不触发特定操作（文档未定义）
-            logger.info("Zone RCS: q002 open 忽略 (region=%s)", self._state.value)
-            return True, "ignored"
+            # q002 status=1: AGV 到达出口
+            if self._state == ZoneFlowState.Q001_CLOSED:
+                self._set_state(ZoneFlowState.Q002_OPENED)
+                self._status.exit_door_status = "1"
+                self._status.current_step = 4
+                await self.rcs.report_door_open(exit_)
+                self._log_step(4, "q002 已开 (AGV在出口)", "q002_open", "info", "",
+                               {"door": exit_, "status": "opened"})
+                self._publish()
+                logger.info("Zone: q002 已开，等待关闭触发退出")
+                return True, "q002_opened"
+            else:
+                return False, f"当前状态不可开 q002: {self._state.value}"
 
         return False, f"未知门编号: {door_code}"
 
@@ -174,15 +186,18 @@ class ZoneStateMachine:
                 self._status.entry_door_status = "2"
                 self._status.current_step = 3
                 # 上报 RCS：q001 已关
+                self._log_step(3, "上报 q001 已关", "report_closed", "send",
+                               f"POST {self.config.rcs.change_status_url}",
+                               {"doorNum": self._status.entry_door_code, "doorStatus": "2"})
                 await self.rcs.report_door_closed(entry)
                 self._publish()
-                logger.info("Zone: q001 已关，等待 q002 触发退出")
+                logger.info("Zone: q001 已关，等待 q002 开")
                 return True, "q001_closed"
             else:
                 return False, f"当前状态不可关 q001: {self._state.value}"
 
         elif door_code == exit_:
-            if self._state == ZoneFlowState.Q001_CLOSED:
+            if self._state == ZoneFlowState.Q002_OPENED:
                 self._cancel_event.clear()
                 self._task = asyncio.create_task(self._exit_flow())
                 self._publish()
@@ -268,34 +283,40 @@ class ZoneStateMachine:
     # ── 退出区域流程 ──────────────────────────
 
     async def _exit_flow(self):
-        """退出区域：POST exit → 轮询确认 → 上报 q002"""
+        """退出区域：POST exit → 轮询确认 → 上报 q002 关"""
         try:
             self._set_state(ZoneFlowState.EXITING)
             self._status.exit_door_status = "2"
-            self._status.current_step = 4
+            self._status.current_step = 5
 
             # 1) 退出区域
-            self._log_step(4, "退出区域", "exit_zone", "send",
+            self._log_step(5, "退出区域", "exit_zone", "send",
                            f"POST {self.config.zone.exit_url}",
                            {"zone_id": self.config.zone.zone_id,
                             "client_id": self.config.zone.client_id})
             await self.zone.exit_with_retry()
-            self._log_step(4, "退出区域成功", "exit_zone", "recv",
+            self._log_step(5, "退出区域成功", "exit_zone", "recv",
                            f"POST {self.config.zone.exit_url}",
                            {"zone_id": self.config.zone.zone_id, "status": "released"})
 
             # 2) 轮询确认区域已释放
-            self._status.current_step = 5
-            self._log_step(5, "确认区域释放", "poll_released", "send",
+            self._status.current_step = 6
+            self._log_step(6, "确认区域释放", "poll_released", "send",
                            f"GET {self.config.zone.status_url}",
                            {"zone_id": self.config.zone.zone_id})
             confirmed = await self._wait_zone_released()
             if confirmed:
-                self._log_step(5, "区域已释放", "poll_released", "recv",
+                self._log_step(6, "区域已释放", "poll_released", "recv",
                                f"GET {self.config.zone.status_url}",
                                {"zone_id": self.config.zone.zone_id, "status": "available"})
 
-            # 3) 重置状态
+            # 3) 上报 RCS：q002 已关
+            self._log_step(6, "上报 q002 已关", "report_closed", "send",
+                           f"POST {self.config.rcs.change_status_url}",
+                           {"doorNum": self._status.exit_door_code, "doorStatus": "2"})
+            await self.rcs.report_door_closed(self._status.exit_door_code)
+
+            # 4) 重置
             self._set_state(ZoneFlowState.IDLE)
             self._status.current_step = 0
             self._status.entry_door_status = "2"

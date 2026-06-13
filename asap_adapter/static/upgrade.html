@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASAP Adapter — 升级管理</title>
+<style>
+:root {
+  --bg: #0d1117; --card: #161b22; --card-border: #30363d;
+  --text: #e6edf3; --text-muted: #8b949e; --accent: #58a6ff;
+  --success: #3fb950; --warning: #d29922; --danger: #f85149;
+  --radius: 10px; --shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100vh; padding: 16px;
+}
+.header {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 20px;
+  padding: 12px 20px; background: var(--card); border: 1px solid var(--card-border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.header h1 { font-size: 18px; font-weight: 600; }
+.header a { color: var(--accent); text-decoration: none; font-size: 13px; margin-left: auto; }
+.header a:hover { text-decoration: underline; }
+
+.card {
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); margin-bottom: 16px;
+}
+.card-title {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 12px;
+}
+
+/* 版本信息 */
+.version-grid { display: flex; gap: 24px; flex-wrap: wrap; }
+.version-item { flex: 1 1 140px; }
+.version-item .label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+.version-item .value { font-size: 16px; font-weight: 600; font-family: "SF Mono", monospace; }
+
+/* 上传区域 */
+.upload-zone {
+  border: 2px dashed var(--card-border); border-radius: 12px;
+  padding: 32px 20px; text-align: center; cursor: pointer;
+  transition: all 0.2s; position: relative;
+}
+.upload-zone:hover, .upload-zone.dragover {
+  border-color: var(--accent); background: rgba(88,166,255,0.05);
+}
+.upload-zone .icon { font-size: 40px; margin-bottom: 8px; }
+.upload-zone .hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.upload-zone input[type="file"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer;
+}
+
+.file-info {
+  display: none; align-items: center; gap: 8px;
+  padding: 10px 14px; background: rgba(88,166,255,0.08);
+  border-radius: 8px; margin-top: 10px;
+}
+.file-info.show { display: flex; }
+.file-info .name { flex: 1; font-size: 13px; font-weight: 500; }
+.file-info .size { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+
+.remark-input {
+  width: 100%; margin-top: 10px; padding: 8px 12px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--card-border);
+  border-radius: 6px; color: var(--text); font-size: 12px;
+  font-family: inherit; resize: vertical; min-height: 50px; outline: none;
+}
+.remark-input:focus { border-color: var(--accent); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px; border-radius: 8px; border: 1px solid var(--card-border);
+  background: transparent; color: var(--text); font-size: 13px;
+  cursor: pointer; transition: all 0.15s; font-family: inherit; font-weight: 500;
+  margin-top: 10px;
+}
+.btn:hover { background: rgba(255,255,255,0.06); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: #4c91e6; }
+.btn-danger { border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover { background: var(--danger); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 11px; margin-top: 0; }
+.btn-warning { border-color: var(--warning); color: var(--warning); }
+.btn-warning:hover { background: var(--warning); color: #000; }
+
+.progress-bar {
+  display: none; height: 4px; border-radius: 2px;
+  background: var(--card-border); margin-top: 10px; overflow: hidden;
+}
+.progress-bar.show { display: block; }
+.progress-bar .bar {
+  height: 100%; width: 100%; background: linear-gradient(90deg, var(--accent), var(--success));
+  animation: progressAnim 1.5s ease infinite;
+}
+@keyframes progressAnim {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.result-box {
+  display: none; padding: 10px 14px; border-radius: 8px; margin-top: 10px;
+  font-size: 13px;
+}
+.result-box.show { display: block; }
+.result-box.success { background: rgba(63,185,80,0.1); border: 1px solid rgba(63,185,80,0.3); color: var(--success); }
+.result-box.error { background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3); color: var(--danger); }
+
+.exclude-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+.exclude-tags .tag {
+  font-size: 10px; padding: 2px 8px; border-radius: 4px;
+  background: rgba(139,148,158,0.1); color: var(--text-muted);
+}
+
+/* 升级记录 */
+.record-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.record-table th {
+  text-align: left; padding: 8px 10px; color: var(--text-muted);
+  border-bottom: 1px solid var(--card-border); font-weight: 600;
+}
+.record-table td { padding: 8px 10px; border-bottom: 1px solid rgba(48,54,61,0.5); vertical-align: middle; }
+.record-table tr:hover td { background: rgba(255,255,255,0.02); }
+.version-tag { font-family: "SF Mono", monospace; font-size: 12px; }
+.badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 600;
+}
+.badge-success { background: rgba(63,185,80,0.15); color: var(--success); }
+.badge-warning { background: rgba(210,153,34,0.15); color: var(--warning); }
+.badge-danger { background: rgba(248,81,73,0.15); color: var(--danger); }
+.empty-state { padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px; }
+
+/* API 帮助 */
+.api-help { margin-top: 10px; }
+.api-help summary { cursor: pointer; font-size: 12px; color: var(--accent); }
+.api-help pre {
+  background: rgba(0,0,0,0.3); border: 1px solid var(--card-border);
+  border-radius: 6px; padding: 12px; margin-top: 8px; overflow-x: auto;
+  font-size: 11px; line-height: 1.5; color: var(--text-muted);
+}
+
+@media (max-width: 600px) {
+  .version-grid { flex-direction: column; gap: 12px; }
+  .record-table th, .record-table td { padding: 6px 6px; font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⬆ 升级管理</h1>
+  <a href="/">← 返回仪表盘</a>
+</div>
+
+<!-- 当前版本 -->
+<div class="card">
+  <div class="card-title">当前版本</div>
+  <div class="version-grid">
+    <div class="version-item">
+      <div class="label">应用版本</div>
+      <div class="value" id="appVersion">加载中...</div>
+    </div>
+    <div class="version-item">
+      <div class="label">项目路径</div>
+      <div class="value" id="projectDir" style="font-size:13px;">加载中...</div>
+    </div>
+    <div class="version-item">
+      <div class="label">Supervisor 进程</div>
+      <div class="value" style="font-size:13px;">asap_adapter</div>
+    </div>
+  </div>
+</div>
+
+<!-- 上传升级 -->
+<div class="card">
+  <div class="card-title">上传升级包</div>
+
+  <div class="upload-zone" id="uploadZone">
+    <div class="icon">📦</div>
+    <div><strong>点击选择或拖拽 .zip 文件到此处</strong></div>
+    <div class="hint">仅支持 .zip 格式</div>
+    <input type="file" id="fileInput" accept=".zip">
+  </div>
+
+  <div class="file-info" id="fileInfo">
+    <span>📦</span>
+    <span class="name" id="fileName"></span>
+    <span class="size" id="fileSize"></span>
+    <button class="btn btn-sm" id="btnClearFile" style="margin-top:0;">✕</button>
+  </div>
+
+  <textarea class="remark-input" id="remarkInput" placeholder="升级说明（可选）&#10;例如：修复了xxx问题，新增了xxx功能"></textarea>
+
+  <button class="btn btn-primary" id="btnUpgrade" disabled>⬆ 开始升级</button>
+  <div class="progress-bar" id="progressBar"><div class="bar"></div></div>
+  <div class="result-box" id="resultBox"></div>
+
+  <div class="exclude-tags">
+    <span style="font-size:10px;color:var(--text-muted);width:100%;margin-bottom:4px;">以下文件/目录将保留，不受升级影响：</span>
+  </div>
+</div>
+
+<!-- API 调用说明 -->
+<div class="card">
+  <details class="api-help">
+    <summary>📋 API 调用方式（点击展开）</summary>
+    <pre>
+<span style="color:var(--accent);"># 通过 curl 升级</span>
+curl -X POST http://HOST:5012/api/asap/upgrade/upload \
+  -F "file=@upgrade_v1.1.0.zip" \
+  -F "remark=修复了xxx问题，新增了xxx功能"
+
+<span style="color:var(--accent);"># 升级包内放入 version.json 可自动读取版本信息</span>
+# version.json 格式：
+# {
+#   "title": "v1.1.0 安全更新",
+#   "changes": ["修复: xxx", "新增: xxx"]
+# }
+
+<span style="color:var(--accent);"># 查看升级记录</span>
+curl http://HOST:5012/api/asap/upgrade/records
+
+<span style="color:var(--accent);"># 回滚到指定备份</span>
+curl -X POST http://HOST:5012/api/asap/upgrade/rollback/upgrade_20260101_120000
+
+<span style="color:var(--accent);"># 查看当前版本</span>
+curl http://HOST:5012/api/asap/upgrade/version
+    </pre>
+  </details>
+</div>
+
+<!-- 升级记录 -->
+<div class="card">
+  <div class="card-title">升级记录</div>
+  <div id="recordsContainer"><div class="empty-state">加载中...</div></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+//  升级管理 WebUI
+// ═══════════════════════════════════════
+
+const fileInput = document.getElementById("fileInput");
+const uploadZone = document.getElementById("uploadZone");
+const fileInfo = document.getElementById("fileInfo");
+const fileName = document.getElementById("fileName");
+const fileSize = document.getElementById("fileSize");
+const btnUpgrade = document.getElementById("btnUpgrade");
+const btnClearFile = document.getElementById("btnClearFile");
+const progressBar = document.getElementById("progressBar");
+const resultBox = document.getElementById("resultBox");
+
+let selectedFile = null;
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / 1048576).toFixed(1) + " MB";
+}
+
+// ── 文件选择 ──────────────────────────
+
+fileInput.addEventListener("change", function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith(".zip")) {
+    alert("仅支持 .zip 格式");
+    this.value = "";
+    return;
+  }
+  selectedFile = file;
+  fileName.textContent = file.name;
+  fileSize.textContent = formatSize(file.size);
+  fileInfo.classList.add("show");
+  btnUpgrade.disabled = false;
+  resultBox.classList.remove("show");
+});
+
+btnClearFile.addEventListener("click", function() {
+  selectedFile = null;
+  fileInput.value = "";
+  fileInfo.classList.remove("show");
+  btnUpgrade.disabled = true;
+  resultBox.classList.remove("show");
+});
+
+// 拖拽
+uploadZone.addEventListener("dragover", function(e) { e.preventDefault(); this.classList.add("dragover"); });
+uploadZone.addEventListener("dragleave", function(e) { e.preventDefault(); this.classList.remove("dragover"); });
+uploadZone.addEventListener("drop", function(e) {
+  e.preventDefault(); this.classList.remove("dragover");
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.toLowerCase().endsWith(".zip")) {
+    fileInput.files = e.dataTransfer.files;
+    fileInput.dispatchEvent(new Event("change"));
+  } else {
+    alert("仅支持 .zip 格式");
+  }
+});
+
+// ── 升级 ──────────────────────────────
+
+btnUpgrade.addEventListener("click", function() {
+  if (!selectedFile) return;
+
+  const formData = new FormData();
+  formData.append("file", selectedFile);
+  const remark = document.getElementById("remarkInput").value.trim();
+  if (remark) formData.append("remark", remark);
+
+  btnUpgrade.disabled = true;
+  btnUpgrade.textContent = "⏳ 升级中...";
+  progressBar.classList.add("show");
+  resultBox.classList.remove("show");
+
+  fetch("/api/asap/upgrade/upload", { method: "POST", body: formData })
+    .then(async res => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "升级失败");
+      return data;
+    })
+    .then(data => {
+      progressBar.classList.remove("show");
+      resultBox.className = "result-box show success";
+      resultBox.textContent = "✅ " + data.message;
+      setTimeout(() => location.reload(), 4000);
+    })
+    .catch(err => {
+      progressBar.classList.remove("show");
+      resultBox.className = "result-box show error";
+      resultBox.textContent = "❌ " + err.message;
+      btnUpgrade.disabled = false;
+      btnUpgrade.textContent = "⬆ 开始升级";
+    });
+});
+
+// ── 加载数据 ──────────────────────────
+
+function loadVersion() {
+  fetch("/api/asap/upgrade/version")
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        document.getElementById("appVersion").textContent = data.info.app_version || "unknown";
+      }
+    })
+    .catch(() => { document.getElementById("appVersion").textContent = "加载失败"; });
+}
+
+function loadRecords() {
+  fetch("/api/asap/upgrade/records")
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) { document.getElementById("recordsContainer").innerHTML = '<div class="empty-state">加载失败</div>'; return; }
+
+      const records = data.records || [];
+      const excludePatterns = data.exclude_patterns || [];
+      document.getElementById("projectDir").textContent = window.location.hostname;
+
+      // 排除标签
+      const tagsContainer = document.querySelector(".exclude-tags");
+      tagsContainer.innerHTML = '<span style="font-size:10px;color:var(--text-muted);width:100%;margin-bottom:4px;">以下文件/目录将保留，不受升级影响：</span>';
+      excludePatterns.forEach(p => {
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = p;
+        tagsContainer.appendChild(tag);
+      });
+
+      // 记录表格
+      const container = document.getElementById("recordsContainer");
+      if (records.length === 0) {
+        container.innerHTML = '<div class="empty-state">📭 暂无升级记录</div>';
+        return;
+      }
+
+      let html = `<table class="record-table">
+        <thead><tr>
+          <th>时间</th><th>版本变化</th><th>升级说明</th><th>状态</th><th>文件</th><th>操作</th>
+        </tr></thead><tbody>`;
+
+      records.forEach(r => {
+        const ts = r.timestamp || "";
+        const dateStr = ts ? `${ts.slice(0,4)}-${ts.slice(4,6)}-${ts.slice(6,8)} ${ts.slice(9,11)}:${ts.slice(11,13)}` : "-";
+        const isRollback = r.status === "rollback";
+
+        let versionHtml = isRollback
+          ? `<span class="version-tag" style="color:var(--warning);">${r.old_version || "?"} ← ${r.new_version || "?"}</span>`
+          : `<span class="version-tag">${r.old_version || "?"} → ${r.new_version || "?"}</span>`;
+
+        let statusHtml = "";
+        if (r.status === "success") statusHtml = '<span class="badge badge-success">成功</span>';
+        else if (r.status === "rollback") statusHtml = '<span class="badge badge-warning">回滚</span>';
+        else statusHtml = '<span class="badge badge-danger">失败</span>';
+
+        let notesHtml = "-";
+        const notes = r.release_notes || [];
+        const title = r.release_title || "";
+        if (title || notes.length > 0) {
+          notesHtml = "";
+          if (title && !title.startsWith("从 v")) notesHtml += `<div style="font-weight:600;margin-bottom:2px;">${title}</div>`;
+          notes.forEach(n => { notesHtml += `<div style="opacity:0.8;">• ${n}</div>`; });
+        }
+
+        const showRollback = r.backup_name && r.backup_name.startsWith("upgrade_");
+        const rollbackBtn = showRollback
+          ? `<button class="btn btn-warning btn-sm" onclick="rollback('${r.backup_name}')" title="回滚到此版本">↩ 回滚</button>`
+          : "";
+
+        html += `<tr>
+          <td style="white-space:nowrap;font-size:11px;">${dateStr}</td>
+          <td>${versionHtml}</td>
+          <td style="max-width:180px;font-size:11px;">${notesHtml}</td>
+          <td>${statusHtml}</td>
+          <td>${r.files_overlay || "-"}</td>
+          <td>${rollbackBtn}</td>
+        </tr>`;
+      });
+
+      html += "</tbody></table>";
+      container.innerHTML = html;
+    })
+    .catch(() => { document.getElementById("recordsContainer").innerHTML = '<div class="empty-state">加载失败</div>'; });
+}
+
+// ── 回滚 ──────────────────────────────
+
+function rollback(backupName) {
+  if (!confirm(`确认回滚到备份 "${backupName}"？\n回滚前会自动备份当前代码，完成后系统将自动重启。`)) return;
+
+  fetch(`/api/asap/upgrade/rollback/${encodeURIComponent(backupName)}`, { method: "POST" })
+    .then(async res => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "回滚失败");
+      return data;
+    })
+    .then(data => {
+      alert("✅ " + data.message);
+      setTimeout(() => location.reload(), 3000);
+    })
+    .catch(err => {
+      alert("❌ " + err.message);
+    });
+}
+
+loadVersion();
+loadRecords();
+</script>
+</body>
+</html>

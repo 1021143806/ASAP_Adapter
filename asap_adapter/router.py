@@ -11,6 +11,7 @@ HTTP API 路由
 import asyncio
 import json
 import logging
+import os
 from typing import AsyncGenerator
 from datetime import datetime
 
@@ -229,5 +230,77 @@ def create_router(app: FastAPI) -> APIRouter:
             "change_status_url": rcs.config.change_status_url,
             "report_interval": rcs.config.report_interval,
         }
+
+    # ── 升级管理 ──────────────────────────────
+
+    @router.get("/api/asap/upgrade/version")
+    async def get_upgrade_version():
+        """获取当前版本信息"""
+        from . import upgrade_service as us
+        return {"success": True, "info": us.get_version_info()}
+
+    @router.get("/api/asap/upgrade/records")
+    async def get_upgrade_records():
+        """获取升级记录"""
+        from . import upgrade_service as us
+        return {"success": True, "records": us.get_upgrade_records(),
+                "exclude_patterns": us.get_exclude_patterns(),
+                "max_backups": us.MAX_BACKUPS}
+
+    @router.post("/api/asap/upgrade/upload")
+    async def upload_upgrade(request: Request):
+        """上传并执行升级包"""
+        import tempfile
+        import traceback
+        from . import upgrade_service as us
+
+        form = await request.form()
+        file = form.get("file")
+        if not file:
+            raise HTTPException(status_code=400, detail="缺少 file 字段")
+
+        if not file.filename or not file.filename.lower().endswith(".zip"):
+            raise HTTPException(status_code=400, detail="仅支持 .zip 文件")
+
+        remark = form.get("remark", "").strip()
+
+        # 保存到临时文件
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zip")
+        os.close(tmp_fd)
+        try:
+            content = await file.read()
+            with open(tmp_path, "wb") as f:
+                f.write(content)
+        except Exception as e:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            logger.error("保存上传文件失败: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail=f"保存上传文件失败: {str(e)}")
+
+        try:
+            result = us.do_upgrade(tmp_path, remark=remark)
+        except Exception as e:
+            logger.error("执行升级异常: %s", traceback.format_exc())
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            raise HTTPException(status_code=500, detail=f"执行升级异常: {str(e)}")
+
+        if result["success"]:
+            us.trigger_restart(delay=3)
+            return {"success": True, "message": result["message"],
+                    "backup": result.get("backup", "")}
+        else:
+            raise HTTPException(status_code=400, detail=result.get("error", "升级失败"))
+
+    @router.post("/api/asap/upgrade/rollback/{backup_name}")
+    async def rollback_upgrade(backup_name: str):
+        """回滚到指定备份版本"""
+        from . import upgrade_service as us
+        result = us.do_rollback(backup_name)
+        if result["success"]:
+            us.trigger_restart(delay=3)
+            return {"success": True, "message": result["message"]}
+        else:
+            raise HTTPException(status_code=500, detail=result.get("error", "回滚失败"))
 
     return router

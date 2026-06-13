@@ -103,6 +103,10 @@ def create_app(config: AppConfig) -> FastAPI:
         async def index():
             return FileResponse(str(static_dir / "index.html"))
 
+        @app.get("/upgrade")
+        async def upgrade_page():
+            return FileResponse(str(static_dir / "upgrade.html"))
+
     return app
 
 

@@ -25,3 +25,4 @@ typing_extensions==4.15.0
 annotated_types==0.7.0
 typing_inspection==0.4.2
 click==8.1.8
+python-multipart==0.0.20

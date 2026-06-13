@@ -167,15 +167,7 @@ create_venv() {
 
     # 检查 venv 模块
     if ! $PYTHON3 -m venv --help &>/dev/null; then
-        log_warn "venv 模块不可用，尝试安装..."
-        case "$OS_ID" in
-            centos|openEuler)
-                yum install -y python3-venv 2>/dev/null || dnf install -y python3-venv 2>/dev/null || true
-                ;;
-            debian)
-                apt install -y python3-venv 2>/dev/null || true
-                ;;
-        esac
+        die "Python 3.9 缺少 venv 模块，请确认编译时使用了 --with-ensurepip=install"
     fi
 
     $PYTHON3 -m venv "$VENV_PATH" || die "虚拟环境创建失败"
@@ -201,10 +193,7 @@ install_deps() {
     [ ! -f "$REQ_FILE" ] && REQ_FILE="$VENDOR_DIR/requirements_py39_fixed.txt"
 
     if [ ! -f "$REQ_FILE" ]; then
-        log_warn "未找到 requirements 文件，尝试在线安装..."
-        "$VENV_PIP" install fastapi uvicorn httpx pydantic typing_extensions 2>&1 | tail -3
-        log_ok "在线安装完成"
-        return
+        die "未找到 requirements 文件: $VENDOR_DIR/requirements_asap_fixed.txt"
     fi
 
     log_info "离线包目录: $VENDOR_DIR"

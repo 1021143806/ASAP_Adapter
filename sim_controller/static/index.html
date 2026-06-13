@@ -376,7 +376,7 @@ async function api(path, opts = {}) {
 
 async function updateStatus() {
   try {
-    const data = await api("/api/sim/status");
+    const data = await api("/sim/api/sim/status");
     renderDoors(data);
     renderZone(data);
     renderConfig(data);
@@ -488,40 +488,19 @@ function escHtml(s) {
 // ── 手动控制 ──────────────────────────
 
 async function setDoor(doorId, state) {
-  await api(`/api/sim/door/set?door_id=${doorId}&state=${state}`, { method: "POST" });
-  await updateStatus();
-}
+  await api(`/sim/api/sim/door/set?door_id=${doorId}&state=${state}`, { method: "POST" });
 
-async function injectFault(doorId) {
-  const data = await api(`/api/sim/door/fault?door_id=${doorId}&enable=true`, { method: "POST" });
-  await updateStatus();
-  // 3秒后自动清除
-  setTimeout(async () => {
-    await api(`/api/sim/door/fault?door_id=${doorId}&enable=false`, { method: "POST" });
-    await updateStatus();
-  }, 3000);
-}
+  await api(`/sim/api/sim/door/fault?door_id=${doorId}&enable=true`, { method: "POST" });
 
-async function setZoneBusy(busy) {
-  await api(`/api/sim/zone/busy?busy=${busy}&client=webui_trigger`, { method: "POST" });
-  await updateStatus();
-}
+    await api(`/sim/api/sim/door/fault?door_id=${doorId}&enable=false`, { method: "POST" });
 
-async function toggleAlwaysBusy() {
-  const busy = document.getElementById("alwaysBusyToggle").checked;
-  await api(`/api/sim/zone/busy?busy=${busy}`, { method: "POST" });
-  await updateStatus();
-}
+  await api(`/sim/api/sim/zone/busy?busy=${busy}&client=webui_trigger`, { method: "POST" });
 
-async function applyDelays() {
-  const openD = parseFloat(document.getElementById("openDelay").value) || 2;
-  const closeD = parseFloat(document.getElementById("closeDelay").value) || 2;
-  await api(`/api/sim/config/delays?open_delay=${openD}&close_delay=${closeD}`, { method: "POST" });
-  await updateStatus();
-}
+  await api(`/sim/api/sim/zone/busy?busy=${busy}`, { method: "POST" });
 
-async function resetSim() {
-  await api("/api/sim/reset", { method: "POST" });
+  await api(`/sim/api/sim/config/delays?open_delay=${openD}&close_delay=${closeD}`, { method: "POST" });
+
+  await api("/sim/api/sim/reset", { method: "POST" });
   await updateStatus();
   addLog("system", "全部", "模拟器已重置");
 }
@@ -594,7 +573,7 @@ init();
 // 报文详情弹窗
 function showLogDetail(logId) {
   // 从页面上取日志条目数据 — 必须从最新状态快照取
-  fetch("/api/sim/status")
+  fetch("/sim/api/sim/status")
     .then(r => r.json())
     .then(data => {
       const logs = data.request_log || [];

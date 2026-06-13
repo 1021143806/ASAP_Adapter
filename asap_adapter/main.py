@@ -132,7 +132,9 @@ def create_app(config: AppConfig) -> FastAPI:
 
         @app.get("/upgrade")
         async def upgrade_page():
-            return FileResponse(str(static_dir / "upgrade.html"))
+            # 升级功能已集成到主页面，/upgrade 重定向到首页
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url="/")
 
         # 模拟器 WebUI（仅 sim_available 时挂载）
         if _sim_available:

@@ -422,6 +422,52 @@ body {
 /* 加载过渡 */
 .fade-in { animation: fadeIn 0.4s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* 配置管理编辑器聚焦效果 */
+#configFileEditor:focus { border-color: var(--accent) !important; box-shadow: 0 0 12px var(--accent-glow); }
+
+/* 升级管理样式 */
+.upgrade-grid { display:flex; flex-direction:column; gap:16px; }
+.upload-zone {
+  border: 2px dashed var(--card-border); border-radius: 12px;
+  padding: 28px 20px; text-align: center; cursor: pointer;
+  transition: all 0.2s; position: relative;
+}
+.upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: var(--accent-glow); }
+.upload-zone .upload-icon { font-size: 36px; margin-bottom: 6px; }
+.upload-zone .hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.upload-zone input[type="file"] { position:absolute; inset:0; opacity:0; cursor:pointer; }
+.file-info {
+  display:none; align-items:center; gap:8px;
+  padding:8px 12px; background: var(--accent-glow); border-radius:8px; margin-top:8px;
+}
+.file-info.show { display:flex; }
+.file-info .name { flex:1; font-size:13px; font-weight:500; }
+.file-info .size { font-size:11px; color:var(--text-muted); font-family:monospace; }
+.progress-bar {
+  display:none; height:4px; border-radius:2px;
+  background: var(--card-border); margin-top:10px; overflow:hidden;
+}
+.progress-bar.show { display:block; }
+.progress-bar .bar {
+  height:100%; width:100%; background: linear-gradient(90deg, var(--accent), var(--success));
+  animation: upgradeProgress 1.5s ease infinite;
+}
+@keyframes upgradeProgress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+.result-box { display:none; padding:10px 14px; border-radius:8px; margin-top:10px; font-size:13px; }
+.result-box.show { display:block; }
+.result-box.success { background:rgba(52,211,153,0.1); border:1px solid rgba(52,211,153,0.3); color:var(--success); }
+.result-box.error { background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.3); color:var(--danger); }
+.exclude-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:10px; }
+.exclude-tags .tag { font-size:10px; padding:2px 8px; border-radius:4px; background:var(--card-bg); color:var(--text-muted); }
+.record-table { width:100%; font-size:12px; border-collapse:collapse; }
+.record-table th { text-align:left; padding:8px 10px; color:var(--text-muted); border-bottom:1px solid var(--card-border); font-weight:600; }
+.record-table td { padding:8px 10px; border-bottom:1px solid var(--card-border); vertical-align:middle; }
+.record-table tr:hover td { background:var(--card-bg); }
+.version-tag { font-family:"SF Mono", monospace; font-size:12px; }
 </style>
 </head>
 <body>
@@ -435,8 +481,10 @@ body {
         <div style="font-size:12px;color:var(--text-muted);">风淋门 · 区域管控协议适配器</div>
       </div>
       <nav style="display:flex;gap:4px;margin-left:12px;">
-        <a href="javascript:void(0)" class="nav-tab nav-tab-active" onclick="switchView('production')" id="tabProduction">📊 仪表盘</a>
-        <a href="/upgrade" class="nav-tab">⬆ 升级</a>
+        <a href="javascript:void(0)" class="nav-tab nav-tab-active" onclick="switchView('door')" id="tabDoor">🚪 风淋门</a>
+        <a href="javascript:void(0)" class="nav-tab" onclick="switchView('zone')" id="tabZone">📡 区域管控</a>
+        <a href="javascript:void(0)" class="nav-tab" onclick="switchView('config')" id="tabConfig">⚙ 配置管理</a>
+        <a href="javascript:void(0)" class="nav-tab" onclick="switchView('upgrade')" id="tabUpgrade">⬆ 升级</a>
         <a href="javascript:void(0)" class="nav-tab" onclick="switchView('simulator')" id="tabSimulator">🎮 模拟器</a>
       </nav>
     </div>
@@ -452,9 +500,9 @@ body {
   </header>
 
   <!-- ════════════════════════════════════
-       仪表盘视图
+       风淋门视图
        ════════════════════════════════════ -->
-  <div id="view-production">
+  <div id="view-door">
   <div class="dashboard">
 
     <!-- 状态机进度 -->
@@ -502,9 +550,37 @@ body {
       </div>
     </div>
 
-    <!-- 区域 & 控制 -->
+    <!-- RCS 请求日志 -->
+    <div class="glass log-panel-full">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>📋 RCS 请求日志 <span id="rcsReqCount" style="font-size:10px;color:var(--text-muted);font-weight:400;"></span></span>
+        <button class="btn" onclick="loadRcsLogs()" style="font-size:10px;padding:3px 8px;">🔄 刷新</button>
+      </div>
+      <div id="rcsLogContainer" style="max-height:300px;overflow-y:auto;font-size:11px;font-family:'SF Mono','Fira Code',monospace;line-height:1.6;">
+        <div style="color:var(--text-muted);padding:10px;text-align:center;">等待 RCS 请求...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 事件日志 -->
+  <div class="glass log-panel log-panel-full">
+    <div class="card-title" style="display:flex;justify-content:space-between;">
+      <span>📋 事件日志</span>
+      <button class="btn" onclick="clearLog()" style="font-size:10px;padding:3px 8px;">清除</button>
+    </div>
+    <div class="log-container" id="logContainer"></div>
+  </div>
+</div>    <!-- view-door -->
+
+<!-- ════════════════════════════════════
+     区域管控视图
+     ════════════════════════════════════ -->
+<div id="view-zone" style="display:none;">
+  <div class="dashboard">
+
+    <!-- 区域管控状态 -->
     <div class="glass">
-      <div class="card-title">区域管控</div>
+      <div class="card-title">📡 区域状态</div>
       <div class="zone-info">
         <div class="zone-row">
           <span class="zone-label">区域ID</span>
@@ -527,166 +603,293 @@ body {
         <button class="btn" onclick="refreshStatus()">🔄 刷新</button>
       </div>
     </div>
-  </div>
 
-  <!-- RCS 配置信息 -->
-  <div class="glass log-panel-full">
-    <div class="card-title">🔗 RCS 第三方对接配置</div>
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
-      请将 RCS/WDCS 系统的 <code style="background:var(--card-bg);padding:1px 6px;border-radius:4px;">access_config</code> 表配置为以下地址：
+    <!-- 区域管控对接配置 -->
+    <div class="glass log-panel-full">
+      <div class="card-title">📡 区域管控对接配置</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
+        ASAP 通过以下三个接口实现风淋区域独占访问
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">进入区域 <code>POST /api/zones/enter</code></span>
+          <input type="text" id="zoneEnterInput"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
+                   font-family:inherit;outline:none;margin-top:4px;"
+            placeholder="http://zone-server:8080/api/zones/enter"
+            onfocus="this.style.borderColor='var(--accent)'"
+            onblur="this.style.borderColor='var(--card-border)'">
+        </div>
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">退出区域 <code>POST /api/zones/exit</code></span>
+          <input type="text" id="zoneExitInput"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
+                   font-family:inherit;outline:none;margin-top:4px;"
+            placeholder="http://zone-server:8080/api/zones/exit"
+            onfocus="this.style.borderColor='var(--accent)'"
+            onblur="this.style.borderColor='var(--card-border)'">
+        </div>
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">状态查询 <code>GET /api/zones/status</code></span>
+          <input type="text" id="zoneStatusInput"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
+                   font-family:inherit;outline:none;margin-top:4px;"
+            placeholder="http://zone-server:8080/api/zones/status"
+            onfocus="this.style.borderColor='var(--accent)'"
+            onblur="this.style.borderColor='var(--card-border)'">
+        </div>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-success btn-sm" onclick="saveZoneUrls()">保存</button>
+        <span id="zoneSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+      </div>
+      <div style="margin-top:6px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
+        <span>区域被占用返回 <code>409</code>，ASAP 自动重试</span>
+        <span>进入成功获得 <code>permission_id</code></span>
+        <span>退出失败自动重试直到释放</span>
+      </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label">控制接口 (door_control_relation_id)</span>
-        <code class="zone-value" id="rcsControlUrl" style="font-size:11px;word-break:break-all;cursor:pointer;" onclick="copyText(this)">http://HOST:5012/api/rcs/controlDoor</code>
-        <span style="font-size:9px;color:var(--text-muted);">POST · RCS → ASAP</span>
+
+    <!-- 模拟器接入指引 -->
+    <div class="glass log-panel-full">
+      <div class="card-title">🎮 模拟器测试配置</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
+        使用内置模拟器测试时，将上述地址填写为以下值（先点右上角「启用模拟」）：
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+        <div style="background:var(--card-bg);border-radius:8px;padding:10px;">
+          <div style="font-weight:600;margin-bottom:4px;">🚪 AB 门 base URL</div>
+          <code style="font-size:11px;color:var(--accent);word-break:break-all;">http://10.68.2.10:5012/sim</code>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">→ /sim/acs/door/{doorId}</div>
+        </div>
+        <div style="background:var(--card-bg);border-radius:8px;padding:10px;">
+          <div style="font-weight:600;margin-bottom:4px;">📡 区域管控接口</div>
+          <div style="font-size:10px;"><code style="color:var(--accent);">http://10.68.2.10:5012/sim/api/zones/enter</code></div>
+          <div style="font-size:10px;"><code style="color:var(--accent);">http://10.68.2.10:5012/sim/api/zones/exit</code></div>
+          <div style="font-size:10px;"><code style="color:var(--accent);">http://10.68.2.10:5012/sim/api/zones/status</code></div>
+        </div>
+      </div>
+      <div style="margin-top:6px;font-size:10px;color:var(--warning);">
+        ⚠ 填写后点「保存」，然后在右上角点「启用模拟」即可开始本地仿真测试
+      </div>
+    </div>
+  </div>
+</div>    <!-- view-zone -->
+
+<!-- ════════════════════════════════════
+     配置管理视图
+     ════════════════════════════════════ -->
+<div id="view-config" style="display:none;">
+  <!-- 配置管理子导航 -->
+  <nav style="display:flex;gap:4px;margin-bottom:16px;">
+    <a href="javascript:void(0)" class="nav-tab nav-tab-active" onclick="switchConfigTab('visual')" id="cfgTabVisual">👁 可视化编辑</a>
+    <a href="javascript:void(0)" class="nav-tab" onclick="switchConfigTab('file')" id="cfgTabFile">📄 文件编辑</a>
+  </nav>
+
+  <!-- ── 可视化编辑 ── -->
+  <div id="cfg-visual">
+  <div class="dashboard">
+
+    <!-- RCS 配置信息 -->
+    <div class="glass log-panel-full">
+      <div class="card-title">🔗 RCS 第三方对接配置</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+        请将 RCS/WDCS 系统的 <code style="background:var(--card-bg);padding:1px 6px;border-radius:4px;">access_config</code> 表配置为以下地址：
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">控制接口 (door_control_relation_id)</span>
+          <code class="zone-value" id="rcsControlUrl" style="font-size:11px;word-break:break-all;cursor:pointer;" onclick="copyText(this)">http://HOST:5012/api/rcs/controlDoor</code>
+          <span style="font-size:9px;color:var(--text-muted);">POST · RCS → ASAP</span>
+        </div>
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">状态查询 (door_status_relation_id)</span>
+          <code class="zone-value" id="rcsStatusUrl" style="font-size:11px;word-break:break-all;cursor:pointer;" onclick="copyText(this)">http://HOST:5012/api/rcs/doorStatus</code>
+          <span style="font-size:9px;color:var(--text-muted);">POST · RCS → ASAP</span>
+        </div>
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label" style="display:flex;justify-content:space-between;align-items:center;">
+            状态上报 URL (ASAP → RCS)
+            <span style="font-size:9px;color:var(--text-muted);">POST /changeDoorStatus</span>
+          </span>
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            <input type="text" id="rcsReportUrlInput"
+              style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                     border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
+                     font-family:inherit;outline:none;"
+              placeholder="http://10.68.2.xx:7110/changeDoorStatus"
+              onfocus="this.style.borderColor='var(--accent)'"
+              onblur="this.style.borderColor='var(--card-border)'">
+            <button class="btn btn-success btn-sm" onclick="saveRcsUrl()" id="rcsSaveBtn">保存</button>
+            <span id="rcsSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+          </div>
+          <div style="font-size:9px;color:var(--text-muted);margin-top:4px;line-height:1.5;">
+            <div><code style="background:transparent;padding:0;">POST {"doorNum":"1001","doorStatus":"1"}</code></div>
+            <div>→ <code style="background:transparent;padding:0;">{"code":1000,"msg":"success"}</code></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text-muted);">
+        <span>🔑 <code>control_way = 4</code> (第三方系统)</span>
+        <span>🚪 <code>door_type = 2</code> (风淋门)</span>
+        <span>🩺 <code>/actuator/health</code> → <code>1000</code></span>
+        <span>💡 模拟器: <a href="/sim" style="color:var(--accent);">/sim</a>（需先启用）</span>
+      </div>
+    </div>
+
+    <!-- AB 自动门配置 -->
+    <div class="glass log-panel-full">
+      <div class="card-title">🚪 AB 自动门对接配置</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
+        ASAP 通过以下 base URL + <code>/acs/door/{doorId}</code> 控制 AB 自动门
       </div>
       <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label">状态查询 (door_status_relation_id)</span>
-        <code class="zone-value" id="rcsStatusUrl" style="font-size:11px;word-break:break-all;cursor:pointer;" onclick="copyText(this)">http://HOST:5012/api/rcs/doorStatus</code>
-        <span style="font-size:9px;color:var(--text-muted);">POST · RCS → ASAP</span>
-      </div>
-      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label" style="display:flex;justify-content:space-between;align-items:center;">
-          状态上报 URL (ASAP → RCS)
-          <span style="font-size:9px;color:var(--text-muted);">POST /changeDoorStatus</span>
-        </span>
+        <span class="zone-label">AB 门 base URL <span style="font-weight:400;color:var(--text-muted);">(POST/GET /acs/door/{doorId})</span></span>
         <div style="display:flex;gap:6px;margin-top:4px;">
-          <input type="text" id="rcsReportUrlInput"
+          <input type="text" id="angelBaseUrlInput"
             style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
                    border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
                    font-family:inherit;outline:none;"
-            placeholder="http://10.68.2.xx:7110/changeDoorStatus"
+            placeholder="http://172.31.43.181:8080"
             onfocus="this.style.borderColor='var(--accent)'"
             onblur="this.style.borderColor='var(--card-border)'">
-          <button class="btn btn-success btn-sm" onclick="saveRcsUrl()" id="rcsSaveBtn">保存</button>
-          <span id="rcsSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
-        </div>
-        <div style="font-size:9px;color:var(--text-muted);margin-top:4px;line-height:1.5;">
-          <div><code style="background:transparent;padding:0;">POST {"doorNum":"1001","doorStatus":"1"}</code></div>
-          <div>→ <code style="background:transparent;padding:0;">{"code":1000,"msg":"success"}</code></div>
+          <button class="btn btn-success btn-sm" onclick="saveAngelUrl()">保存</button>
+          <span id="angelSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
         </div>
       </div>
+      <div style="margin-top:6px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
+        <span><code>POST /acs/door/DOOR_OUTER</code> 开/关外门</span>
+        <span><code>POST /acs/door/DOOR_INNER</code> 开/关内门</span>
+        <span><code>GET /acs/door/{doorId}</code> 查询门状态</span>
+      </div>
     </div>
-    <div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text-muted);">
-      <span>🔑 <code>control_way = 4</code> (第三方系统)</span>
-      <span>🚪 <code>door_type = 2</code> (风淋门)</span>
-      <span>🩺 <code>/actuator/health</code> → <code>1000</code></span>
-      <span>💡 模拟器: <a href="/sim" style="color:var(--accent);">/sim</a>（需先启用）</span>
+
+    <!-- 区域管控配置（仅提示，实际编辑在区域管控标签页） -->
+    <div class="glass log-panel-full">
+      <div class="card-title">📡 区域管控对接配置</div>
+      <div style="padding:16px;text-align:center;color:var(--text-muted);font-size:13px;">
+        <p style="margin-bottom:8px;">区域管控的对接地址请在 <strong style="color:var(--accent);">📡 区域管控</strong> 标签页中配置</p>
+        <p style="font-size:11px;">包括：进入区域、退出区域、状态查询 三个接口地址</p>
+      </div>
     </div>
   </div>
+  </div> <!-- /cfg-visual -->
 
-  <!-- AB 自动门配置 -->
-  <div class="glass log-panel-full">
-    <div class="card-title">🚪 AB 自动门对接配置</div>
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
-      ASAP 通过以下 base URL + <code>/acs/door/{doorId}</code> 控制 AB 自动门
-    </div>
-    <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-      <span class="zone-label">AB 门 base URL <span style="font-weight:400;color:var(--text-muted);">(POST/GET /acs/door/{doorId})</span></span>
-      <div style="display:flex;gap:6px;margin-top:4px;">
-        <input type="text" id="angelBaseUrlInput"
-          style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
-                 font-family:inherit;outline:none;"
-          placeholder="http://172.31.43.181:8080"
-          onfocus="this.style.borderColor='var(--accent)'"
-          onblur="this.style.borderColor='var(--card-border)'">
-        <button class="btn btn-success btn-sm" onclick="saveAngelUrl()">保存</button>
-        <span id="angelSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+  <!-- ── 文件编辑 ── -->
+  <div id="cfg-file" style="display:none;">
+    <div class="glass">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>📄 配置文件 (config/env.toml)</span>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="loadConfigFile()">🔄 重新加载</button>
+          <button class="btn btn-success" onclick="saveConfigFile()">💾 保存</button>
+        </div>
+      </div>
+      <textarea id="configFileEditor" spellcheck="false"
+        style="width:100%;min-height:500px;background:rgba(0,0,0,0.25);border:1px solid var(--card-border);
+               border-radius:10px;padding:14px;color:var(--text-primary);font-size:13px;
+               font-family:'SF Mono','Fira Code','Consolas',monospace;line-height:1.6;
+               outline:none;resize:vertical;tab-size:2;"
+        placeholder="加载中..."></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <span id="cfgFileStatus" style="font-size:12px;color:var(--text-muted);"></span>
+        <span style="font-size:11px;color:var(--warning);">⚠ 修改后需重启服务才能生效。TOML 格式错误将无法保存。</span>
       </div>
     </div>
-    <div style="margin-top:6px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
-      <span><code>POST /acs/door/DOOR_OUTER</code> 开/关外门</span>
-      <span><code>POST /acs/door/DOOR_INNER</code> 开/关内门</span>
-      <span><code>GET /acs/door/{doorId}</code> 查询门状态</span>
+  </div> <!-- /cfg-file -->
+</div>    <!-- view-config -->
+
+<!-- ════════════════════════════════════
+     升级管理视图
+     ════════════════════════════════════ -->
+<div id="view-upgrade" style="display:none;">
+  <div class="upgrade-grid">
+
+    <!-- 当前版本 -->
+    <div class="glass">
+      <div class="card-title">当前版本</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">应用版本</div>
+          <div style="font-size:18px;font-weight:600;font-family:monospace;" id="upgradeAppVersion">加载中...</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">项目路径</div>
+          <div style="font-size:13px;font-family:monospace;" id="upgradeProjectDir">加载中...</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Supervisor 进程</div>
+          <div style="font-size:13px;font-family:monospace;">asap_adapter</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 上传升级 -->
+    <div class="glass">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>📦 上传升级包</span>
+      </div>
+      <div class="upload-zone" id="upgradeUploadZone">
+        <div class="upload-icon">📦</div>
+        <div><strong>点击选择或拖拽 .zip 文件到此处</strong></div>
+        <div class="hint">仅支持 .zip 格式</div>
+        <input type="file" id="upgradeFileInput" accept=".zip">
+      </div>
+      <div class="file-info" id="upgradeFileInfo">
+        <span>📦</span>
+        <span class="name" id="upgradeFileName"></span>
+        <span class="size" id="upgradeFileSize"></span>
+        <button class="btn btn-sm" id="upgradeBtnClearFile" style="margin-top:0;">✕</button>
+      </div>
+      <textarea class="remark-input" id="upgradeRemarkInput"
+        style="width:100%;margin-top:10px;padding:8px 12px;background:var(--card-bg);border:1px solid var(--card-border);
+               border-radius:6px;color:var(--text-primary);font-size:12px;font-family:inherit;
+               resize:vertical;min-height:50px;outline:none;"
+        placeholder="升级说明（可选）&#10;例如：修复了xxx问题，新增了xxx功能"></textarea>
+      <button class="btn btn-success" id="upgradeBtnUpload" disabled style="margin-top:10px;">⬆ 开始升级</button>
+      <div class="progress-bar" id="upgradeProgressBar"><div class="bar"></div></div>
+      <div class="result-box" id="upgradeResultBox"></div>
+      <div class="exclude-tags" id="upgradeExcludeTags">
+        <span style="font-size:10px;color:var(--text-muted);width:100%;margin-bottom:4px;">以下文件/目录将保留，不受升级影响：</span>
+      </div>
+    </div>
+
+    <!-- API 调用说明 -->
+    <div class="glass">
+      <details style="cursor:pointer;">
+        <summary style="font-size:12px;color:var(--accent);">📋 API 调用方式（点击展开）</summary>
+        <pre style="background:rgba(0,0,0,0.2);border:1px solid var(--card-border);border-radius:6px;padding:12px;margin-top:8px;overflow-x:auto;font-size:11px;line-height:1.5;color:var(--text-muted);">
+<span style="color:var(--accent);"># 通过 curl 升级</span>
+curl -X POST http://HOST:5012/api/asap/upgrade/upload \
+  -F "file=@upgrade_v1.1.0.zip" \
+  -F "remark=修复了xxx问题，新增了xxx功能"
+
+<span style="color:var(--accent);"># 升级包内放入 version.json 可自动读取版本信息</span>
+# version.json 格式：
+# { "title": "v1.1.0 安全更新", "changes": ["修复: xxx", "新增: xxx"] }
+
+<span style="color:var(--accent);"># 查看升级记录</span>
+curl http://HOST:5012/api/asap/upgrade/records
+
+<span style="color:var(--accent);"># 回滚到指定备份</span>
+curl -X POST http://HOST:5012/api/asap/upgrade/rollback/upgrade_20260101_120000
+
+<span style="color:var(--accent);"># 查看当前版本</span>
+curl http://HOST:5012/api/asap/upgrade/version
+        </pre>
+      </details>
+    </div>
+
+    <!-- 升级记录 -->
+    <div class="glass">
+      <div class="card-title">📋 升级记录</div>
+      <div id="upgradeRecordsContainer"><div style="padding:20px;text-align:center;color:var(--text-muted);">加载中...</div></div>
     </div>
   </div>
-
-  <!-- 区域管控对接配置 -->
-  <div class="glass log-panel-full">
-    <div class="card-title">📡 区域管控对接配置</div>
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
-      ASAP 通过以下三个接口实现风淋区域独占访问</span>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label">进入区域 <code>POST /api/zones/enter</code></span>
-        <input type="text" id="zoneEnterInput"
-          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
-                 font-family:inherit;outline:none;margin-top:4px;"
-          placeholder="http://zone-server:8080/api/zones/enter"
-          onfocus="this.style.borderColor='var(--accent)'"
-          onblur="this.style.borderColor='var(--card-border)'">
-      </div>
-      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label">退出区域 <code>POST /api/zones/exit</code></span>
-        <input type="text" id="zoneExitInput"
-          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
-                 font-family:inherit;outline:none;margin-top:4px;"
-          placeholder="http://zone-server:8080/api/zones/exit"
-          onfocus="this.style.borderColor='var(--accent)'"
-          onblur="this.style.borderColor='var(--card-border)'">
-      </div>
-      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label">状态查询 <code>GET /api/zones/status</code></span>
-        <input type="text" id="zoneStatusInput"
-          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
-                 font-family:inherit;outline:none;margin-top:4px;"
-          placeholder="http://zone-server:8080/api/zones/status"
-          onfocus="this.style.borderColor='var(--accent)'"
-          onblur="this.style.borderColor='var(--card-border)'">
-      </div>
-    </div>
-    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
-      <button class="btn btn-success btn-sm" onclick="saveZoneUrls()">保存</button>
-      <span id="zoneSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
-    </div>
-    <div style="margin-top:6px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
-      <span>区域被占用返回 <code>409</code>，ASAP 自动重试</span>
-      <span>进入成功获得 <code>permission_id</code></span>
-      <span>退出失败自动重试直到释放</span>
-    </div>
-  </div>
-
-  <!-- 模拟器接入指引 -->
-  <div class="glass log-panel-full">
-    <div class="card-title">🎮 模拟器测试配置</div>
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
-      使用内置模拟器测试时，将上述地址填写为以下值（先点右上角「启用模拟」）：
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
-      <div style="background:var(--card-bg);border-radius:8px;padding:10px;">
-        <div style="font-weight:600;margin-bottom:4px;">🚪 AB 门 base URL</div>
-        <code style="font-size:11px;color:var(--accent);word-break:break-all;">http://10.68.2.10:5012/sim</code>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">→ /sim/acs/door/{doorId}</div>
-      </div>
-      <div style="background:var(--card-bg);border-radius:8px;padding:10px;">
-        <div style="font-weight:600;margin-bottom:4px;">📡 区域管控接口</div>
-        <div style="font-size:10px;"><code style="color:var(--accent);">http://10.68.2.10:5012/sim/api/zones/enter</code></div>
-        <div style="font-size:10px;"><code style="color:var(--accent);">http://10.68.2.10:5012/sim/api/zones/exit</code></div>
-        <div style="font-size:10px;"><code style="color:var(--accent);">http://10.68.2.10:5012/sim/api/zones/status</code></div>
-      </div>
-    </div>
-    <div style="margin-top:6px;font-size:10px;color:var(--warning);">
-      ⚠ 填写后点「保存」，然后在右上角点「启用模拟」即可开始本地仿真测试
-    </div>
-  </div>
-
-  <!-- RCS 请求日志 -->
-  <div class="glass log-panel-full">
-    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-      <span>📋 RCS 请求日志 <span id="rcsReqCount" style="font-size:10px;color:var(--text-muted);font-weight:400;"></span></span>
-      <button class="btn" onclick="loadRcsLogs()" style="font-size:10px;padding:3px 8px;">🔄 刷新</button>
-    </div>
-    <div id="rcsLogContainer" style="max-height:300px;overflow-y:auto;font-size:11px;font-family:'SF Mono','Fira Code',monospace;line-height:1.6;">
-      <div style="color:var(--text-muted);padding:10px;text-align:center;">等待 RCS 请求...</div>
-  </div>  <!-- RCS请求日志 -->
-</div>    <!-- dashboard -->
-</div>    <!-- view-production -->
+</div>    <!-- view-upgrade -->
 
 <!-- ════════════════════════════════════
      模拟器视图
@@ -743,17 +946,8 @@ body {
       </div>
     </div>
   </div>
-</div>
-
-<!-- 事件日志 -->
-  <div class="glass log-panel log-panel-full">
-    <div class="card-title" style="display:flex;justify-content:space-between;">
-      <span>事件日志</span>
-      <button class="btn" onclick="clearLog()" style="font-size:10px;padding:3px 8px;">清除</button>
-    </div>
-    <div class="log-container" id="logContainer"></div>
-  </div>
-</div>
+</div>    <!-- view-simulator -->
+</div>    <!-- app-container -->
 
 <script>
 // ═══════════════════════════════════════
@@ -797,16 +991,29 @@ function init() {
   simRefresh();
   checkSimStatus();
   setInterval(checkSimStatus, 5000);
+  // 初始化升级管理上传组件
+  upgradeInitUpload();
 }
 
 // ── 视图切换 ──────────────────────────
 function switchView(name) {
-  document.getElementById("view-production").style.display = name === "production" ? "" : "none";
-  document.getElementById("view-simulator").style.display = name === "simulator" ? "" : "none";
-  document.getElementById("tabProduction").className = "nav-tab" + (name === "production" ? " nav-tab-active" : "");
-  document.getElementById("tabSimulator").className = "nav-tab" + (name === "simulator" ? " nav-tab-active" : "");
+  // 所有视图列表
+  const views = ["door","zone","config","upgrade","simulator"];
+  views.forEach(v => {
+    const el = document.getElementById("view-" + v);
+    if (el) el.style.display = v === name ? "" : "none";
+  });
+  // 更新导航标签高亮
+  views.forEach(v => {
+    const tabId = "tab" + v.charAt(0).toUpperCase() + v.slice(1);
+    const tab = document.getElementById(tabId);
+    if (tab) tab.className = "nav-tab" + (v === name ? " nav-tab-active" : "");
+  });
+  // 刷新对应视图数据
   if (name === "simulator") simRefresh();
-  else loadRcsLogs();
+  else if (name === "door") loadRcsLogs();
+  else if (name === "zone") refreshStatus();
+  else if (name === "upgrade") { loadUpgradeVersion(); loadUpgradeRecords(); }
 }
 
 function fixSimulatorUrl() {
@@ -1323,6 +1530,268 @@ function copyText(el) {
       setRcsUrls();
     }, 1500);
   }).catch(() => {});
+}
+
+// ── 升级管理 ────────────────────────────
+
+let upgradeSelectedFile = null;
+
+function upgradeFormatSize(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / 1048576).toFixed(1) + " MB";
+}
+
+function upgradeInitUpload() {
+  const fileInput = document.getElementById("upgradeFileInput");
+  const uploadZone = document.getElementById("upgradeUploadZone");
+  const fileInfo = document.getElementById("upgradeFileInfo");
+  const fileName = document.getElementById("upgradeFileName");
+  const fileSize = document.getElementById("upgradeFileSize");
+  const btnUpload = document.getElementById("upgradeBtnUpload");
+  const btnClear = document.getElementById("upgradeBtnClearFile");
+  const progressBar = document.getElementById("upgradeProgressBar");
+  const resultBox = document.getElementById("upgradeResultBox");
+
+  if (!fileInput) return;
+
+  fileInput.addEventListener("change", function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".zip")) {
+      alert("仅支持 .zip 格式");
+      this.value = "";
+      return;
+    }
+    upgradeSelectedFile = file;
+    fileName.textContent = file.name;
+    fileSize.textContent = upgradeFormatSize(file.size);
+    fileInfo.classList.add("show");
+    btnUpload.disabled = false;
+    resultBox.classList.remove("show");
+  });
+
+  btnClear.addEventListener("click", function() {
+    upgradeSelectedFile = null;
+    fileInput.value = "";
+    fileInfo.classList.remove("show");
+    btnUpload.disabled = true;
+    resultBox.classList.remove("show");
+  });
+
+  uploadZone.addEventListener("dragover", function(e) { e.preventDefault(); this.classList.add("dragover"); });
+  uploadZone.addEventListener("dragleave", function(e) { e.preventDefault(); this.classList.remove("dragover"); });
+  uploadZone.addEventListener("drop", function(e) {
+    e.preventDefault(); this.classList.remove("dragover");
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.toLowerCase().endsWith(".zip")) {
+      fileInput.files = e.dataTransfer.files;
+      fileInput.dispatchEvent(new Event("change"));
+    } else {
+      alert("仅支持 .zip 格式");
+    }
+  });
+
+  btnUpload.addEventListener("click", function() {
+    if (!upgradeSelectedFile) return;
+    const formData = new FormData();
+    formData.append("file", upgradeSelectedFile);
+    const remark = document.getElementById("upgradeRemarkInput").value.trim();
+    if (remark) formData.append("remark", remark);
+
+    btnUpload.disabled = true;
+    btnUpload.textContent = "⏳ 升级中...";
+    progressBar.classList.add("show");
+    resultBox.classList.remove("show");
+
+    fetch("/api/asap/upgrade/upload", { method: "POST", body: formData })
+      .then(async res => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "升级失败");
+        return data;
+      })
+      .then(data => {
+        progressBar.classList.remove("show");
+        resultBox.className = "result-box show success";
+        resultBox.textContent = "✅ " + data.message;
+        setTimeout(() => location.reload(), 4000);
+      })
+      .catch(err => {
+        progressBar.classList.remove("show");
+        resultBox.className = "result-box show error";
+        resultBox.textContent = "❌ " + err.message;
+        btnUpload.disabled = false;
+        btnUpload.textContent = "⬆ 开始升级";
+      });
+  });
+}
+
+async function loadUpgradeVersion() {
+  try {
+    const resp = await fetch("/api/asap/upgrade/version");
+    const data = await resp.json();
+    if (data.success) {
+      document.getElementById("upgradeAppVersion").textContent = data.info.app_version || "unknown";
+      if (data.info.project_dir) document.getElementById("upgradeProjectDir").textContent = data.info.project_dir;
+    }
+  } catch (e) {
+    document.getElementById("upgradeAppVersion").textContent = "加载失败";
+  }
+}
+
+async function loadUpgradeRecords() {
+  try {
+    const resp = await fetch("/api/asap/upgrade/records");
+    const data = await resp.json();
+    if (!data.success) {
+      document.getElementById("upgradeRecordsContainer").innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">加载失败</div>';
+      return;
+    }
+    const records = data.records || [];
+    const excludePatterns = data.exclude_patterns || [];
+
+    // 排除标签
+    const tagsContainer = document.getElementById("upgradeExcludeTags");
+    tagsContainer.innerHTML = '<span style="font-size:10px;color:var(--text-muted);width:100%;margin-bottom:4px;">以下文件/目录将保留，不受升级影响：</span>';
+    excludePatterns.forEach(p => {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = p;
+      tagsContainer.appendChild(tag);
+    });
+
+    // 记录表格
+    const container = document.getElementById("upgradeRecordsContainer");
+    if (records.length === 0) {
+      container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">📭 暂无升级记录</div>';
+      return;
+    }
+
+    let html = `<table class="record-table"><thead><tr>
+      <th>时间</th><th>版本变化</th><th>升级说明</th><th>状态</th><th>文件</th><th>操作</th>
+    </tr></thead><tbody>`;
+
+    records.forEach(r => {
+      const ts = r.timestamp || "";
+      const dateStr = ts ? `${ts.slice(0,4)}-${ts.slice(4,6)}-${ts.slice(6,8)} ${ts.slice(9,11)}:${ts.slice(11,13)}` : "-";
+      const isRollback = r.status === "rollback";
+
+      let versionHtml = isRollback
+        ? `<span class="version-tag" style="color:var(--warning);">${r.old_version || "?"} ← ${r.new_version || "?"}</span>`
+        : `<span class="version-tag">${r.old_version || "?"} → ${r.new_version || "?"}</span>`;
+
+      let statusHtml = "";
+      if (r.status === "success") statusHtml = '<span style="font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(52,211,153,0.15);color:var(--success);">成功</span>';
+      else if (r.status === "rollback") statusHtml = '<span style="font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(251,191,36,0.15);color:var(--warning);">回滚</span>';
+      else statusHtml = '<span style="font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(248,113,113,0.15);color:var(--danger);">失败</span>';
+
+      let notesHtml = "-";
+      const notes = r.release_notes || [];
+      const title = r.release_title || "";
+      if (title || notes.length > 0) {
+        notesHtml = "";
+        if (title && !title.startsWith("从 v")) notesHtml += `<div style="font-weight:600;margin-bottom:2px;">${title}</div>`;
+        notes.forEach(n => { notesHtml += `<div style="opacity:0.8;">• ${n}</div>`; });
+      }
+
+      const showRollback = r.backup_name && r.backup_name.startsWith("upgrade_");
+      const rollbackBtn = showRollback
+        ? `<button class="btn btn-warning btn-sm" onclick="upgradeRollback('${r.backup_name}')" style="margin:0;" title="回滚到此版本">↩ 回滚</button>`
+        : "";
+
+      html += `<tr>
+        <td style="white-space:nowrap;font-size:11px;">${dateStr}</td>
+        <td>${versionHtml}</td>
+        <td style="max-width:180px;font-size:11px;">${notesHtml}</td>
+        <td>${statusHtml}</td>
+        <td>${r.files_overlay || "-"}</td>
+        <td>${rollbackBtn}</td>
+      </tr>`;
+    });
+
+    html += "</tbody></table>";
+    container.innerHTML = html;
+  } catch (e) {
+    document.getElementById("upgradeRecordsContainer").innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">加载失败</div>';
+  }
+}
+
+function upgradeRollback(backupName) {
+  if (!confirm(`确认回滚到备份 "${backupName}"？\n回滚前会自动备份当前代码，完成后系统将自动重启。`)) return;
+  fetch(`/api/asap/upgrade/rollback/${encodeURIComponent(backupName)}`, { method: "POST" })
+    .then(async res => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "回滚失败");
+      return data;
+    })
+    .then(data => {
+      alert("✅ " + data.message);
+      setTimeout(() => location.reload(), 3000);
+    })
+    .catch(err => {
+      alert("❌ " + err.message);
+    });
+}
+
+// ── 配置管理子标签切换 ──────────────────
+function switchConfigTab(name) {
+  document.getElementById("cfg-visual").style.display = name === "visual" ? "" : "none";
+  document.getElementById("cfg-file").style.display = name === "file" ? "" : "none";
+  document.getElementById("cfgTabVisual").className = "nav-tab" + (name === "visual" ? " nav-tab-active" : "");
+  document.getElementById("cfgTabFile").className = "nav-tab" + (name === "file" ? " nav-tab-active" : "");
+  if (name === "file") loadConfigFile();
+}
+
+// ── 配置文件读取/保存 ──────────────────
+async function loadConfigFile() {
+  const editor = document.getElementById("configFileEditor");
+  const status = document.getElementById("cfgFileStatus");
+  if (!editor) return;
+  editor.placeholder = "加载中...";
+  status.textContent = "正在加载...";
+  try {
+    const resp = await fetch("/api/asap/config/file");
+    const data = await resp.json();
+    if (data.success) {
+      editor.value = data.content;
+      status.textContent = "✓ 已加载 (" + data.path + ")";
+      status.style.color = "var(--success)";
+    } else {
+      status.textContent = "✗ 加载失败";
+      status.style.color = "var(--danger)";
+    }
+  } catch (e) {
+    editor.value = "";
+    status.textContent = "✗ 加载失败: " + e.message;
+    status.style.color = "var(--danger)";
+  }
+}
+
+async function saveConfigFile() {
+  const editor = document.getElementById("configFileEditor");
+  const status = document.getElementById("cfgFileStatus");
+  if (!editor) return;
+  const content = editor.value;
+  status.textContent = "正在保存...";
+  status.style.color = "var(--text-muted)";
+  try {
+    const resp = await fetch("/api/asap/config/file", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: content }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      status.textContent = "✓ " + data.message;
+      status.style.color = "var(--success)";
+    } else {
+      status.textContent = "✗ " + (data.error || "保存失败");
+      status.style.color = "var(--danger)";
+    }
+  } catch (e) {
+    status.textContent = "✗ 保存失败: " + e.message;
+    status.style.color = "var(--danger)";
+  }
 }
 
 // ── 启动 ──────────────────────────────────

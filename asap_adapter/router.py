@@ -600,16 +600,53 @@ def create_router(app: FastAPI) -> APIRouter:
         else:
             raise HTTPException(status_code=400, detail=result.get("error", "升级失败"))
 
-    @router.post("/api/asap/upgrade/rollback/{backup_name}")
-    async def rollback_upgrade(backup_name: str):
-        """回滚到指定备份版本"""
-        from . import upgrade_service as us
-        result = us.do_rollback(backup_name)
-        if result["success"]:
-            import threading as _t
-            _t.Thread(target=lambda: (_t.Event().wait(3), os._exit(0)), daemon=True).start()
-            return {"success": True, "message": result["message"]}
-        else:
-            raise HTTPException(status_code=500, detail=result.get("error", "回滚失败"))
+    # ── 配置文件直接编辑 ──────────────────────
+
+    class ConfigFileUpdate(BaseModel):
+        content: str
+
+    def _get_config_path() -> str:
+        base_dir = Path(__file__).resolve().parent.parent
+        return str(base_dir / "config" / "env.toml")
+
+    @router.get("/api/asap/config/file")
+    async def get_config_file():
+        """获取配置文件 (config/env.toml) 原始内容"""
+        path = _get_config_path()
+        if not os.path.exists(path):
+            return {"success": True, "content": "", "path": path}
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return {"success": True, "content": content, "path": path}
+
+    @router.post("/api/asap/config/file")
+    async def save_config_file(req: ConfigFileUpdate):
+        """保存配置文件（写入前验证 TOML 格式，自动备份）"""
+        path = _get_config_path()
+        # 验证 TOML 格式
+        try:
+            try:
+                import tomllib
+                _toml_parse = tomllib.loads
+            except ImportError:
+                import tomli as _tomli
+                _toml_parse = _tomli.loads
+            _toml_parse(req.content)
+        except Exception as e:
+            return {"success": False, "error": f"TOML 格式错误: {e}"}
+        # 备份当前文件
+        backup_path = path + ".bak"
+        import shutil
+        if os.path.exists(path):
+            shutil.copy2(path, backup_path)
+        # 写入
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(req.content)
+        logger.info("配置文件已更新，备份保存至: %s", backup_path)
+        return {
+            "success": True,
+            "message": "配置文件已保存，重启后生效",
+            "backup": backup_path,
+        }
 
     return router

@@ -235,30 +235,130 @@ need_close_another_door  = 1    -- 1: 需配对门关闭才可开门
 | 查询 | `/no/door/getStatus` | 第三方/测试→本系统 | HTTP JSON | 按需 |
 
 > **注意：** 第三方系统如果无法提供 HTTP 状态查询接口，可以配置 `door_has_status = false`，此时系统通过 `UpdateDoorState` 线程在开门后延迟一段时间自动将状态设置为 OPEN，关门时再设置为 CLOSE，不依赖第三方的实时状态。
->
-> 必须报文
 
-```Shell
-##  健康检查接口
+---
 
-```
-GET /actuator/health
+## 六、AB 自动门接口对接配置（ASAP → Angel AB门）
+
+ASAP Adapter 通过 HTTP 协议控制 Angel AB 自动门，第三方的 AB 门系统需提供以下两个接口。
+
+### 6.1 门控制
+
+**Endpoint:** `POST /acs/door/{doorId}`
+
+由 ASAP Adapter 在风淋流程中调用，控制门的开关。
+
+```json
+// 请求体
+{
+  "doorSerial": "DOOR_OUTER",
+  "command": "1",               // 1=开门, 2=关门
+  "Direction": "1",
+  "RobotName": "AGV001"
+}
+
+// 期望响应
+{
+  "doorSerial": "DOOR_OUTER",
+  "doorStatus": "1",            // 0=关, 1=开, 2=故障
+  "command": "1",
+  "code": "200"
+}
 ```
 
-- **认证**: 无（公开接口）
-- **Content-Type**: `text/plain; charset=utf-8`
-- **正常响应**: `1000` (HTTP 200)
-- **设计说明**: 返回纯文本 `1000`（与华睿 ICS 接口返回码 `code: 1000` 保持一致），避免 JSON 解析开销，适合监控程序快速检测。
+**调用时机：**
+| 步骤 | 动作 | 门 |
+|------|------|-----|
+| 步骤3 | 开外门 | DOOR_OUTER |
+| 步骤6 | 关外门 | DOOR_OUTER |
+| 步骤9 | 开内门 | DOOR_INNER |
+| 步骤12 | 关内门 | DOOR_INNER |
 
-> 请求示例
-```
-GET /actuator/health
+### 6.2 门状态查询
+
+**Endpoint:** `GET /acs/door/{doorId}`
+
+开门/关门后轮询等待门到位。
+
+```json
+// 期望响应
+{
+  "doorSerial": "DOOR_OUTER",
+  "doorStatus": "1",
+  "command": "1",
+  "code": "200"
+}
 ```
 
-> 正常响应示例
-```
-1000
-```
+轮询间隔 1 秒，超时 10 秒（可配置）。doorStatus=2（故障）立即终止。
+
+### 6.3 配置方式
+
+```toml
+[angel]
+base_url = "http://172.31.43.181:8080"   # AB 门地址
+outer_door_id = "DOOR_OUTER"
+inner_door_id = "DOOR_INNER"
+poll_interval = 1.0
+poll_timeout = 10.0
 ```
 
+---
 
+## 七、区域管控接口对接配置（ASAP → Zone Controller）
+
+ASAP Adapter 通过 HTTP 请求区域管控系统，实现风淋区域的独占访问。
+
+### 7.1 请求进入区域
+
+**Endpoint:** `POST /api/zones/enter`
+
+```json
+// 请求体
+{ "zone_id": "air_shower_room", "client_id": "asap_adapter" }
+
+// 成功 200
+{ "permission_id": "perm_abc123", "zone_id": "air_shower_room", "client_id": "asap_adapter", "status": "granted" }
+
+// 被占用 409
+{ "error": "Zone is currently occupied", "occupied_by": "AGV001" }
+```
+
+被占用时等待 5 秒重试，最多 60 次（可配置）。
+
+### 7.2 退出区域
+
+**Endpoint:** `POST /api/zones/exit`
+
+```json
+// 请求体
+{ "zone_id": "air_shower_room", "client_id": "asap_adapter" }
+
+// 响应
+{ "zone_id": "air_shower_room", "client_id": "asap_adapter", "status": "released" }
+```
+
+退出失败时重试，间隔 5 秒，最多 10 次。
+
+### 7.3 查询区域状态
+
+**Endpoint:** `GET /api/zones/status?zone_id=air_shower_room`
+
+```json
+{ "zone_id": "air_shower_room", "status": "occupied", "occupied_by": "asap_adapter" }
+```
+
+### 7.4 配置方式
+
+```toml
+[zone]
+enter_url = "http://zone-controller:8080/api/zones/enter"
+exit_url  = "http://zone-controller:8080/api/zones/exit"
+status_url = "http://zone-controller:8080/api/zones/status"
+zone_id = "air_shower_room"
+client_id = "asap_adapter"
+retry_interval = 5.0
+max_retries = 60
+exit_retry_interval = 5.0
+exit_max_retries = 10
+```

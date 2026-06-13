@@ -56,15 +56,18 @@ class ZoneConfig:
     status_url: str = ""
     zone_id: str = "air_shower_room"
     client_id: str = "asap_adapter_01"
+    entry_door_code: str = "q001"   # RCS doorNum → 进入区域
+    exit_door_code: str = "q002"    # RCS doorNum → 退出区域
     retry_interval: float = 3.0
     max_retries: int = 10
     exit_retry_interval: float = 1.0
     exit_max_retries: int = 30
+    zone_poll_interval: float = 300.0  # 区域状态定时轮询间隔(秒)，默认5分钟
 
 
 @dataclass
 class AirShowerConfig:
-    duration: float = 15.0
+    duration: float = 4.0
     agv_enter_timeout: float = 30.0
     agv_exit_timeout: float = 30.0
 
@@ -73,7 +76,16 @@ class AirShowerConfig:
 class RcsConfig:
     change_status_url: str = ""
     report_interval: float = 0.5
-    door_code_mapping: dict = field(default_factory=lambda: {"DOOR_OUTER": "1001", "DOOR_INNER": "1002"})
+    door_code_mapping: dict = field(default_factory=lambda: {"DOOR01": "1001", "DOOR02": "1002"})
+
+
+@dataclass
+class SimConfig:
+    """内置模拟器配置"""
+    auto_open_delay: float = 2.0     # 门自动打开过渡时间(秒)
+    auto_close_delay: float = 2.0    # 门自动关闭过渡时间(秒)
+    zone_always_busy: bool = False   # 区域始终占用(测试用)
+    zone_id: str = "air_shower_room" # 模拟区域ID
 
 
 @dataclass
@@ -84,6 +96,7 @@ class AppConfig:
     zone: ZoneConfig = field(default_factory=ZoneConfig)
     air_shower: AirShowerConfig = field(default_factory=AirShowerConfig)
     rcs: RcsConfig = field(default_factory=RcsConfig)
+    sim: SimConfig = field(default_factory=SimConfig)
 
 
 def _project_dir() -> str:
@@ -120,12 +133,17 @@ def load_config(path: Optional[str] = None) -> AppConfig:
                             "poll_interval", "poll_timeout"))
             _apply_section(cfg, data, "zone",
                            ("enter_url", "exit_url", "status_url", "zone_id",
-                            "client_id", "retry_interval", "max_retries",
-                            "exit_retry_interval", "exit_max_retries"))
+                            "client_id", "entry_door_code", "exit_door_code",
+                            "retry_interval", "max_retries",
+                            "exit_retry_interval", "exit_max_retries",
+                            "zone_poll_interval"))
             _apply_section(cfg, data, "air_shower",
                            ("duration", "agv_enter_timeout", "agv_exit_timeout"))
             _apply_section(cfg, data, "rcs",
                            ("change_status_url", "report_interval", "door_code_mapping"))
+            _apply_section(cfg, data, "sim",
+                           ("auto_open_delay", "auto_close_delay",
+                            "zone_always_busy", "zone_id"))
         except Exception as e:
             logger.error("加载 env.toml 失败: %s", e)
 
@@ -145,8 +163,15 @@ def _load_runtime(cfg: AppConfig, path: str):
         with open(path, "rb") as f:
             data = tomllib.load(f)
         _apply_section(cfg, data, "angel", ("base_url", "outer_door_id", "inner_door_id"))
-        _apply_section(cfg, data, "zone", ("enter_url", "exit_url", "status_url"))
+        _apply_section(cfg, data, "zone",
+                       ("enter_url", "exit_url", "status_url",
+                        "zone_poll_interval", "entry_door_code", "exit_door_code"))
         _apply_section(cfg, data, "rcs", ("change_status_url", "report_interval", "door_code_mapping"))
+        _apply_section(cfg, data, "air_shower",
+                       ("duration", "agv_enter_timeout", "agv_exit_timeout"))
+        _apply_section(cfg, data, "sim",
+                       ("auto_open_delay", "auto_close_delay",
+                        "zone_always_busy", "zone_id"))
         logger.info("已加载 runtime.toml")
     except Exception as e:
         logger.error("加载 runtime.toml 失败: %s", e)
@@ -224,8 +249,13 @@ def apply_runtime_string(config: AppConfig, content: str):
     """
     data = tomllib.loads(content)
     _apply_section(config, data, "angel", ("base_url", "outer_door_id", "inner_door_id"))
-    _apply_section(config, data, "zone", ("enter_url", "exit_url", "status_url"))
+    _apply_section(config, data, "zone", ("enter_url", "exit_url", "status_url", "zone_poll_interval"))
     _apply_section(config, data, "rcs", ("change_status_url", "report_interval", "door_code_mapping"))
+    _apply_section(config, data, "air_shower",
+                   ("duration", "agv_enter_timeout", "agv_exit_timeout"))
+    _apply_section(config, data, "sim",
+                   ("auto_open_delay", "auto_close_delay",
+                    "zone_always_busy", "zone_id"))
 
 
 def env_path() -> str:

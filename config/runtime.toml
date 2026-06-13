@@ -15,6 +15,11 @@
 # enter_url = "http://zone-server:8080/api/zones/enter"
 # exit_url = "http://zone-server:8080/api/zones/exit"
 # status_url = "http://zone-server:8080/api/zones/status"
+# RCS 门编号映射 (区域管控)
+# entry_door_code = "q001"
+# exit_door_code = "q002"
+# 区域状态轮询间隔（秒），默认300=5分钟
+# zone_poll_interval = 300
 
 [rcs]
 # 状态上报 URL (ASAP → RCS)
@@ -23,3 +28,18 @@
 # report_interval = 0.5
 # 门编码映射 {ASAP门ID = "RCS门编码"}
 # door_code_mapping = {DOOR_OUTER = "1001", DOOR_INNER = "1002"}
+
+[air_shower]
+# 风淋时长（秒），默认4
+# duration = 4.0
+# AGV进入超时（秒）
+# agv_enter_timeout = 30.0
+# AGV驶离超时（秒）
+# agv_exit_timeout = 30.0
+
+[sim]
+# 内置模拟器配置
+# auto_open_delay = 2.0
+# auto_close_delay = 2.0
+# zone_always_busy = false
+# zone_id = "air_shower_room"

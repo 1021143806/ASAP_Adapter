@@ -217,6 +217,18 @@ class ZoneState(BaseModel):
     last_check: str = ""
 
 
+class StepLog(BaseModel):
+    """单步执行日志（含请求/响应报文）"""
+    step: int = 0
+    step_name: str = ""
+    action: str = ""          # e.g. "open_outer_door", "close_inner_door"
+    direction: str = ""       # "send"=请求, "recv"=响应
+    url: str = ""             # 请求 URL
+    payload: dict = Field(default_factory=dict)  # 请求体或响应体
+    timestamp: str = ""
+    success: bool = True
+
+
 class AirShowerStatus(BaseModel):
     """风淋整体状态（WebUI 使用）"""
     state: AirShowerState = AirShowerState.IDLE
@@ -227,11 +239,13 @@ class AirShowerStatus(BaseModel):
     elapsed: float = 0.0
     total_steps: int = 14
     current_step: int = 0
+    shower_duration: float = 4.0
     started_at: Optional[str] = None
     error_message: str = ""
     last_event: str = ""
     rcs_query_count: int = 0
     rcs_last_query: str = ""
+    step_log: list = Field(default_factory=list)  # 每步报文日志
 
 
 class StateEvent(BaseModel):

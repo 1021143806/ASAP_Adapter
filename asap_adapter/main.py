@@ -11,7 +11,9 @@ ASAP Adapter 主入口
 """
 
 import logging
+import json
 import asyncio
+from datetime import datetime
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
@@ -26,6 +28,7 @@ from .door_client import DoorClient
 from .zone_client import ZoneClient
 from .rcs_reporter import RcsReporter
 from .state_machine import StateMachine
+from .zone_state_machine import ZoneStateMachine
 from .router import create_router
 from .logger import setup_logging
 
@@ -64,6 +67,7 @@ def create_app(config: AppConfig) -> FastAPI:
         zone = ZoneClient(config.zone)
         rcs = RcsReporter(config.rcs)
         sm = StateMachine(config, door, zone, rcs)
+        zsm = ZoneStateMachine(config, zone, rcs)
 
         # ── 模拟器状态 ────────────────────
         app.state.sim_controller = _app_sim
@@ -92,12 +96,58 @@ def create_app(config: AppConfig) -> FastAPI:
 
         sm.on_event = _on_event
 
+        # ZoneStateMachine SSE 回调
+        async def _zone_on_event():
+            event = {
+                "timestamp": datetime.now().isoformat(),
+                "event_type": "zone_snapshot",
+                "data": zsm.status.dump(),
+            }
+            payload = json.dumps(event, ensure_ascii=False)
+            dead = []
+            for q in sse_clients:
+                try:
+                    q.put_nowait(f"data: {payload}\n\n")
+                except asyncio.QueueFull:
+                    dead.append(q)
+            for q in dead:
+                sse_clients.remove(q)
+        zsm.on_event = _zone_on_event
+
         # 存入 app.state 供路由使用
         app.state.door = door
         app.state.zone = zone
         app.state.rcs = rcs
         app.state.sm = sm
+        app.state.zone_sm = zsm
         app.state.config = config
+
+        # ── 后台区域状态轮询 ──────────────
+        async def _zone_poll_loop():
+            """定时轮询区域管控状态"""
+            await asyncio.sleep(5)  # 启动后稍等再开始
+            while True:
+                try:
+                    interval = config.zone.zone_poll_interval
+                    if interval <= 0:
+                        interval = 300
+                    if config.zone.status_url:
+                        status = await zone.get_status()
+                        sm._status.zone.zone_id = config.zone.zone_id
+                        sm._status.zone.status = status.status
+                        sm._status.zone.occupied_by = status.occupied_by
+                        sm._status.zone.last_check = datetime.now().isoformat()
+                        # 同步到 ZoneStateMachine
+                        zsm.status.zone_status = status.status
+                        zsm.status.zone_occupied_by = status.occupied_by
+                        zsm.status.last_check = datetime.now().isoformat()
+                        logger.debug("区域状态轮询: %s → %s (by %s)",
+                                     config.zone.zone_id, status.status, status.occupied_by)
+                except Exception as e:
+                    logger.warning("区域状态轮询异常: %s", e)
+                await asyncio.sleep(interval)
+
+        app.state._zone_poll_task = asyncio.create_task(_zone_poll_loop())
 
         logger.info("ASAP Adapter 启动完成，端口 %d", config.server.port)
 
@@ -105,7 +155,11 @@ def create_app(config: AppConfig) -> FastAPI:
 
         # ── 关闭 ──────────────────────────
         logger.info("ASAP Adapter 正在关闭...")
+        # 取消后台轮询任务
+        if hasattr(app.state, '_zone_poll_task'):
+            app.state._zone_poll_task.cancel()
         await sm.cancel()
+        await zsm.cancel()
         await door.close()
         await zone.close()
         await rcs.close()

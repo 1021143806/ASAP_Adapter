@@ -82,10 +82,11 @@ class StateMachine:
         """获取当前状态快照"""
         self._status.state = self._state
         self._status.current_step = STATE_STEP_MAP.get(self._state, 0)
-        # 填充门编码（来自 RCS door_code_mapping）
+        self._status.shower_duration = self.config.air_shower.duration
+        # 填充门编码（来自 RCS door_code_mapping，按实际 door_id 查找）
         mapping = self.config.rcs.door_code_mapping
-        self._status.outer_door.door_code = mapping.get("DOOR_OUTER", "")
-        self._status.inner_door.door_code = mapping.get("DOOR_INNER", "")
+        self._status.outer_door.door_code = mapping.get(self.config.angel.outer_door_id, "")
+        self._status.inner_door.door_code = mapping.get(self.config.angel.inner_door_id, "")
         return self._status
 
     @property
@@ -169,7 +170,14 @@ class StateMachine:
         """步骤1: 请求区域"""
         self._set_state(AirShowerState.REQUEST_ZONE)
         logger.info("步骤1/13: 请求区域 [%s]", self.config.zone.zone_id)
+        zone_id = self.config.zone.zone_id
+        self._log_step(1, "请求区域", "enter_zone", "send",
+                       f"POST {self.config.zone.enter_url}",
+                       {"zone_id": zone_id, "client_id": self._current_agv})
         result = await self.zone.enter_with_retry()
+        self._log_step(1, "请求区域", "enter_zone", "recv",
+                       f"POST {self.config.zone.enter_url}",
+                       {"permission_id": result.permission_id, "zone_id": zone_id, "status": "granted"})
         self._status.zone.permission_id = result.permission_id
         self._status.zone.status = "granted"
         self._publish_event("zone_granted", {
@@ -180,8 +188,13 @@ class StateMachine:
         """步骤2: 开外门"""
         self._set_state(AirShowerState.OPEN_OUTER_DOOR)
         door_id = self.config.angel.outer_door_id
+        url = f"POST {self.config.angel.base_url}/acs/door/{door_id}"
         logger.info("步骤2/13: 开外门 [%s]", door_id)
+        self._log_step(2, "开外门", "open_outer", "send", url,
+                       {"doorSerial": door_id, "command": "1", "Direction": "1"})
         resp = await self.door.open_door(door_id, robot_name=self._current_agv)
+        self._log_step(2, "开外门", "open_outer", "recv", url,
+                       resp.model_dump())
         self._update_door_state(door_id, resp.doorStatus)
         self._publish_event("door_control", {
             "door_id": door_id, "action": "open",
@@ -191,8 +204,11 @@ class StateMachine:
         """步骤3: 等外门完全打开"""
         self._set_state(AirShowerState.WAIT_OUTER_DOOR_OPEN)
         door_id = self.config.angel.outer_door_id
+        url = f"GET {self.config.angel.base_url}/acs/door/{door_id}"
         logger.info("步骤3/13: 等待外门全开 [%s]", door_id)
         status = await self.door.wait_for_open(door_id)
+        self._log_step(3, "等外门开到位", "poll_outer_open", "recv", url,
+                       status.model_dump())
         self._update_door_state(door_id, status.doorStatus)
         self._publish_event("door_opened", {
             "door_id": door_id,
@@ -202,9 +218,14 @@ class StateMachine:
     async def _step_agv_entering(self):
         """步骤4: 等待AGV进入"""
         self._set_state(AirShowerState.AGV_ENTERING)
+        door_id = self.config.angel.outer_door_id
+        door_code = self.config.rcs.door_code_mapping.get(door_id, door_id)
         logger.info("步骤4/13: 等待AGV进入")
         # 上报RCS：外门已开
-        await self.rcs.report_door_open(self.config.angel.outer_door_id)
+        self._log_step(4, "上报外门已开", "report_open", "send",
+                       f"POST {self.config.rcs.change_status_url}",
+                       {"doorNum": door_code, "doorStatus": "1"})
+        await self.rcs.report_door_open(door_id)
         # 等待 AGV 进入
         await asyncio.sleep(self.config.air_shower.agv_enter_timeout)
         self._publish_event("agv_entered", {
@@ -215,8 +236,13 @@ class StateMachine:
         """步骤5: 关外门"""
         self._set_state(AirShowerState.CLOSE_OUTER_DOOR)
         door_id = self.config.angel.outer_door_id
+        url = f"POST {self.config.angel.base_url}/acs/door/{door_id}"
         logger.info("步骤5/13: 关外门 [%s]", door_id)
+        self._log_step(5, "关外门", "close_outer", "send", url,
+                       {"doorSerial": door_id, "command": "2"})
         resp = await self.door.close_door(door_id)
+        self._log_step(5, "关外门", "close_outer", "recv", url,
+                       resp.model_dump())
         self._update_door_state(door_id, resp.doorStatus)
         self._publish_event("door_control", {
             "door_id": door_id, "action": "close",
@@ -226,10 +252,17 @@ class StateMachine:
         """步骤6: 等外门完全关闭"""
         self._set_state(AirShowerState.WAIT_OUTER_DOOR_CLOSE)
         door_id = self.config.angel.outer_door_id
+        url = f"GET {self.config.angel.base_url}/acs/door/{door_id}"
         logger.info("步骤6/13: 等待外门关闭 [%s]", door_id)
         status = await self.door.wait_for_close(door_id)
+        self._log_step(6, "等外门关到位", "poll_outer_close", "recv", url,
+                       status.model_dump())
         self._update_door_state(door_id, status.doorStatus)
         # 上报 RCS：外门已关
+        door_code = self.config.rcs.door_code_mapping.get(door_id, door_id)
+        self._log_step(6, "上报外门已关", "report_closed", "send",
+                       f"POST {self.config.rcs.change_status_url}",
+                       {"doorNum": door_code, "doorStatus": "2"})
         await self.rcs.report_door_closed(door_id)
         self._publish_event("door_closed", {
             "door_id": door_id,
@@ -240,6 +273,8 @@ class StateMachine:
         self._set_state(AirShowerState.SHOWERING)
         duration = self.config.air_shower.duration
         logger.info("步骤7/13: 风淋中 (%ds)", duration)
+        self._log_step(7, "风淋计时", "showering", "info", "",
+                       {"duration": duration, "unit": "seconds"})
         # 分小段 sleep 以便可被取消
         elapsed = 0.0
         while elapsed < duration:
@@ -257,16 +292,24 @@ class StateMachine:
         """步骤8: 开内门"""
         self._set_state(AirShowerState.OPEN_INNER_DOOR)
         door_id = self.config.angel.inner_door_id
+        url = f"POST {self.config.angel.base_url}/acs/door/{door_id}"
         logger.info("步骤8/13: 开内门 [%s]", door_id)
-        resp = await self.door.open_door(door_id, robot_name=self._current_agv)
+        self._log_step(8, "开内门", "open_inner", "send", url,
+                       {"doorSerial": door_id, "command": "1", "Direction": "2"})
+        resp = await self.door.open_door(door_id, direction="2", robot_name=self._current_agv)
+        self._log_step(8, "开内门", "open_inner", "recv", url,
+                       resp.model_dump())
         self._update_door_state(door_id, resp.doorStatus)
 
     async def _step_wait_inner_door_open(self):
         """步骤9: 等内门完全打开"""
         self._set_state(AirShowerState.WAIT_INNER_DOOR_OPEN)
         door_id = self.config.angel.inner_door_id
+        url = f"GET {self.config.angel.base_url}/acs/door/{door_id}"
         logger.info("步骤9/13: 等待内门全开 [%s]", door_id)
         status = await self.door.wait_for_open(door_id)
+        self._log_step(9, "等内门开到位", "poll_inner_open", "recv", url,
+                       status.model_dump())
         self._update_door_state(door_id, status.doorStatus)
         self._publish_event("door_opened", {
             "door_id": door_id,
@@ -276,9 +319,14 @@ class StateMachine:
     async def _step_agv_exiting(self):
         """步骤10: 等待AGV驶离"""
         self._set_state(AirShowerState.AGV_EXITING)
+        door_id = self.config.angel.inner_door_id
+        door_code = self.config.rcs.door_code_mapping.get(door_id, door_id)
         logger.info("步骤10/13: 等待AGV驶离")
         # 上报 RCS：内门已开
-        await self.rcs.report_door_open(self.config.angel.inner_door_id)
+        self._log_step(10, "上报内门已开", "report_open", "send",
+                       f"POST {self.config.rcs.change_status_url}",
+                       {"doorNum": door_code, "doorStatus": "1"})
+        await self.rcs.report_door_open(door_id)
         # 等待 AGV 驶离
         await asyncio.sleep(self.config.air_shower.agv_exit_timeout)
         self._publish_event("agv_exited", {
@@ -289,28 +337,47 @@ class StateMachine:
         """步骤11: 关内门"""
         self._set_state(AirShowerState.CLOSE_INNER_DOOR)
         door_id = self.config.angel.inner_door_id
+        url = f"POST {self.config.angel.base_url}/acs/door/{door_id}"
         logger.info("步骤11/13: 关内门 [%s]", door_id)
+        self._log_step(11, "关内门", "close_inner", "send", url,
+                       {"doorSerial": door_id, "command": "2"})
         resp = await self.door.close_door(door_id)
+        self._log_step(11, "关内门", "close_inner", "recv", url,
+                       resp.model_dump())
         self._update_door_state(door_id, resp.doorStatus)
 
     async def _step_wait_inner_door_close(self):
         """步骤12: 等内门关闭"""
         self._set_state(AirShowerState.WAIT_INNER_DOOR_CLOSE)
         door_id = self.config.angel.inner_door_id
+        url = f"GET {self.config.angel.base_url}/acs/door/{door_id}"
         logger.info("步骤12/13: 等待内门关闭 [%s]", door_id)
         status = await self.door.wait_for_close(door_id)
+        self._log_step(12, "等内门关到位", "poll_inner_close", "recv", url,
+                       status.model_dump())
         self._update_door_state(door_id, status.doorStatus)
         # 上报 RCS：内门已关
+        door_code = self.config.rcs.door_code_mapping.get(door_id, door_id)
+        self._log_step(12, "上报内门已关", "report_closed", "send",
+                       f"POST {self.config.rcs.change_status_url}",
+                       {"doorNum": door_code, "doorStatus": "2"})
         await self.rcs.report_door_closed(door_id)
 
     async def _step_release_zone(self):
         """步骤13: 释放区域"""
         self._set_state(AirShowerState.RELEASE_ZONE)
-        logger.info("步骤13/13: 释放区域 [%s]", self.config.zone.zone_id)
+        zone_id = self.config.zone.zone_id
+        logger.info("步骤13/13: 释放区域 [%s]", zone_id)
+        self._log_step(13, "释放区域", "release_zone", "send",
+                       f"POST {self.config.zone.exit_url}",
+                       {"zone_id": zone_id, "client_id": self._current_agv})
         await self.zone.exit_with_retry()
+        self._log_step(13, "释放区域", "release_zone", "recv",
+                       f"POST {self.config.zone.exit_url}",
+                       {"zone_id": zone_id, "status": "released"})
         self._status.zone.status = "released"
         self._publish_event("zone_released", {
-            "zone_id": self.config.zone.zone_id,
+            "zone_id": zone_id,
         })
 
     async def _finish(self):
@@ -365,6 +432,24 @@ class StateMachine:
             self._status.outer_door = door_state
         elif door_id == self.config.angel.inner_door_id:
             self._status.inner_door = door_state
+
+    def _log_step(self, step: int, step_name: str, action: str,
+                  direction: str, url: str, payload: dict, success: bool = True):
+        """记录步骤报文日志"""
+        entry = {
+            "step": step,
+            "step_name": step_name,
+            "action": action,
+            "direction": direction,
+            "url": url,
+            "payload": payload,
+            "timestamp": datetime.now().strftime("%H:%M:%S.%f")[:12],
+            "success": success,
+        }
+        self._status.step_log.append(entry)
+        # 只保留最近 30 条
+        if len(self._status.step_log) > 30:
+            self._status.step_log = self._status.step_log[-30:]
 
     def _publish_event(self, event_type: str, data: dict):
         """发布事件（触发 SSE 回调）"""

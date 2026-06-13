@@ -193,6 +193,19 @@ body {
   animation: pulse 1s infinite;
 }
 
+.step-item[data-has-log] .step-dot::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  border: 2px solid var(--card-bg);
+  z-index: 2;
+}
+
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0.5); }
   50% { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
@@ -471,6 +484,7 @@ body {
 </style>
 </head>
 <body>
+  <div id="jsErrorBar" style="display:none;background:var(--danger);color:#fff;padding:8px 16px;font-size:12px;text-align:center;position:sticky;top:0;z-index:9999;" onclick="this.style.display='none'"></div>
 
 <div class="app-container">
   <!-- Header -->
@@ -507,8 +521,10 @@ body {
 
     <!-- 状态机进度 -->
     <div class="glass state-machine">
-      <div class="card-title">风淋流程状态</div>
-      <div class="steps-row" id="stepsRow"></div>
+      <div class="card-title">风淋流程状态 <span id="flowStepCount" style="font-size:10px;color:var(--text-muted);font-weight:400;"></span></div>
+      <div class="steps-row" id="stepsRow">
+        <span style="font-size:11px;color:var(--text-muted);">等待流程启动...</span>
+      </div>
       <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
         <div>
           <span style="font-size:13px;font-weight:600;" id="stateLabel">空闲</span>
@@ -519,6 +535,15 @@ body {
           <button class="btn btn-danger" onclick="cancelFlow()" id="btnCancel" disabled>⏹ 取消</button>
         </div>
       </div>
+    </div>
+
+    <!-- 步骤报文详情 -->
+    <div class="glass log-panel-full" id="stepDetailPanel" style="display:none;">
+      <div class="card-title" style="display:flex;justify-content:space-between;">
+        <span>📦 步骤报文 <span id="stepDetailTitle" style="font-size:10px;color:var(--text-muted);font-weight:400;"></span></span>
+        <button class="btn" onclick="closeStepDetail()" style="font-size:10px;padding:3px 8px;">✕ 关闭</button>
+      </div>
+      <div id="stepDetailContent" style="max-height:400px;overflow-y:auto;"></div>
     </div>
 
     <!-- 门状态 -->
@@ -580,6 +605,25 @@ body {
 <div id="view-zone" style="display:none;">
   <div class="dashboard">
 
+    <!-- 区域管控门状态 -->
+    <div class="glass door-panel">
+      <div class="card-title">🚪 区域门状态 <span id="zoneFlowState" style="font-size:10px;font-weight:400;color:var(--text-muted);"></span></div>
+      <div class="door-cards" id="zoneDoorCards">
+        <div class="door-card" id="zoneEntryDoor">
+          <div class="door-name"><span class="door-icon">🚪</span>进入门 <span style="font-size:10px;color:var(--text-muted);font-weight:400;" id="zoneEntryDoorId">(q001)</span></div>
+          <div class="door-code" id="zoneEntryDoorCode">─</div>
+          <div class="door-status-value closed" id="zoneEntryDoorStatus">--</div>
+          <div class="door-status-text" id="zoneEntryDoorText">未知</div>
+        </div>
+        <div class="door-card" id="zoneExitDoor">
+          <div class="door-name"><span class="door-icon">🚪</span>退出门 <span style="font-size:10px;color:var(--text-muted);font-weight:400;" id="zoneExitDoorId">(q002)</span></div>
+          <div class="door-code" id="zoneExitDoorCode">─</div>
+          <div class="door-status-value closed" id="zoneExitDoorStatus">--</div>
+          <div class="door-status-text" id="zoneExitDoorText">未知</div>
+        </div>
+      </div>
+    </div>
+
     <!-- 区域管控状态 -->
     <div class="glass">
       <div class="card-title">📡 区域状态</div>
@@ -600,58 +644,13 @@ body {
           <span class="zone-label">当前AGV</span>
           <span class="zone-value" id="currentAgv" style="font-size:12px;">--</span>
         </div>
+        <div class="zone-row">
+          <span class="zone-label">上次查询</span>
+          <span class="zone-value" id="zoneLastCheck" style="font-size:11px;">--</span>
+        </div>
       </div>
       <div class="flow-controls">
         <button class="btn" onclick="refreshStatus()">🔄 刷新</button>
-      </div>
-    </div>
-
-    <!-- 区域管控对接配置 -->
-    <div class="glass log-panel-full">
-      <div class="card-title">📡 区域管控对接配置</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
-        ASAP 通过以下三个接口实现风淋区域独占访问
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">进入区域 <code>POST /api/zones/enter</code></span>
-          <input type="text" id="zoneEnterInput" title="进入区域接口地址"
-            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
-                   font-family:inherit;outline:none;margin-top:4px;"
-            placeholder="http://zone-server:8080/api/zones/enter"
-            onfocus="this.style.borderColor='var(--accent)'"
-            onblur="this.style.borderColor='var(--card-border)'">
-        </div>
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">退出区域 <code>POST /api/zones/exit</code></span>
-          <input type="text" id="zoneExitInput" title="退出区域接口地址"
-            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
-                   font-family:inherit;outline:none;margin-top:4px;"
-            placeholder="http://zone-server:8080/api/zones/exit"
-            onfocus="this.style.borderColor='var(--accent)'"
-            onblur="this.style.borderColor='var(--card-border)'">
-        </div>
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">状态查询 <code>GET /api/zones/status</code></span>
-          <input type="text" id="zoneStatusInput" title="区域状态查询接口地址"
-            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
-                   font-family:inherit;outline:none;margin-top:4px;"
-            placeholder="http://zone-server:8080/api/zones/status"
-            onfocus="this.style.borderColor='var(--accent)'"
-            onblur="this.style.borderColor='var(--card-border)'">
-        </div>
-      </div>
-      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
-        <button class="btn btn-success btn-sm" onclick="saveZoneUrls()">保存</button>
-        <span id="zoneSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
-      </div>
-      <div style="margin-top:6px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
-        <span>区域被占用返回 <code>409</code>，ASAP 自动重试</span>
-        <span>进入成功获得 <code>permission_id</code></span>
-        <span>退出失败自动重试直到释放</span>
       </div>
     </div>
 
@@ -735,6 +734,32 @@ body {
           </div>
         </div>
       </div>
+      <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">外门 RCS 编码 <span style="font-weight:400;color:var(--text-muted);">(doorCode → door_id)</span></span>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="text" id="rcsOuterCodeInput" title="外门 RCS doorCode"
+              style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                     border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
+                     font-family:inherit;outline:none;"
+              placeholder="1001">
+            <span style="color:var(--text-muted);font-size:12px;">→</span>
+            <span id="rcsOuterDoorId" style="color:var(--accent);font-size:12px;font-family:monospace;min-width:60px;">DOOR01</span>
+          </div>
+        </div>
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">内门 RCS 编码 <span style="font-weight:400;color:var(--text-muted);">(doorCode → door_id)</span></span>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="text" id="rcsInnerCodeInput" title="内门 RCS doorCode"
+              style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                     border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
+                     font-family:inherit;outline:none;"
+              placeholder="1002">
+            <span style="color:var(--text-muted);font-size:12px;">→</span>
+            <span id="rcsInnerDoorId" style="color:var(--accent);font-size:12px;font-family:monospace;min-width:60px;">DOOR02</span>
+          </div>
+        </div>
+      </div>
       <div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text-muted);">
         <span>🔑 <code>control_way = 4</code> (第三方系统)</span>
         <span>🚪 <code>door_type = 2</code> (风淋门)</span>
@@ -784,12 +809,59 @@ body {
       </div>
     </div>
 
-    <!-- 区域管控配置（仅提示，实际编辑在区域管控标签页） -->
+    <!-- 区域管控对接配置 -->
     <div class="glass log-panel-full">
       <div class="card-title">📡 区域管控对接配置</div>
-      <div style="padding:16px;text-align:center;color:var(--text-muted);font-size:13px;">
-        <p style="margin-bottom:8px;">区域管控的对接地址请在 <strong style="color:var(--accent);">📡 区域管控</strong> 标签页中配置</p>
-        <p style="font-size:11px;">包括：进入区域、退出区域、状态查询 三个接口地址</p>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
+        ASAP 通过以下三个接口实现区域独占访问。区域门编码在下方配置。
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">进入区域 <code>POST</code></span>
+          <input type="text" id="cfgZoneEnterInput" title="进入区域接口"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;font-family:inherit;outline:none;margin-top:4px;"
+            placeholder="http://zone-server:8080/api/zones/enter">
+        </div>
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">退出区域 <code>POST</code></span>
+          <input type="text" id="cfgZoneExitInput" title="退出区域接口"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;font-family:inherit;outline:none;margin-top:4px;"
+            placeholder="http://zone-server:8080/api/zones/exit">
+        </div>
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">状态查询 <code>GET</code></span>
+          <input type="text" id="cfgZoneStatusInput" title="区域状态查询接口"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;font-family:inherit;outline:none;margin-top:4px;"
+            placeholder="http://zone-server:8080/api/zones/status">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">进入门 RCS 编码 <span style="font-weight:400;color:var(--text-muted);">(q001)</span></span>
+          <input type="text" id="cfgZoneEntryCodeInput"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;font-family:inherit;outline:none;"
+            placeholder="q001">
+        </div>
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">退出门 RCS 编码 <span style="font-weight:400;color:var(--text-muted);">(q002)</span></span>
+          <input type="text" id="cfgZoneExitCodeInput"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;font-family:inherit;outline:none;"
+            placeholder="q002">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+        <button class="btn btn-success btn-sm" onclick="saveZoneConfig()">💾 保存</button>
+        <span id="cfgZoneSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+      </div>
+      <div style="margin-top:6px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
+        <span>区域被占用返回 <code>409</code>，ASAP 自动重试</span>
+        <span>进入成功获得 <code>permission_id</code></span>
+        <span>退出失败自动重试直到释放</span>
       </div>
     </div>
   </div>
@@ -840,6 +912,44 @@ body {
       </div>
     </div>
   </div> <!-- /cfg-env -->
+
+  <!-- 模拟器配置 -->
+  <div class="glass log-panel-full" style="margin-top:12px;">
+    <div class="card-title">🎮 模拟器参数配置</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+        <span class="zone-label">开门过渡时间 (秒)</span>
+        <input type="number" id="simOpenDelayInput" step="0.1" min="0.5" max="30"
+          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;font-family:inherit;outline:none;">
+      </div>
+      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+        <span class="zone-label">关门过渡时间 (秒)</span>
+        <input type="number" id="simCloseDelayInput" step="0.1" min="0.5" max="30"
+          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;font-family:inherit;outline:none;">
+      </div>
+      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+        <span class="zone-label">区域ID</span>
+        <input type="text" id="simZoneIdInput"
+          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;font-family:inherit;outline:none;"
+          placeholder="air_shower_room">
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;margin-top:8px;flex-wrap:wrap;">
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-primary);cursor:pointer;">
+        <input type="checkbox" id="simZoneBusyCheck" onchange="this.style.accentColor='var(--danger)'">
+        区域始终占用 (测试用)
+      </label>
+      <button class="btn btn-success btn-sm" onclick="saveSimConfig()">💾 保存</button>
+      <span id="simSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+    </div>
+    <div style="margin-top:6px;font-size:10px;color:var(--text-muted);">
+      💡 模拟器启用后，此配置立即生效。修改后点保存即可，无需重启。
+    </div>
+  </div>
+
 </div>    <!-- view-config -->
 
 <!-- ════════════════════════════════════
@@ -976,6 +1086,15 @@ curl http://HOST:5012/api/asap/upgrade/version
         </div>
       </div>
     </div>
+    <!-- 风淋倒计时 -->
+    <div class="glass" id="showerTimerPanel" style="display:none;text-align:center;">
+      <div class="card-title">⏱ 风淋计时</div>
+      <div style="font-size:48px;font-weight:700;font-family:monospace;color:var(--accent);" id="showerCountdown">0.0s</div>
+      <div style="width:100%;height:6px;background:var(--card-bg);border-radius:3px;margin-top:8px;overflow:hidden;">
+        <div id="showerProgress" style="height:100%;background:var(--accent);border-radius:3px;width:0%;transition:width 0.5s linear;"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">风淋中，请等待...</div>
+    </div>
     <div class="glass log-panel-full">
       <div class="card-title" style="display:flex;justify-content:space-between;">
         <span>📋 模拟器请求日志</span>
@@ -990,6 +1109,17 @@ curl http://HOST:5012/api/asap/upgrade/version
 </div>    <!-- app-container -->
 
 <script>
+// ── 全局JS错误展示 ──────────────────────
+window.onerror = function(msg, url, line) {
+  const bar = document.getElementById("jsErrorBar");
+  if (bar) { bar.textContent = "⚠ JS错误: " + msg + " (行" + line + ") — 点击关闭"; bar.style.display = "block"; }
+  console.error(msg, url, line);
+};
+window.addEventListener('unhandledrejection', function(e) {
+  const bar = document.getElementById("jsErrorBar");
+  if (bar) { bar.textContent = "⚠ 异步错误: " + (e.reason?.message || e.reason) + " — 点击关闭"; bar.style.display = "block"; }
+  console.error('Unhandled rejection:', e.reason);
+});
 // ═══════════════════════════════════════
 //  WebUI 主逻辑
 // ═══════════════════════════════════════
@@ -1011,6 +1141,9 @@ const stateStepMap = {
 
 let currentState = "IDLE";
 let currentStep = 0;
+let currentShowerDuration = 4.0;
+let currentElapsed = 0;
+let showerTimerInterval = null;
 let sseConnected = false;
 let doorIds = { outer: "DOOR_OUTER", inner: "DOOR_INNER" };
 
@@ -1030,6 +1163,13 @@ function init() {
   safe(checkSimStatus, 'checkSimStatus');
   setInterval(checkSimStatus, 5000);
   safe(upgradeInitUpload, 'upgradeInitUpload');
+  safe(renderStepNodes, 'renderStepNodes');
+  safe(connectSSE, 'connectSSE');
+  // 风淋倒计时轮询 (0.5秒一次，仅步骤7时显示)
+  setInterval(() => {
+    if (currentStep === 7) currentElapsed += 0.5;
+    updateShowerTimer();
+  }, 500);
 }
 
 // ── 视图切换 ──────────────────────────
@@ -1049,8 +1189,8 @@ function switchView(name) {
   // 刷新对应视图数据
   if (name === "simulator") simRefresh();
   else if (name === "door") loadRcsLogs();
-  else if (name === "zone") refreshStatus();
-  else if (name === "config") { loadAngelConfig(); loadZoneConfig(); loadRuntimeConfig(); loadEnvConfig(); }
+  else if (name === "zone") { refreshStatus(); fetchZoneStatus(); }
+  else if (name === "config") { loadAngelConfig(); loadZoneConfig(); loadRuntimeConfig(); loadEnvConfig(); loadSimConfig(); }
   else if (name === "upgrade") { loadUpgradeVersion(); loadUpgradeRecords(); }
 }
 
@@ -1169,6 +1309,16 @@ async function fetchStatus() {
   }
 }
 
+async function fetchZoneStatus() {
+  try {
+    const resp = await fetch("/api/asap/zone-status");
+    const data = await resp.json();
+    updateZoneDashboard(data);
+  } catch (e) {
+    console.error("获取区域状态失败:", e);
+  }
+}
+
 async function startFlow() {
   try {
     await fetch("/api/asap/start", { method: "POST" });
@@ -1187,6 +1337,237 @@ async function cancelFlow() {
   } catch (e) {
     console.error("取消失败:", e);
   }
+}
+
+// ── SSE 事件流 + 步骤节点 ────────────────
+
+function updateDashboard(data) {
+  // 更新步骤节点
+  updateStepNodes(data);
+  // 更新门状态
+  if (data.outer_door) updateDoorCard("outer", data.outer_door);
+  if (data.inner_door) updateDoorCard("inner", data.inner_door);
+  // 更新区域状态（区域管控视图）
+  if (data.zone) {
+    const zsEl = document.getElementById("zoneStatus");
+    const zbyEl = document.getElementById("zoneOccupiedBy");
+    const zidEl = document.getElementById("zoneId");
+    const agvEl = document.getElementById("currentAgv");
+    const simZsEl = document.getElementById("simZoneState");
+    if (zidEl) zidEl.textContent = data.zone.zone_id || "--";
+    if (zsEl) {
+      const s = data.zone.status || "unknown";
+      zsEl.textContent = s === "occupied" ? "占用中" : s === "granted" ? "已授权" : s === "available" ? "可用" : s;
+      zsEl.className = "zone-value " + (s === "occupied" ? "occupied" : s === "granted" ? "active" : "unknown");
+    }
+    if (zbyEl) zbyEl.textContent = data.zone.occupied_by || "--";
+    if (agvEl) agvEl.textContent = data.current_agv || "--";
+    const zlcEl = document.getElementById("zoneLastCheck");
+    if (zlcEl) zlcEl.textContent = data.zone.last_check
+      ? new Date(data.zone.last_check + "Z").toLocaleTimeString()
+      : "等待中...";
+    if (simZsEl) {
+      const simS = data.zone.status || "unknown";
+      simZsEl.textContent = simS === "occupied" ? "被占用" : simS === "granted" ? "已授权" : "空闲";
+      simZsEl.style.color = simS === "occupied" ? "var(--warning)" : simS === "granted" ? "var(--accent)" : "var(--success)";
+    }
+  }
+  currentState = data.state || "IDLE";
+  currentStep = data.current_step || 0;
+  currentShowerDuration = data.shower_duration || 4.0;
+  currentElapsed = data.elapsed || 0;
+  updateShowerTimer();
+}
+
+function updateShowerTimer() {
+  const panel = document.getElementById("showerTimerPanel");
+  const countdown = document.getElementById("showerCountdown");
+  const progress = document.getElementById("showerProgress");
+  if (!panel || !countdown || !progress) return;
+
+  if (currentStep === 7) {
+    panel.style.display = "";
+    const remaining = Math.max(0, currentShowerDuration - currentElapsed);
+    countdown.textContent = remaining.toFixed(1) + "s";
+    const pct = Math.min(100, (currentElapsed / currentShowerDuration) * 100);
+    progress.style.width = pct + "%";
+  } else {
+    panel.style.display = "none";
+  }
+}
+
+function updateZoneDashboard(data) {
+  try {
+    const fsEl = document.getElementById("zoneFlowState");
+    if (fsEl) {
+      const s = data.state || "idle";
+      const labels = { idle: "空闲", entering: "进入中", inside: "区域内", q001_closed: "等待退出", exiting: "退出中", error: "异常" };
+      fsEl.textContent = labels[s] || s;
+    }
+    updateZoneDoorCard("zoneEntry", data.entry_door_code || "q001", data.entry_door_status || "2");
+    updateZoneDoorCard("zoneExit", data.exit_door_code || "q002", data.exit_door_status || "2");
+  } catch(e) { console.error('updateZoneDashboard:', e); }
+}
+
+function updateZoneDoorCard(prefix, doorCode, doorStatus) {
+  try {
+    const card = document.getElementById(prefix + "Door");
+    const statusEl = document.getElementById(prefix + "DoorStatus");
+    const textEl = document.getElementById(prefix + "DoorText");
+    const idEl = document.getElementById(prefix + "DoorId");
+    const codeEl = document.getElementById(prefix + "DoorCode");
+    if (!card || !statusEl) return;
+    if (idEl) idEl.textContent = "(" + doorCode + ")";
+    if (codeEl) codeEl.textContent = "";
+
+    card.className = "door-card";
+    const isOpen = doorStatus === "1";
+    card.classList.add(isOpen ? "open" : "closed");
+    statusEl.className = "door-status-value " + (isOpen ? "open" : "closed");
+    statusEl.textContent = isOpen ? "开" : "关";
+    if (textEl) textEl.textContent = isOpen ? "已打开" : "已关闭";
+  } catch(e) { console.error('updateZoneDoorCard:'+prefix, e); }
+}
+
+function connectSSE() {
+  if (sseConnected) return;
+  try {
+    const es = new EventSource("/api/sse/events");
+    es.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.event_type === "snapshot" && msg.data) {
+          updateDashboard(msg.data);
+          updateStepNodes(msg.data);
+        } else if (msg.event_type === "zone_snapshot" && msg.data) {
+          updateZoneDashboard(msg.data);
+        } else if (msg.event_type !== "heartbeat") {
+          addLog(msg);
+          // 非快照事件后刷新状态获取最新 step_log
+          setTimeout(fetchStatus, 500);
+        }
+      } catch (err) { /* ignore parse errors */ }
+    };
+    es.onerror = () => { sseConnected = false; es.close(); };
+    es.onopen = () => { sseConnected = true; };
+  } catch (e) {
+    console.error('SSE连接失败:', e);
+    // 回退到轮询
+    sseConnected = false;
+    fetchStatus();
+    setInterval(fetchStatus, 3000);
+  }
+}
+
+function renderStepNodes() {
+  const row = document.getElementById("stepsRow");
+  if (!row) return;
+  row.innerHTML = stepNames.slice(1).map((name, i) => {
+    const stepNum = i + 1;
+    return `<div class="step-item" id="stepItem${stepNum}" onclick="showStepDetail(${stepNum})"
+             title="${name} — 点击查看报文" style="cursor:pointer;">
+      ${stepNum < 14 ? `<div class="step-line" id="stepLine${stepNum}"></div>` : ""}
+      <div class="step-dot" id="stepDot${stepNum}">${stepNum}</div>
+      <div class="step-label" id="stepLabel${stepNum}">${name}</div>
+    </div>`;
+  }).join("");
+}
+
+function updateStepNodes(data) {
+  const step = data.current_step || 0;
+  const state = data.state || "IDLE";
+  const stepLog = data.step_log || [];
+
+  // 更新步骤计数器
+  const countEl = document.getElementById("flowStepCount");
+  if (countEl) countEl.textContent = step > 0 ? `(步骤 ${step}/13)` : "";
+
+  // 更新标题
+  document.getElementById("stateLabel").textContent = step >= 1 && step <= 13 ? stepNames[step] : "空闲";
+  document.getElementById("agvLabel").textContent = data.current_agv ? `AGV: ${data.current_agv}` : "";
+
+  // 按钮状态
+  const busy = step >= 1 && step <= 13;
+  document.getElementById("btnStart").disabled = busy;
+  document.getElementById("btnCancel").disabled = !busy;
+
+  // 步骤节点状态
+  for (let i = 1; i <= 13; i++) {
+    const dot = document.getElementById("stepDot" + i);
+    const label = document.getElementById("stepLabel" + i);
+    const line = document.getElementById("stepLine" + i);
+    const item = document.getElementById("stepItem" + i);
+    if (!dot) continue;
+
+    dot.className = "step-dot";
+    if (i < step) dot.classList.add("done");
+    else if (i === step) dot.classList.add("active");
+    if (state === "ERROR" && i === step) dot.classList.add("error");
+
+    if (line) {
+      line.className = "step-line";
+      if (i < step) line.classList.add("done");
+      else if (i === step) line.classList.add("running");
+    }
+
+    // 显示该步是否有报文日志（小圆点标记）
+    const hasLog = stepLog.some(l => l.step === i);
+    if (hasLog && item) item.setAttribute("data-has-log", "1");
+    else if (item) item.removeAttribute("data-has-log");
+  }
+
+  // 更新已打开详情面板的数据
+  if (document.getElementById("stepDetailPanel").style.display !== "none") {
+    const activeStep = document.getElementById("stepDetailPanel").getAttribute("data-step");
+    if (activeStep) showStepDetail(parseInt(activeStep), stepLog);
+  }
+}
+
+// 获取 step_log（从缓存或最新状态）
+async function getStepLog() {
+  try {
+    const resp = await fetch("/api/asap/status");
+    const data = await resp.json();
+    return data.step_log || [];
+  } catch (e) { return []; }
+}
+
+async function showStepDetail(stepNum, cachedLog) {
+  const panel = document.getElementById("stepDetailPanel");
+  const title = document.getElementById("stepDetailTitle");
+  const content = document.getElementById("stepDetailContent");
+  if (!panel || !content) return;
+
+  panel.setAttribute("data-step", stepNum);
+  title.textContent = `步骤 ${stepNum}: ${stepNames[stepNum] || ""}`;
+
+  const stepLog = cachedLog || await getStepLog();
+  const entries = stepLog.filter(l => l.step === stepNum);
+
+  if (entries.length === 0) {
+    content.innerHTML = `<div style="padding:16px;color:var(--text-muted);text-align:center;">该步骤暂无报文记录</div>`;
+  } else {
+    content.innerHTML = entries.map(e => `
+      <div style="margin-bottom:8px;border:1px solid var(--card-border);border-radius:6px;overflow:hidden;">
+        <div style="display:flex;gap:8px;padding:6px 10px;background:rgba(255,255,255,0.03);align-items:center;">
+          <span style="font-size:10px;color:var(--text-muted);">${e.timestamp || ""}</span>
+          <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${e.direction==='send'?'rgba(59,130,246,0.2)':'rgba(34,197,94,0.2)'};color:${e.direction==='send'?'var(--info)':'var(--success)'};">
+            ${e.direction === 'send' ? '↑ 请求' : e.direction === 'recv' ? '↓ 响应' : '· ' + e.direction}
+          </span>
+          <span style="font-size:10px;color:var(--text-muted);font-family:monospace;">${e.url || e.action || ""}</span>
+          ${e.success === false ? '<span style="font-size:10px;color:var(--danger);">✗ 失败</span>' : ''}
+        </div>
+        <div style="padding:6px 10px;font-family:monospace;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;">
+          ${JSON.stringify(e.payload || {}, null, 2)}
+        </div>
+      </div>
+    `).join("");
+  }
+  panel.style.display = "block";
+}
+
+function closeStepDetail() {
+  document.getElementById("stepDetailPanel").style.display = "none";
 }
 
 async function manualOpen(doorId) {
@@ -1307,12 +1688,27 @@ function setRcsUrls() {
         input.value = cfg.change_status_url;
         input.placeholder = cfg.change_status_url;
       }
+      // 加载门编码映射
+      const mapping = cfg.door_code_mapping || {};
+      const outerId = doorIds.outer || "DOOR_OUTER";
+      const innerId = doorIds.inner || "DOOR_INNER";
+      const outerInput = document.getElementById("rcsOuterCodeInput");
+      const innerInput = document.getElementById("rcsInnerCodeInput");
+      if (outerInput) outerInput.value = mapping[outerId] || Object.values(mapping)[0] || "1001";
+      if (innerInput) innerInput.value = mapping[innerId] || Object.values(mapping)[1] || "1002";
+      // 显示对应的 door_id
+      const outerLabel = document.getElementById("rcsOuterDoorId");
+      const innerLabel = document.getElementById("rcsInnerDoorId");
+      if (outerLabel) outerLabel.textContent = outerId;
+      if (innerLabel) innerLabel.textContent = innerId;
     })
     .catch(() => {});
 }
 
 async function saveRcsUrl() {
   const url = document.getElementById("rcsReportUrlInput").value.trim();
+  const outerCode = document.getElementById("rcsOuterCodeInput").value.trim();
+  const innerCode = document.getElementById("rcsInnerCodeInput").value.trim();
   const btn = document.getElementById("rcsSaveBtn");
   const status = document.getElementById("rcsSaveStatus");
 
@@ -1321,10 +1717,19 @@ async function saveRcsUrl() {
   status.style.display = "none";
 
   try {
+    const body = { change_status_url: url, report_interval: 0.5 };
+    // 构建门编码映射
+    if (outerCode || innerCode) {
+      const outerId = doorIds.outer || "DOOR_OUTER";
+      const innerId = doorIds.inner || "DOOR_INNER";
+      body.door_code_mapping = {};
+      if (outerCode) body.door_code_mapping[outerId] = outerCode;
+      if (innerCode) body.door_code_mapping[innerId] = innerCode;
+    }
     const resp = await fetch("/api/asap/config/rcs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ change_status_url: url, report_interval: 0.5 }),
+      body: JSON.stringify(body),
     });
     const data = await resp.json();
     status.textContent = "✓ 已保存";
@@ -1389,26 +1794,34 @@ function loadAngelConfig() {
 }
 
 // ── 区域管控配置 ────────────────────────
-async function saveZoneUrls() {
-  const enter = document.getElementById("zoneEnterInput").value.trim();
-  const exit = document.getElementById("zoneExitInput").value.trim();
-  const status = document.getElementById("zoneStatusInput").value.trim();
-  const st = document.getElementById("zoneSaveStatus");
+async function saveZoneConfig() {
+  const enter = document.getElementById("cfgZoneEnterInput").value.trim();
+  const exit = document.getElementById("cfgZoneExitInput").value.trim();
+  const status = document.getElementById("cfgZoneStatusInput").value.trim();
+  const entryCode = document.getElementById("cfgZoneEntryCodeInput").value.trim();
+  const exitCode = document.getElementById("cfgZoneExitCodeInput").value.trim();
+  const statusEl = document.getElementById("cfgZoneSaveStatus");
   try {
+    const body = {};
+    if (enter) body.enter_url = enter;
+    if (exit) body.exit_url = exit;
+    if (status) body.status_url = status;
+    if (entryCode) body.entry_door_code = entryCode;
+    if (exitCode) body.exit_door_code = exitCode;
     const resp = await fetch("/api/asap/config/zone", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enter_url: enter, exit_url: exit, status_url: status }),
+      body: JSON.stringify(body),
     });
-    await resp.json();
-    st.textContent = "✓ 已保存";
-    st.style.display = "inline";
-    st.style.color = "var(--success)";
-    setTimeout(() => { st.style.display = "none"; }, 3000);
+    const data = await resp.json();
+    statusEl.textContent = "✓ 已保存";
+    statusEl.style.display = "inline";
+    statusEl.style.color = "var(--success)";
+    setTimeout(() => { statusEl.style.display = "none"; }, 3000);
   } catch (e) {
-    st.textContent = "✗ 保存失败";
-    st.style.display = "inline";
-    st.style.color = "var(--danger)";
+    statusEl.textContent = "✗ 保存失败";
+    statusEl.style.display = "inline";
+    statusEl.style.color = "var(--danger)";
   }
 }
 
@@ -1416,11 +1829,60 @@ function loadZoneConfig() {
   fetch("/api/asap/config/zone")
     .then(r => r.json())
     .then(data => {
-      document.getElementById("zoneEnterInput").value = data.enter_url || "";
-      document.getElementById("zoneExitInput").value = data.exit_url || "";
-      document.getElementById("zoneStatusInput").value = data.status_url || "";
+      document.getElementById("cfgZoneEnterInput").value = data.enter_url || "";
+      document.getElementById("cfgZoneExitInput").value = data.exit_url || "";
+      document.getElementById("cfgZoneStatusInput").value = data.status_url || "";
+      document.getElementById("cfgZoneEntryCodeInput").value = data.entry_door_code || "q001";
+      document.getElementById("cfgZoneExitCodeInput").value = data.exit_door_code || "q002";
     })
     .catch(() => {});
+}
+
+// ── 模拟器配置 ──────────────────────────
+
+function loadSimConfig() {
+  fetch("/api/asap/config/sim")
+    .then(r => r.json())
+    .then(data => {
+      const odEl = document.getElementById("simOpenDelayInput");
+      const cdEl = document.getElementById("simCloseDelayInput");
+      const ziEl = document.getElementById("simZoneIdInput");
+      const zbEl = document.getElementById("simZoneBusyCheck");
+      if (odEl) odEl.value = data.auto_open_delay ?? 2.0;
+      if (cdEl) cdEl.value = data.auto_close_delay ?? 2.0;
+      if (ziEl) ziEl.value = data.zone_id || "air_shower_room";
+      if (zbEl) zbEl.checked = data.zone_always_busy || false;
+    })
+    .catch(() => {});
+}
+
+async function saveSimConfig() {
+  const openDelay = parseFloat(document.getElementById("simOpenDelayInput").value) || 2.0;
+  const closeDelay = parseFloat(document.getElementById("simCloseDelayInput").value) || 2.0;
+  const zoneId = document.getElementById("simZoneIdInput").value.trim();
+  const zoneBusy = document.getElementById("simZoneBusyCheck").checked;
+  const status = document.getElementById("simSaveStatus");
+  try {
+    const resp = await fetch("/api/asap/config/sim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        auto_open_delay: openDelay,
+        auto_close_delay: closeDelay,
+        zone_id: zoneId || undefined,
+        zone_always_busy: zoneBusy,
+      }),
+    });
+    const data = await resp.json();
+    status.textContent = "✓ 已保存 (即时生效)";
+    status.style.display = "inline";
+    status.style.color = "var(--success)";
+    setTimeout(() => { status.style.display = "none"; }, 3000);
+  } catch (e) {
+    status.textContent = "✗ 保存失败";
+    status.style.display = "inline";
+    status.style.color = "var(--danger)";
+  }
 }
 
 // ── 模拟器控制 ──────────────────────────

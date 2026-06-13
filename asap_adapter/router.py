@@ -37,6 +37,7 @@ class RcsConfigUpdate(BaseModel):
     """RCS 配置更新请求"""
     change_status_url: str = ""
     report_interval: float = 0.5
+    door_code_mapping: Optional[dict] = None  # {"DOOR01": "1001", "DOOR02": "1002"}
 
 
 class LogQueryRequest(BaseModel):
@@ -60,9 +61,13 @@ class ZoneConfigUpdate(BaseModel):
     enter_url: str = ""
     exit_url: str = ""
     status_url: str = ""
+    entry_door_code: Optional[str] = None
+    exit_door_code: Optional[str] = None
+    zone_poll_interval: Optional[float] = None
 
 
 # ── 请求日志记录 ──────────────────────────
+
 
 def _log_req(request: Request, category: str, endpoint: str,
              req_body: dict, resp_body, resp_status: int = 200, method: str = "POST"):
@@ -171,10 +176,15 @@ def create_router(app: FastAPI) -> APIRouter:
     async def rcs_control_door(req: RcsDoorControlRequest, request: Request):
         """
         RCS 门禁控制入口
-        当 status=1(开门) 时启动完整风淋流程
-        当 status=2(关门) 时执行手动关门
+        根据 doorCode 分流：
+          - 风淋门门码 (1001/1002) → AirShowerStateMachine
+          - 区域管控门码 (q001/q002) → ZoneStateMachine
         """
         from datetime import datetime
+        entry_code = request.app.state.config.zone.entry_door_code
+        exit_code = request.app.state.config.zone.exit_door_code
+        is_zone_door = req.doorCode in (entry_code, exit_code)
+
         sm = _get_sm(request)
         sm._status.rcs_query_count += 1
         action = "开门" if req.status == 1 else "关门" if req.status == 2 else f"status={req.status}"
@@ -182,11 +192,29 @@ def create_router(app: FastAPI) -> APIRouter:
             f"{datetime.now().strftime('%H:%M:%S')} "
             f"控制 doorCode={req.doorCode} {action}"
         )
-        logger.info("RCS控制请求: door=%s status=%d agv=%s",
-                    req.doorCode, req.status, req.deviceCode)
+        logger.info("RCS控制请求: door=%s status=%d agv=%s zone=%s",
+                    req.doorCode, req.status, req.deviceCode, is_zone_door)
 
         req_dict = req.model_dump(exclude_none=True)
 
+        # ── 区域管控门 (q001/q002) ──
+        if is_zone_door:
+            zsm = request.app.state.zone_sm
+            if req.status == 1:
+                ok, msg = await zsm.handle_open(req.doorCode, req.deviceCode)
+                code = 1000 if ok else 2001
+                resp = RcsDoorControlResponse(code=code, msg=msg)
+            elif req.status == 2:
+                ok, msg = await zsm.handle_close(req.doorCode)
+                code = 1000 if ok else 2002
+                resp = RcsDoorControlResponse(code=code, msg=msg)
+            else:
+                resp = RcsDoorControlResponse(code=2003, msg=f"未知状态: {req.status}")
+            _log_req(request, "control", "/api/rcs/controlDoor",
+                     req_dict, resp.model_dump(), 200)
+            return resp
+
+        # ── 风淋门 (1001/1002) 原有逻辑 ──
         if req.status == 1:
             success = await sm.start(agv_id=req.deviceCode)
             if not success:
@@ -222,10 +250,12 @@ def create_router(app: FastAPI) -> APIRouter:
 
     @router.post("/api/rcs/doorStatus")
     async def rcs_door_status(req: RcsStatusQueryRequest, request: Request):
-        """RCS 门状态查询"""
+        """RCS 门状态查询（风淋门 + 区域管控）"""
         from datetime import datetime
+        entry_code = request.app.state.config.zone.entry_door_code
+        exit_code = request.app.state.config.zone.exit_door_code
+
         sm = _get_sm(request)
-        # 更新查询统计
         sm._status.rcs_query_count += 1
         sm._status.rcs_last_query = (
             f"{datetime.now().strftime('%H:%M:%S')} "
@@ -234,6 +264,19 @@ def create_router(app: FastAPI) -> APIRouter:
 
         req_dict = req.model_dump(exclude_none=True)
 
+        # ── 区域管控门 ──
+        if req.doorCode in (entry_code, exit_code):
+            zsm = request.app.state.zone_sm
+            try:
+                rcs_status = zsm.door_status_by_code(req.doorCode)
+                resp = RcsStatusQueryResponse(data=RcsStatusData(status=rcs_status))
+            except Exception as e:
+                resp = RcsStatusQueryResponse(code=9999, msg=str(e))
+            _log_req(request, "query", "/api/rcs/doorStatus",
+                     req_dict, resp.model_dump(), 200)
+            return resp
+
+        # ── 风淋门原有逻辑 ──
         try:
             door_id = _door_code_to_id(req.doorCode, sm)
             status = await sm.query_door_status(door_id)
@@ -267,6 +310,12 @@ def create_router(app: FastAPI) -> APIRouter:
         """获取风淋系统整体状态"""
         sm = _get_sm(request)
         return sm.status.model_dump()
+
+    @router.get("/api/asap/zone-status")
+    async def get_zone_status(request: Request):
+        """获取区域管控状态"""
+        zsm = request.app.state.zone_sm
+        return zsm.status.dump()
 
     @router.post("/api/asap/start")
     async def start_air_shower(request: Request, agv_id: str = ""):
@@ -345,16 +394,23 @@ def create_router(app: FastAPI) -> APIRouter:
         rcs.config.change_status_url = cfg.change_status_url
         if cfg.report_interval > 0:
             rcs.config.report_interval = cfg.report_interval
+        # 门编码映射
+        if cfg.door_code_mapping is not None:
+            rcs.config.door_code_mapping = cfg.door_code_mapping
         # 持久化到 overrides.json（重启后保留）
         from .config import save_override
         save_override("rcs", "change_status_url", cfg.change_status_url)
         if cfg.report_interval > 0:
             save_override("rcs", "report_interval", cfg.report_interval)
-        logger.info("RCS配置已更新并持久化: change_status_url=%s", cfg.change_status_url)
+        if cfg.door_code_mapping is not None:
+            save_override("rcs", "door_code_mapping", cfg.door_code_mapping)
+        logger.info("RCS配置已更新并持久化: change_status_url=%s mapping=%s",
+                     cfg.change_status_url, cfg.door_code_mapping)
         return {
             "status": "ok",
             "change_status_url": rcs.config.change_status_url,
             "report_interval": rcs.config.report_interval,
+            "door_code_mapping": rcs.config.door_code_mapping,
         }
 
     # ── AB 门配置管理 ───────────────────────
@@ -417,6 +473,9 @@ def create_router(app: FastAPI) -> APIRouter:
             "enter_url": cfg.zone.enter_url,
             "exit_url": cfg.zone.exit_url,
             "status_url": cfg.zone.status_url,
+            "entry_door_code": cfg.zone.entry_door_code,
+            "exit_door_code": cfg.zone.exit_door_code,
+            "zone_poll_interval": cfg.zone.zone_poll_interval,
         }
 
     @router.post("/api/asap/config/zone")
@@ -435,12 +494,27 @@ def create_router(app: FastAPI) -> APIRouter:
             config.zone.status_url = cfg.status_url
             from .config import save_override
             save_override("zone", "status_url", cfg.status_url)
+        if cfg.zone_poll_interval is not None and cfg.zone_poll_interval > 0:
+            config.zone.zone_poll_interval = cfg.zone_poll_interval
+            from .config import save_override
+            save_override("zone", "zone_poll_interval", cfg.zone_poll_interval)
+        if cfg.entry_door_code is not None:
+            config.zone.entry_door_code = cfg.entry_door_code
+            from .config import save_override
+            save_override("zone", "entry_door_code", cfg.entry_door_code)
+        if cfg.exit_door_code is not None:
+            config.zone.exit_door_code = cfg.exit_door_code
+            from .config import save_override
+            save_override("zone", "exit_door_code", cfg.exit_door_code)
         logger.info("区域管控配置已更新")
         return {
             "status": "ok",
             "enter_url": config.zone.enter_url,
             "exit_url": config.zone.exit_url,
             "status_url": config.zone.status_url,
+            "entry_door_code": config.zone.entry_door_code,
+            "exit_door_code": config.zone.exit_door_code,
+            "zone_poll_interval": config.zone.zone_poll_interval,
         }
 
     # ── 日志查询 ──────────────────────────────
@@ -560,6 +634,70 @@ def create_router(app: FastAPI) -> APIRouter:
                 "simulator": snap.model_dump(),
             }
         return {"enabled": False, "available": False, "message": "模拟器模块未安装"}
+
+    # ── 模拟器配置管理 ─────────────────────────
+
+    @router.get("/api/asap/config/sim")
+    async def get_sim_config(request: Request):
+        """获取模拟器配置"""
+        cfg = request.app.state.config
+        sim_ctrl = getattr(request.app.state, 'sim_controller', None)
+        sim_snap = sim_ctrl.snapshot() if sim_ctrl and getattr(request.app.state, 'sim_enabled', False) else None
+        return {
+            "auto_open_delay": cfg.sim.auto_open_delay,
+            "auto_close_delay": cfg.sim.auto_close_delay,
+            "zone_always_busy": cfg.sim.zone_always_busy,
+            "zone_id": cfg.sim.zone_id,
+            "enabled": getattr(request.app.state, 'sim_enabled', False),
+            "available": getattr(request.app.state, '_sim_available', False),
+            "sim_config": sim_snap.config.model_dump() if sim_snap else None,
+        }
+
+    class SimConfigUpdate(BaseModel):
+        auto_open_delay: Optional[float] = None
+        auto_close_delay: Optional[float] = None
+        zone_always_busy: Optional[bool] = None
+        zone_id: Optional[str] = None
+
+    @router.post("/api/asap/config/sim")
+    async def update_sim_config(request: Request, cfg: SimConfigUpdate):
+        """更新模拟器配置（运行时生效 + 持久化）"""
+        config = request.app.state.config
+        sim_ctrl = getattr(request.app.state, 'sim_controller', None)
+
+        if cfg.auto_open_delay is not None and cfg.auto_open_delay > 0:
+            config.sim.auto_open_delay = cfg.auto_open_delay
+            if sim_ctrl:
+                sim_ctrl.config.auto_open_delay = cfg.auto_open_delay
+            from .config import save_override
+            save_override("sim", "auto_open_delay", cfg.auto_open_delay)
+        if cfg.auto_close_delay is not None and cfg.auto_close_delay > 0:
+            config.sim.auto_close_delay = cfg.auto_close_delay
+            if sim_ctrl:
+                sim_ctrl.config.auto_close_delay = cfg.auto_close_delay
+            from .config import save_override
+            save_override("sim", "auto_close_delay", cfg.auto_close_delay)
+        if cfg.zone_always_busy is not None:
+            config.sim.zone_always_busy = cfg.zone_always_busy
+            if sim_ctrl:
+                sim_ctrl.config.zone_always_busy = cfg.zone_always_busy
+            from .config import save_override
+            save_override("sim", "zone_always_busy", cfg.zone_always_busy)
+        if cfg.zone_id is not None:
+            config.sim.zone_id = cfg.zone_id
+            if sim_ctrl:
+                sim_ctrl.zone.zone_id = cfg.zone_id
+            from .config import save_override
+            save_override("sim", "zone_id", cfg.zone_id)
+
+        logger.info("模拟器配置已更新")
+        return {
+            "status": "ok",
+            "auto_open_delay": config.sim.auto_open_delay,
+            "auto_close_delay": config.sim.auto_close_delay,
+            "zone_always_busy": config.sim.zone_always_busy,
+            "zone_id": config.sim.zone_id,
+        }
 
     # ── 升级管理 ──────────────────────────────
 

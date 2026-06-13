@@ -254,6 +254,8 @@ configure_supervisor() {
 
     log_info "创建 Supervisor 配置..."
     mkdir -p "$LOG_DIR" 2>/dev/null || true
+    # 确保日志目录对运行用户可写（避免 supervisor EACCES）
+    chown -R "${SUPERVISOR_USER}:${SUPERVISOR_USER}" "$LOG_DIR" 2>/dev/null || true
 
     cat > "$SUPERVISOR_CONF" << EOF
 [program:${SERVICE_NAME}]

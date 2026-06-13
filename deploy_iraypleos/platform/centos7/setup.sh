@@ -86,14 +86,26 @@ if [ -f "$PYTHON_SRC" ]; then
     SRC_DIR="/tmp/$(basename "$PYTHON_SRC" .tar.xz)"
     cd "$SRC_DIR"
 
-    log_info "配置..."
-    ./configure --prefix="$PYTHON_PREFIX" --enable-optimizations --with-ensurepip=install 2>&1 | tail -1
+    log_info "配置中..."
+    if ! ./configure --prefix="$PYTHON_PREFIX" --enable-optimizations --with-ensurepip=install > /tmp/python39_configure.log 2>&1; then
+        tail -20 /tmp/python39_configure.log
+        die "Python 配置失败 (详情: /tmp/python39_configure.log)"
+    fi
+    log_ok "配置完成 (--prefix=$PYTHON_PREFIX, --enable-optimizations)"
 
-    log_info "编译中 (使用 $(nproc) 核)..."
-    make -j$(nproc) 2>&1 | tail -1
+    log_info "编译中 (使用 $(nproc) 核, 约 5-10 分钟)..."
+    if ! make -j$(nproc) > /tmp/python39_make.log 2>&1; then
+        tail -20 /tmp/python39_make.log
+        die "Python 编译失败 (详情: /tmp/python39_make.log)"
+    fi
+    log_ok "编译完成"
 
-    log_info "安装..."
-    make install 2>&1 | tail -1
+    log_info "安装中..."
+    if ! make install > /tmp/python39_install.log 2>&1; then
+        tail -20 /tmp/python39_install.log
+        die "Python 安装失败 (详情: /tmp/python39_install.log)"
+    fi
+    log_ok "安装完成"
 
     cd /tmp
     rm -rf "$SRC_DIR"

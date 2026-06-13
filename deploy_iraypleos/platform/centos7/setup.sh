@@ -16,6 +16,21 @@ CENTOS7_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log_info "CentOS 7 平台: 准备 Python 3.9 环境..."
 
+# 通用检测：是否已有 Python 3.9 可用（之前编译安装过）
+for _py in /usr/local/bin/python3 /usr/bin/python3 /opt/rh/rh-python39/root/bin/python3; do
+    if [ -x "$_py" ]; then
+        ver=$("$_py" --version 2>&1)
+        ver_num=$(echo "$ver" | grep -oP '[0-9]+\.[0-9]+' | head -1)
+        major=${ver_num%%.*}; minor=${ver_num#*.}
+        if [ "$major" -ge 3 ] && [ "$minor" -ge 9 ]; then
+            PYTHON3="$_py"
+            USE_SYSTEM_PYTHON=true
+            log_ok "Python 3.9 已存在，跳过安装: $ver"
+            return 0
+        fi
+    fi
+done
+
 # ---- 策略 1：SCL rh-python39 ----
 SCL_PYTHON="/opt/rh/rh-python39/root/bin/python3"
 if [ -x "$SCL_PYTHON" ]; then
@@ -63,6 +78,19 @@ fi
 PYTHON_SRC=$(ls "$CENTOS7_DIR/rpms/Python-3.9"*.tar.xz 2>/dev/null | head -1)
 
 if [ -f "$PYTHON_SRC" ]; then
+    # 检查是否已编译安装过（避免反复编译）
+    if [ -x /usr/local/bin/python3 ]; then
+        ver=$(/usr/local/bin/python3 --version 2>&1)
+        ver_num=$(echo "$ver" | grep -oP '[0-9]+\.[0-9]+' | head -1)
+        major=${ver_num%%.*}; minor=${ver_num#*.}
+        if [ "$major" -ge 3 ] && [ "$minor" -ge 9 ]; then
+            PYTHON3="/usr/local/bin/python3"
+            USE_SYSTEM_PYTHON=true
+            log_ok "Python 3.9 已安装，跳过编译: $ver"
+            return 0
+        fi
+    fi
+
     log_info "开始源码编译 Python 3.9 (约 5-15 分钟)..."
 
     # 检查编译依赖

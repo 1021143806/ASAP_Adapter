@@ -108,6 +108,85 @@ if [ -f "$PYTHON_SRC" ]; then
     fi
 fi
 
+# ---- 策略 4：在线下载源码编译 ----
+log_info "rpms 目录中未找到 Python 3.9 源码包，尝试在线下载..."
+
+PYTHON39_VERSION="3.9.21"
+PYTHON39_URL="https://www.python.org/ftp/python/${PYTHON39_VERSION}/Python-${PYTHON39_VERSION}.tar.xz"
+PYTHON39_SRC_TGZ="/tmp/Python-${PYTHON39_VERSION}.tar.xz"
+
+# 先检查编译依赖
+command -v gcc &>/dev/null || {
+    log_warn "缺少 gcc，尝试通过 yum 安装..."
+    yum install -y gcc make 2>/dev/null || {
+        die "无法安装 gcc，请手动安装: yum install -y gcc make"
+    }
+}
+command -v make &>/dev/null || {
+    yum install -y make 2>/dev/null || die "无法安装 make"
+}
+
+# 安装编译依赖（尝试 yum 在线安装，失败时尝试离线 RPM）
+log_info "安装编译依赖..."
+for pkg_name in openssl-devel bzip2-devel libffi-devel zlib-devel readline-devel sqlite-devel; do
+    if ! rpm -qa 2>/dev/null | grep -qi "^${pkg_name}-"; then
+        # 先找离线 RPM
+        rpm_file=$(ls "$CENTOS7_DIR/rpms/${pkg_name}"*.rpm 2>/dev/null | head -1)
+        if [ -f "$rpm_file" ]; then
+            log_info "  离线安装 $pkg_name ..."
+            rpm -ivh "$rpm_file" --nodeps 2>/dev/null || true
+        else
+            log_info "  在线安装 $pkg_name ..."
+            yum install -y "$pkg_name" 2>/dev/null || log_warn "  $pkg_name 安装失败（编译可能出错）"
+        fi
+    fi
+done
+
+# 下载 Python 源码
+if [ ! -f "$PYTHON39_SRC_TGZ" ]; then
+    log_info "下载 Python ${PYTHON39_VERSION} 源码..."
+    if command -v wget &>/dev/null; then
+        wget -q --timeout=60 "$PYTHON39_URL" -O "$PYTHON39_SRC_TGZ" || {
+            rm -f "$PYTHON39_SRC_TGZ"
+            die "下载失败，请手动放置源码包到: $CENTOS7_DIR/rpms/Python-3.9.x.tar.xz"
+        }
+    elif command -v curl &>/dev/null; then
+        curl -sL --connect-timeout 60 "$PYTHON39_URL" -o "$PYTHON39_SRC_TGZ" || {
+            rm -f "$PYTHON39_SRC_TGZ"
+            die "下载失败，请手动放置源码包到: $CENTOS7_DIR/rpms/Python-3.9.x.tar.xz"
+        }
+    else
+        die "请安装 wget 或 curl，或手动放置源码包到: $CENTOS7_DIR/rpms/Python-3.9.x.tar.xz"
+    fi
+    log_ok "下载完成"
+fi
+
+log_info "开始源码编译 Python ${PYTHON39_VERSION} (约 5-15 分钟)..."
+tar -xf "$PYTHON39_SRC_TGZ" -C /tmp/
+SRC_DIR="/tmp/Python-${PYTHON39_VERSION}"
+cd "$SRC_DIR"
+
+log_info "配置..."
+./configure --prefix="$PYTHON_PREFIX" --enable-optimizations --with-ensurepip=install 2>&1 | tail -1
+
+log_info "编译中 (使用 $(nproc) 核)..."
+make -j$(nproc) 2>&1 | tail -1
+
+log_info "安装..."
+make install 2>&1 | tail -1
+
+cd /tmp
+rm -rf "$SRC_DIR" "$PYTHON39_SRC_TGZ"
+
+if [ -x "$PYTHON_PREFIX/bin/python3" ]; then
+    PYTHON3="$PYTHON_PREFIX/bin/python3"
+    USE_SYSTEM_PYTHON=true
+    log_ok "Python ${PYTHON39_VERSION} 编译安装成功: $($PYTHON3 --version 2>&1)"
+    return 0
+else
+    die "Python 编译安装失败"
+fi
+
 # ---- 所有策略均失败 ----
 die "CentOS 7: 无法安装 Python 3.9\n  \
 请选择以下方式之一:\n  \

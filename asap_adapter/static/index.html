@@ -1017,19 +1017,19 @@ let doorIds = { outer: "DOOR_OUTER", inner: "DOOR_INNER" };
 // ── 初始化 ──────────────────────────────
 
 function init() {
-  updateClock();
+  const safe = (fn, name) => { try { fn(); } catch(e) { console.error('[Init] '+name+' 失败:', e); } };
+  safe(updateClock, 'updateClock');
   setInterval(updateClock, 1000);
-  setRcsUrls();
-  loadRcsLogs();
+  safe(setRcsUrls, 'setRcsUrls');
+  safe(loadRcsLogs, 'loadRcsLogs');
   setInterval(loadRcsLogs, 3000);
-  fixSimulatorUrl();
-  refreshDoorStatus();
+  safe(fixSimulatorUrl, 'fixSimulatorUrl');
+  safe(refreshDoorStatus, 'refreshDoorStatus');
   setInterval(refreshDoorStatus, 3000);
-  simRefresh();
-  checkSimStatus();
+  safe(simRefresh, 'simRefresh');
+  safe(checkSimStatus, 'checkSimStatus');
   setInterval(checkSimStatus, 5000);
-  // 初始化升级管理上传组件
-  upgradeInitUpload();
+  safe(upgradeInitUpload, 'upgradeInitUpload');
 }
 
 // ── 视图切换 ──────────────────────────

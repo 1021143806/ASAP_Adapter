@@ -27,6 +27,10 @@ plans/
 *.swp
 *.swo
 
+# Upgrade packages
+upgrade_*.zip
+hotfix_*.zip
+
 # OS
 .DS_Store
 Thumbs.db

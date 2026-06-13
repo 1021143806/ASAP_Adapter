@@ -421,7 +421,7 @@ body {
       <nav style="display:flex;gap:4px;margin-left:12px;">
         <a href="/" class="nav-tab nav-tab-active">📊 仪表盘</a>
         <a href="/upgrade" class="nav-tab">⬆ 升级</a>
-        <a href="http://localhost:5112/" class="nav-tab" target="_blank" id="navSimulator">🎮 模拟器</a>
+        <a href="/sim" class="nav-tab" id="navSimulator">🎮 模拟器</a>
       </nav>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
@@ -543,7 +543,7 @@ body {
       <span>🔑 <code>control_way = 4</code> (第三方系统)</span>
       <span>🚪 <code>door_type = 2</code> (风淋门)</span>
       <span>🩺 <code>/actuator/health</code> → <code>1000</code></span>
-      <span>💡 模拟器: <a href="http://localhost:5112" target="_blank" style="color:var(--accent);">http://localhost:5112</a></span>
+      <span>💡 模拟器: <a href="/sim" style="color:var(--accent);">/sim</a>（需先启用）</span>
     </div>
   </div>
 
@@ -593,10 +593,8 @@ function init() {
 }
 
 function fixSimulatorUrl() {
-  const host = window.location.hostname;
-  const port = 5112;
   const el = document.getElementById('navSimulator');
-  if (el) el.href = `http://${host}:${port}/`;
+  if (el) el.href = '/sim';
 }
 
 function renderSteps() {

@@ -542,11 +542,15 @@ body {
             style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
                    border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
                    font-family:inherit;outline:none;"
-            placeholder="http://rcs-host/changeDoorStatus"
+            placeholder="http://10.68.2.xx:7110/changeDoorStatus"
             onfocus="this.style.borderColor='var(--accent)'"
             onblur="this.style.borderColor='var(--card-border)'">
           <button class="btn btn-success btn-sm" onclick="saveRcsUrl()" id="rcsSaveBtn">保存</button>
           <span id="rcsSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+        </div>
+        <div style="font-size:9px;color:var(--text-muted);margin-top:4px;line-height:1.5;">
+          <div><code style="background:transparent;padding:0;">POST {"doorNum":"1001","doorStatus":"1"}</code></div>
+          <div>→ <code style="background:transparent;padding:0;">{"code":1000,"msg":"success"}</code></div>
         </div>
       </div>
     </div>

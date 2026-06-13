@@ -561,11 +561,11 @@ body {
   <!-- AB 自动门配置 -->
   <div class="glass log-panel-full">
     <div class="card-title">🚪 AB 自动门对接配置</div>
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
-      ASAP → Angel AB 自动门 HTTP 接口地址
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
+      ASAP 通过以下 base URL + <code>/acs/door/{doorId}</code> 控制 AB 自动门
     </div>
     <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-      <span class="zone-label">AB 门 base URL</span>
+      <span class="zone-label">AB 门 base URL <span style="font-weight:400;color:var(--text-muted);">(POST/GET /acs/door/{doorId})</span></span>
       <div style="display:flex;gap:6px;margin-top:4px;">
         <input type="text" id="angelBaseUrlInput"
           style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
@@ -578,42 +578,47 @@ body {
         <span id="angelSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
       </div>
     </div>
+    <div style="margin-top:6px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
+      <span><code>POST /acs/door/DOOR_OUTER</code> 开/关外门</span>
+      <span><code>POST /acs/door/DOOR_INNER</code> 开/关内门</span>
+      <span><code>GET /acs/door/{doorId}</code> 查询门状态</span>
+    </div>
   </div>
 
   <!-- 区域管控对接配置 -->
   <div class="glass log-panel-full">
     <div class="card-title">📡 区域管控对接配置</div>
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
-      ASAP → 区域管控系统 HTTP 接口地址
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
+      ASAP 通过以下三个接口实现风淋区域独占访问</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
       <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label">进入区域 (enter)</span>
+        <span class="zone-label">进入区域 <code>POST /api/zones/enter</code></span>
         <input type="text" id="zoneEnterInput"
           style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
                  border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
                  font-family:inherit;outline:none;margin-top:4px;"
-          placeholder="/api/zones/enter"
+          placeholder="http://zone-server:8080/api/zones/enter"
           onfocus="this.style.borderColor='var(--accent)'"
           onblur="this.style.borderColor='var(--card-border)'">
       </div>
       <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label">退出区域 (exit)</span>
+        <span class="zone-label">退出区域 <code>POST /api/zones/exit</code></span>
         <input type="text" id="zoneExitInput"
           style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
                  border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
                  font-family:inherit;outline:none;margin-top:4px;"
-          placeholder="/api/zones/exit"
+          placeholder="http://zone-server:8080/api/zones/exit"
           onfocus="this.style.borderColor='var(--accent)'"
           onblur="this.style.borderColor='var(--card-border)'">
       </div>
       <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label">状态查询 (status)</span>
+        <span class="zone-label">状态查询 <code>GET /api/zones/status</code></span>
         <input type="text" id="zoneStatusInput"
           style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
                  border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
                  font-family:inherit;outline:none;margin-top:4px;"
-          placeholder="/api/zones/status"
+          placeholder="http://zone-server:8080/api/zones/status"
           onfocus="this.style.borderColor='var(--accent)'"
           onblur="this.style.borderColor='var(--card-border)'">
       </div>
@@ -621,6 +626,35 @@ body {
     <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
       <button class="btn btn-success btn-sm" onclick="saveZoneUrls()">保存</button>
       <span id="zoneSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+    </div>
+    <div style="margin-top:6px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
+      <span>区域被占用返回 <code>409</code>，ASAP 自动重试</span>
+      <span>进入成功获得 <code>permission_id</code></span>
+      <span>退出失败自动重试直到释放</span>
+    </div>
+  </div>
+
+  <!-- 模拟器接入指引 -->
+  <div class="glass log-panel-full">
+    <div class="card-title">🎮 模拟器测试配置</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
+      使用内置模拟器测试时，将上述地址填写为以下值（先点右上角「启用模拟」）：
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+      <div style="background:var(--card-bg);border-radius:8px;padding:10px;">
+        <div style="font-weight:600;margin-bottom:4px;">🚪 AB 门 base URL</div>
+        <code style="font-size:11px;color:var(--accent);word-break:break-all;">http://10.68.2.10:5012/sim</code>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">→ /sim/acs/door/{doorId}</div>
+      </div>
+      <div style="background:var(--card-bg);border-radius:8px;padding:10px;">
+        <div style="font-weight:600;margin-bottom:4px;">📡 区域管控接口</div>
+        <div style="font-size:10px;"><code style="color:var(--accent);">http://10.68.2.10:5012/sim/api/zones/enter</code></div>
+        <div style="font-size:10px;"><code style="color:var(--accent);">http://10.68.2.10:5012/sim/api/zones/exit</code></div>
+        <div style="font-size:10px;"><code style="color:var(--accent);">http://10.68.2.10:5012/sim/api/zones/status</code></div>
+      </div>
+    </div>
+    <div style="margin-top:6px;font-size:10px;color:var(--warning);">
+      ⚠ 填写后点「保存」，然后在右上角点「启用模拟」即可开始本地仿真测试
     </div>
   </div>
 

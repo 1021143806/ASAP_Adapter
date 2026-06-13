@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SimController — 风淋门/区域管控 模拟器</title>
+<title>模拟器 — ASAP Adapter 内置</title>
 <style>
 :root {
   --bg: #0d1117;
@@ -234,7 +234,7 @@ input:checked + .slider:before { transform: translateX(16px); }
 <div class="header">
   <div>
     <h1>SimController</h1>
-    <div class="header-badge"><span class="badge-dot"></span>5112 · 风淋门+区域管控模拟器</div>
+    <div class="header-badge"><span class="badge-dot"></span>集成 · 风淋门+区域管控模拟器</div>
   </div>
   <div style="display:flex;gap:8px;align-items:center;">
     <span id="serverStatus" style="font-size:11px;color:var(--success);">运行中</span>
@@ -332,7 +332,7 @@ input:checked + .slider:before { transform: translateX(16px); }
       <span style="font-size:11px;color:var(--text-muted);">(指向 ASAP 供测试)</span>
     </div>
     <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
-      💡 将 ASAP 配置中 angel.base_url 设为 <code id="simSelfUrl">http://localhost:5112</code>
+      💡 模拟器已集成到 ASAP 主端口，在 WebUI 中点击「启用模拟」即可自动重定向</code>
     </div>
   </div>
 

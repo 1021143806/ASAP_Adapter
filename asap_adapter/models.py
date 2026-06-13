@@ -201,6 +201,7 @@ class AirShowerState(str, Enum):
 class DoorState(BaseModel):
     """门实时状态"""
     door_id: str = ""
+    door_code: str = ""
     door_status: AngelDoorStatus = AngelDoorStatus.UNKNOWN
     command: str = "0"
     last_updated: str = ""

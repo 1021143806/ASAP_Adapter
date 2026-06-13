@@ -82,6 +82,10 @@ class StateMachine:
         """获取当前状态快照"""
         self._status.state = self._state
         self._status.current_step = STATE_STEP_MAP.get(self._state, 0)
+        # 填充门编码（来自 RCS door_code_mapping）
+        mapping = self.config.rcs.door_code_mapping
+        self._status.outer_door.door_code = mapping.get("DOOR_OUTER", "")
+        self._status.inner_door.door_code = mapping.get("DOOR_INNER", "")
         return self._status
 
     @property

@@ -245,10 +245,19 @@ body {
 .door-name {
   font-size: 13px;
   font-weight: 500;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.door-code {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: "SF Mono", "Fira Code", monospace;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
 }
 
 .door-icon {
@@ -454,10 +463,11 @@ body {
 
     <!-- 门状态 -->
     <div class="glass door-panel">
-      <div class="card-title">门状态</div>
+      <div class="card-title">🚪 门状态</div>
       <div class="door-cards" id="doorCards">
         <div class="door-card" id="outerDoor">
           <div class="door-name"><span class="door-icon">🚪</span>外门</div>
+          <div class="door-code" id="outerDoorCode">─</div>
           <div class="door-status-value closed" id="outerDoorStatus">--</div>
           <div class="door-status-text" id="outerDoorText">未知</div>
           <div class="door-controls">
@@ -467,6 +477,7 @@ body {
         </div>
         <div class="door-card" id="innerDoor">
           <div class="door-name"><span class="door-icon">🚪</span>内门</div>
+          <div class="door-code" id="innerDoorCode">─</div>
           <div class="door-status-value closed" id="innerDoorStatus">--</div>
           <div class="door-status-text" id="innerDoorText">未知</div>
           <div class="door-controls">
@@ -751,6 +762,10 @@ function updateDoorCard(pos, door) {
   const card = document.getElementById(`${pos}Door`);
   const statusEl = document.getElementById(`${pos}DoorStatus`);
   const textEl = document.getElementById(`${pos}DoorText`);
+  const codeEl = document.getElementById(`${pos}DoorCode`);
+
+  // 门编码（RCS doorCode）
+  if (codeEl) codeEl.textContent = door.door_code ? `#${door.door_code}` : "─";
 
   card.className = "door-card";
 

@@ -20,6 +20,11 @@ log_error() { echo -e "${C_R}[ERROR]${C_N} $*"; }
 die()       { log_error "$*"; exit 1; }
 step()      { echo ""; echo -e "${C_BOLD}[$1]${C_N} $2"; }
 
+# ---- 权限检查 ----
+if [ "$(id -u)" -ne 0 ]; then
+    die "需要 root 权限运行，请使用: sudo ./deploy_iraypleos.sh"
+fi
+
 # ---- 目录定义 ----
 DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$DEPLOY_DIR")"
@@ -30,7 +35,7 @@ cd "$PROJECT_DIR"
 
 SERVICE_NAME="asap_adapter"
 APP_PORT=5012
-SUPERVISOR_USER="${USER:-ymsk}"
+SUPERVISOR_USER="${SUDO_USER:-${USER:-ymsk}}"
 SUPERVISOR_CONF="/main/server/supervisor/${SERVICE_NAME}.conf"
 LOG_DIR="/main/app/${SERVICE_NAME}/logs"
 

@@ -219,12 +219,17 @@ def create_router(app: FastAPI) -> APIRouter:
 
     @router.post("/api/asap/config/rcs")
     async def update_rcs_config(request: Request, cfg: RcsConfigUpdate):
-        """更新 RCS 配置（运行时生效，不持久化到文件）"""
+        """更新 RCS 配置（运行时生效，持久化到 overrides.json）"""
         rcs = request.app.state.rcs
         rcs.config.change_status_url = cfg.change_status_url
         if cfg.report_interval > 0:
             rcs.config.report_interval = cfg.report_interval
-        logger.info("RCS配置已更新: change_status_url=%s", cfg.change_status_url)
+        # 持久化到 overrides.json（重启后保留）
+        from .config import save_override
+        save_override("rcs", "change_status_url", cfg.change_status_url)
+        if cfg.report_interval > 0:
+            save_override("rcs", "report_interval", cfg.report_interval)
+        logger.info("RCS配置已更新并持久化: change_status_url=%s", cfg.change_status_url)
         return {
             "status": "ok",
             "change_status_url": rcs.config.change_status_url,

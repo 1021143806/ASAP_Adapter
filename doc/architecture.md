@@ -586,7 +586,9 @@ RcsChangeStatusRequest {
 └──────────────────────────────────────────┘
 ```
 
-支持运行时热更新（通过 WebUI 底部的 RCS 配置面板），但重启后恢复为文件配置。
+支持运行时热更新，通过 WebUI 底部的 RCS 配置面板修改后自动持久化到 `config/overrides.json`，重启后保留。
+
+**覆盖优先级：** `overrides.json` > `env.toml` > 代码默认值
 
 ---
 

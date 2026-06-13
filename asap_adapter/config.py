@@ -1,10 +1,12 @@
 """
 配置加载模块
-从 TOML 文件加载配置，支持环境变量覆盖
+从 TOML 文件加载配置，再叠加上 JSON 运行时覆盖（persistent overrides）。
+优先级: overrides.json > env.toml > 默认值
 """
 
 import os
 import sys
+import json
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -131,4 +133,54 @@ def load_config(path: Optional[str] = None) -> AppConfig:
             if key in data["rcs"]:
                 setattr(cfg.rcs, key, data["rcs"][key])
 
+    # ── 加载运行时覆盖 overrides.json ──────────
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    overrides_path = os.path.join(base_dir, "config", "overrides.json")
+    if os.path.exists(overrides_path):
+        try:
+            with open(overrides_path, "r", encoding="utf-8") as f:
+                overrides = json.load(f)
+
+            # 只覆盖 [rcs] 段（当前所有可热更新的配置）
+            rcs_overrides = overrides.get("rcs", {})
+            for key in ("change_status_url", "report_interval", "door_code_mapping"):
+                if key in rcs_overrides:
+                    setattr(cfg.rcs, key, rcs_overrides[key])
+
+            # 可扩展: 后续新增其他可热更新配置段时在此添加
+        except Exception as e:
+            print(f"[Config] 加载 overrides.json 失败: {e}")
+
     return cfg
+
+
+# ═══════════════════════════════════════════
+#  运行时配置持久化
+# ═══════════════════════════════════════════
+
+def save_override(section: str, key: str, value):
+    """
+    保存运行时配置覆盖到 overrides.json (持久化，重启后保留)
+    section: 配置段名, 如 "rcs"
+    key: 配置键名, 如 "change_status_url"
+    value: 配置值
+    """
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    overrides_path = os.path.join(base_dir, "config", "overrides.json")
+
+    overrides = {}
+    if os.path.exists(overrides_path):
+        try:
+            with open(overrides_path, "r", encoding="utf-8") as f:
+                overrides = json.load(f)
+        except Exception:
+            overrides = {}
+
+    if section not in overrides:
+        overrides[section] = {}
+
+    overrides[section][key] = value
+
+    os.makedirs(os.path.dirname(overrides_path), exist_ok=True)
+    with open(overrides_path, "w", encoding="utf-8") as f:
+        json.dump(overrides, f, ensure_ascii=False, indent=2)

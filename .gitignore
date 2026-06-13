@@ -11,6 +11,7 @@ venv/
 
 # Config
 config/env.toml
+config/overrides.json
 config/old/
 
 # Project runtime

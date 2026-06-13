@@ -435,9 +435,9 @@ body {
         <div style="font-size:12px;color:var(--text-muted);">风淋门 · 区域管控协议适配器</div>
       </div>
       <nav style="display:flex;gap:4px;margin-left:12px;">
-        <a href="/" class="nav-tab nav-tab-active">📊 仪表盘</a>
+        <a href="javascript:void(0)" class="nav-tab nav-tab-active" onclick="switchView('production')" id="tabProduction">📊 仪表盘</a>
         <a href="/upgrade" class="nav-tab">⬆ 升级</a>
-        <a href="/sim" class="nav-tab" id="navSimulator">🎮 模拟器</a>
+        <a href="javascript:void(0)" class="nav-tab" onclick="switchView('simulator')" id="tabSimulator">🎮 模拟器</a>
       </nav>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
@@ -450,8 +450,12 @@ body {
     </div>
   </header>
 
-  <!-- Dashboard -->
+  <!-- ════════════════════════════════════
+       仪表盘视图
+       ════════════════════════════════════ -->
+  <div id="view-production">
   <div class="dashboard">
+
     <!-- 状态机进度 -->
     <div class="glass state-machine">
       <div class="card-title">风淋流程状态</div>
@@ -679,10 +683,68 @@ body {
     </div>
     <div id="rcsLogContainer" style="max-height:300px;overflow-y:auto;font-size:11px;font-family:'SF Mono','Fira Code',monospace;line-height:1.6;">
       <div style="color:var(--text-muted);padding:10px;text-align:center;">等待 RCS 请求...</div>
+  </div>  <!-- RCS请求日志 -->
+</div>    <!-- dashboard -->
+</div>    <!-- view-production -->
+
+<!-- ════════════════════════════════════
+     模拟器视图
+     ════════════════════════════════════ -->
+<div id="view-simulator" style="display:none;">
+  <div class="sim-dashboard">
+    <div style="display:flex;gap:12px;margin-bottom:12px;">
+      <div class="glass" style="flex:1;min-width:300px;">
+        <div class="card-title">🚪 模拟器门控制</div>
+        <div id="simDoorArea" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="door-card" id="simOuterCard">
+            <div class="door-name"><span class="door-icon">🚪</span>外门</div>
+            <div class="door-code" id="simOuterCode">DOOR_OUTER</div>
+            <div class="door-status-value closed" id="simOuterState">关闭</div>
+            <div class="door-controls" style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">
+              <button class="btn btn-success btn-sm" onclick="simSetDoor('DOOR_OUTER','1')">开门</button>
+              <button class="btn btn-warning btn-sm" onclick="simSetDoor('DOOR_OUTER','0')">关门</button>
+              <button class="btn btn-danger btn-sm" onclick="simFault('DOOR_OUTER')">故障</button>
+            </div>
+          </div>
+          <div class="door-card" id="simInnerCard">
+            <div class="door-name"><span class="door-icon">🚪</span>内门</div>
+            <div class="door-code" id="simInnerCode">DOOR_INNER</div>
+            <div class="door-status-value closed" id="simInnerState">关闭</div>
+            <div class="door-controls" style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">
+              <button class="btn btn-success btn-sm" onclick="simSetDoor('DOOR_INNER','1')">开门</button>
+              <button class="btn btn-warning btn-sm" onclick="simSetDoor('DOOR_INNER','0')">关门</button>
+              <button class="btn btn-danger btn-sm" onclick="simFault('DOOR_INNER')">故障</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="glass" style="flex:1;min-width:300px;">
+        <div class="card-title">📡 模拟器区域控制</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div><span style="font-size:12px;color:var(--text-muted);">区域</span> <code id="simZoneId">air_shower_room</code></div>
+          <div><span style="font-size:12px;color:var(--text-muted);">状态</span> <strong id="simZoneState" style="color:var(--success);">空闲</strong></div>
+          <div><span style="font-size:12px;color:var(--text-muted);">占用者</span> <code id="simZoneBy">-</code></div>
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            <button class="btn btn-warning btn-sm" onclick="simZoneBusy(true)">强制占用</button>
+            <button class="btn btn-success btn-sm" onclick="simZoneBusy(false)">释放</button>
+            <button class="btn btn-danger btn-sm" onclick="simReset()">重置模拟器</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="glass log-panel-full">
+      <div class="card-title" style="display:flex;justify-content:space-between;">
+        <span>📋 模拟器请求日志</span>
+        <button class="btn" onclick="simRefreshLogs()" style="font-size:10px;padding:3px 8px;">🔄 刷新</button>
+      </div>
+      <div id="simLogContainer" style="max-height:250px;overflow-y:auto;font-size:11px;font-family:'SF Mono','Fira Code',monospace;line-height:1.6;">
+        <div style="color:var(--text-muted);padding:10px;text-align:center;">加载中...</div>
+      </div>
     </div>
   </div>
+</div>
 
-  <!-- 事件日志 -->
+<!-- 事件日志 -->
   <div class="glass log-panel log-panel-full">
     <div class="card-title" style="display:flex;justify-content:space-between;">
       <span>事件日志</span>
@@ -729,11 +791,118 @@ function init() {
   loadRcsLogs();
   setInterval(loadRcsLogs, 3000);
   fixSimulatorUrl();
+  simRefresh();
+}
+
+// ── 视图切换 ──────────────────────────
+function switchView(name) {
+  document.getElementById("view-production").style.display = name === "production" ? "" : "none";
+  document.getElementById("view-simulator").style.display = name === "simulator" ? "" : "none";
+  document.getElementById("tabProduction").className = "nav-tab" + (name === "production" ? " nav-tab-active" : "");
+  document.getElementById("tabSimulator").className = "nav-tab" + (name === "simulator" ? " nav-tab-active" : "");
+  if (name === "simulator") simRefresh();
+  else loadRcsLogs();
 }
 
 function fixSimulatorUrl() {
-  const el = document.getElementById('navSimulator');
-  if (el) el.href = '/sim';
+  // 模拟器已集成到页面内，无需外部链接
+}
+
+// ── 模拟器控制 ──────────────────────────
+let simTimer = null;
+
+async function simRefresh() {
+  try {
+    const resp = await fetch("/sim/api/sim/status");
+    const data = await resp.json();
+    // 门状态
+    simUpdateDoor("Outer", data.outer_door);
+    simUpdateDoor("Inner", data.inner_door);
+    // 区域
+    document.getElementById("simZoneId").textContent = data.zone?.zone_id || "-";
+    const zs = document.getElementById("simZoneState");
+    const zb = document.getElementById("simZoneBy");
+    if (data.zone?.state === "occupied" || data.zone?.status === "occupied") {
+      zs.textContent = "被占用";
+      zs.style.color = "var(--warning)";
+      zb.textContent = data.zone?.occupied_by || "-";
+    } else {
+      zs.textContent = "空闲";
+      zs.style.color = "var(--success)";
+      zb.textContent = "-";
+    }
+    // 日志
+    simRefreshLogs();
+  } catch (e) {
+    document.getElementById("simLogContainer").innerHTML =
+      '<div style="color:var(--danger);padding:10px;text-align:center;">❌ 模拟器未启用，请先点右上角「启用模拟」</div>';
+  }
+}
+
+function simUpdateDoor(pos, door) {
+  const card = document.getElementById(`sim${pos}Card`);
+  const stateEl = document.getElementById(`sim${pos}State`);
+  if (!card || !stateEl) return;
+  const state = door?.state || "0";
+  let label, cls;
+  if (state === "1" || state === "OPENED") { label = "打开"; cls = "open"; }
+  else if (state === "0" || state === "CLOSED") { label = "关闭"; cls = "closed"; }
+  else if (state === "2" || state === "FAULT") { label = "故障 ⚠"; cls = "fault"; }
+  else { label = "过渡中"; cls = "closed"; }
+  card.className = "door-card " + cls;
+  stateEl.textContent = label;
+  stateEl.className = "door-status-value " + cls;
+}
+
+async function simSetDoor(doorId, state) {
+  await fetch(`/sim/api/sim/door/set?door_id=${doorId}&state=${state}`, { method: "POST" });
+  simRefresh();
+}
+
+async function simFault(doorId) {
+  await fetch(`/sim/api/sim/door/fault?door_id=${doorId}&enable=true`, { method: "POST" });
+  setTimeout(() => {
+    fetch(`/sim/api/sim/door/fault?door_id=${doorId}&enable=false`, { method: "POST" }).then(() => simRefresh());
+  }, 2000);
+  simRefresh();
+}
+
+async function simZoneBusy(busy) {
+  await fetch(`/sim/api/sim/zone/busy?busy=${busy}&client=webui`, { method: "POST" });
+  simRefresh();
+}
+
+async function simReset() {
+  await fetch("/sim/api/sim/reset", { method: "POST" });
+  simRefresh();
+}
+
+async function simRefreshLogs() {
+  try {
+    const resp = await fetch("/sim/api/sim/logs");
+    const data = await resp.json();
+    const container = document.getElementById("simLogContainer");
+    if (!data.logs || data.logs.length === 0) {
+      container.innerHTML = '<div style="color:var(--text-muted);padding:10px;text-align:center;">暂无请求日志</div>';
+      return;
+    }
+    let html = "";
+    for (const entry of data.logs.slice().reverse().slice(0, 30)) {
+      const reqStr = entry.request ? JSON.stringify(entry.request) : "";
+      const respStr = entry.response ? JSON.stringify(entry.response) : "";
+      html += `<div style="padding:4px 6px;border-bottom:1px solid var(--card-border);font-size:10px;">
+        <span style="color:var(--text-muted);">${entry.time}</span>
+        <span style="color:var(--accent);margin:0 4px;">${entry.category}</span>
+        <span>${entry.target}</span>
+        <span style="color:var(--text-secondary);">${entry.message}</span>
+        <div style="padding-left:12px;word-break:break-all;color:var(--text-muted);">${reqStr ? '📤 ' + reqStr : ''}</div>
+        <div style="padding-left:12px;word-break:break-all;color:var(--success);">${respStr ? '📥 ' + respStr : ''}</div>
+      </div>`;
+    }
+    container.innerHTML = html;
+  } catch (e) {
+    // ignore
+  }
 }
 
 function renderSteps() {

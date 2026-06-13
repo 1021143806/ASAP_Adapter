@@ -216,7 +216,9 @@ install_deps() {
             pkg_name="${line%%=*}"
             pkg_name="${pkg_name%%>*}"
             pkg_name="$(echo "$pkg_name" | xargs)"
-            whl=$(find "$VENDOR_DIR" -type f -iname "*${pkg_name}*.whl" 2>/dev/null | head -1)
+            # 归一化: pip 包名中的中划线在 wheel 文件名中都是下划线
+            pkg_glob="${pkg_name//-/_}"
+            whl=$(find "$VENDOR_DIR" -type f -iname "*${pkg_glob}*.whl" 2>/dev/null | head -1)
             if [ -f "$whl" ]; then
                 "$VENV_PIP" install --no-index --find-links="$VENDOR_DIR" "$whl" 2>/dev/null \
                     && log_ok "$pkg_name" || log_error "$pkg_name 安装失败"
@@ -248,8 +250,13 @@ configure_supervisor() {
     VENV_PYTHON="$VENV_PATH/bin/python"
 
     if [ -f "$SUPERVISOR_CONF" ]; then
-        log_ok "Supervisor 配置已存在: $SUPERVISOR_CONF"
-        return
+        # 检查配置是否指向当前 venv 的 python
+        current_python="$VENV_PATH/bin/python"
+        if grep -q "$current_python" "$SUPERVISOR_CONF" 2>/dev/null; then
+            log_ok "Supervisor 配置已存在且路径正确: $SUPERVISOR_CONF"
+            return
+        fi
+        log_warn "Supervisor 配置路径过时，重新生成..."
     fi
 
     log_info "创建 Supervisor 配置..."

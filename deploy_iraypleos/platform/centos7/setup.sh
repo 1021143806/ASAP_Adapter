@@ -86,12 +86,15 @@ if [ -f "$PYTHON_SRC" ]; then
     SRC_DIR="/tmp/$(basename "$PYTHON_SRC" .tar.xz)"
     cd "$SRC_DIR"
 
+    # 安装到系统路径 /usr/local，使得 python3 直接在 PATH 中可用
+    INSTALL_PREFIX="/usr/local"
+
     log_info "配置中..."
-    if ! ./configure --prefix="$PYTHON_PREFIX" --enable-optimizations --with-ensurepip=install > /tmp/python39_configure.log 2>&1; then
+    if ! ./configure --prefix="$INSTALL_PREFIX" --enable-optimizations --with-ensurepip=install > /tmp/python39_configure.log 2>&1; then
         tail -20 /tmp/python39_configure.log
         die "Python 配置失败 (详情: /tmp/python39_configure.log)"
     fi
-    log_ok "配置完成 (--prefix=$PYTHON_PREFIX, --enable-optimizations)"
+    log_ok "配置完成 (--prefix=$INSTALL_PREFIX, --enable-optimizations)"
 
     log_info "编译中 (使用 $(nproc) 核, 约 5-10 分钟)..."
     if ! make -j$(nproc) > /tmp/python39_make.log 2>&1; then
@@ -110,8 +113,8 @@ if [ -f "$PYTHON_SRC" ]; then
     cd /tmp
     rm -rf "$SRC_DIR"
 
-    if [ -x "$PYTHON_PREFIX/bin/python3" ]; then
-        PYTHON3="$PYTHON_PREFIX/bin/python3"
+    if [ -x "/usr/local/bin/python3" ]; then
+        PYTHON3="/usr/local/bin/python3"
         USE_SYSTEM_PYTHON=true
         log_ok "Python 3.9 源码编译安装成功: $($PYTHON3 --version 2>&1)"
         return 0

@@ -310,6 +310,8 @@ def create_router(app: FastAPI) -> APIRouter:
     @router.post("/api/asap/sim/enable")
     async def sim_enable(request: Request):
         """启用模拟器模式（DoorClient/ZoneClient 重定向到本地模拟端点）"""
+        if not request.app.state._sim_available:
+            return {"status": "error", "message": "模拟器模块未安装"}
         if request.app.state.sim_enabled:
             return {"status": "ok", "message": "模拟器已启用"}
         door: DoorClient = request.app.state.door
@@ -357,11 +359,14 @@ def create_router(app: FastAPI) -> APIRouter:
     async def sim_status(request: Request):
         """获取模拟器状态（是否启用、模拟器快照）"""
         enabled = request.app.state.sim_enabled
-        snap = request.app.state.sim_controller.snapshot()
-        return {
-            "enabled": enabled,
-            "simulator": snap.model_dump(),
-        }
+        if request.app.state._sim_available:
+            snap = request.app.state.sim_controller.snapshot()
+            return {
+                "enabled": enabled,
+                "available": True,
+                "simulator": snap.model_dump(),
+            }
+        return {"enabled": False, "available": False, "message": "模拟器模块未安装"}
 
     # ── 升级管理 ──────────────────────────────
 

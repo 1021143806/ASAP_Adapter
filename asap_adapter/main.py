@@ -29,11 +29,16 @@ from .state_machine import StateMachine
 from .router import create_router
 from .logger import setup_logging
 
-# ── 模拟器（全局单例，模块加载时初始化） ──
-from sim_controller.state import SimController
-from sim_controller.router import create_router as create_sim_router
-
-_sim_controller = SimController()
+# ── 模拟器（可选导入，不存在时降级） ──
+try:
+    from sim_controller.state import SimController
+    from sim_controller.router import create_router as create_sim_router
+    _sim_controller = SimController()
+    _sim_available = True
+except ImportError:
+    _sim_controller = None
+    _sim_available = False
+    logger.warning("sim_controller 模块未安装，模拟器不可用")
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +58,7 @@ def create_app(config: AppConfig) -> FastAPI:
         # ── 模拟器状态 ────────────────────
         app.state.sim_controller = _sim_controller
         app.state.sim_enabled = False
+        app.state._sim_available = _sim_available
         app.state._orig_door_base_url = config.angel.base_url
 
         # 初始化 SSE 事件总线
@@ -103,10 +109,13 @@ def create_app(config: AppConfig) -> FastAPI:
     router = _create_router(app)
     app.include_router(router)
 
-    # ── 模拟器路由（始终挂载 /sim，默认关闭） ─
-    sim_router = create_sim_router(_sim_controller)
-    app.include_router(sim_router, prefix="/sim")
-    logger.info("模拟器路由已挂载到 /sim")
+    # ── 模拟器路由（可选挂载） ──
+    if _sim_available:
+        sim_router = create_sim_router(_sim_controller)
+        app.include_router(sim_router, prefix="/sim")
+        logger.info("模拟器路由已挂载到 /sim")
+    else:
+        logger.info("模拟器不可用，/sim 路由未挂载")
 
     # ── WebUI 静态文件 ───────────────────
     static_dir = Path(__file__).parent / "static"
@@ -121,12 +130,13 @@ def create_app(config: AppConfig) -> FastAPI:
         async def upgrade_page():
             return FileResponse(str(static_dir / "upgrade.html"))
 
-        # 模拟器 WebUI
-        sim_static_dir = Path(__file__).parent.parent / "sim_controller" / "static"
-        if sim_static_dir.exists():
-            @app.get("/sim")
-            async def sim_page():
-                return FileResponse(str(sim_static_dir / "index.html"))
+        # 模拟器 WebUI（仅 sim_available 时挂载）
+        if _sim_available:
+            sim_static_dir = Path(__file__).parent.parent / "sim_controller" / "static"
+            if sim_static_dir.exists():
+                @app.get("/sim")
+                async def sim_page():
+                    return FileResponse(str(sim_static_dir / "index.html"))
 
     return app
 

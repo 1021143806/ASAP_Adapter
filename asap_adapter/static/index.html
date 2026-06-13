@@ -54,8 +54,8 @@ body {
 /* 玻璃卡片 */
 .glass {
   background: var(--card-bg);
-  backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
   border: 1px solid var(--card-border);
   border-radius: 16px;
   box-shadow: var(--card-shadow);
@@ -535,6 +535,7 @@ body {
             <button class="btn btn-success" onclick="manualOpen('DOOR_OUTER')" disabled>开门</button>
             <button class="btn btn-warning" onclick="manualClose('DOOR_OUTER')" disabled>关门</button>
           </div>
+          <div id="outerDebugStatus" style="font-size:9px;color:var(--text-muted);margin-top:4px;font-family:monospace;"></div>
         </div>
         <div class="door-card" id="innerDoor">
           <div class="door-name"><span class="door-icon">🚪</span>内门 <span style="font-size:10px;color:var(--text-muted);font-weight:400;" id="innerDoorId">(DOOR_INNER)</span></div>
@@ -546,6 +547,7 @@ body {
             <button class="btn btn-success" onclick="manualOpen('DOOR_INNER')" disabled>开门</button>
             <button class="btn btn-warning" onclick="manualClose('DOOR_INNER')" disabled>关门</button>
           </div>
+          <div id="innerDebugStatus" style="font-size:9px;color:var(--text-muted);margin-top:4px;font-family:monospace;"></div>
         </div>
       </div>
     </div>
@@ -613,7 +615,7 @@ body {
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
         <div class="zone-row" style="flex-direction:column;align-items:stretch;">
           <span class="zone-label">进入区域 <code>POST /api/zones/enter</code></span>
-          <input type="text" id="zoneEnterInput"
+          <input type="text" id="zoneEnterInput" title="进入区域接口地址"
             style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
                    border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
                    font-family:inherit;outline:none;margin-top:4px;"
@@ -623,7 +625,7 @@ body {
         </div>
         <div class="zone-row" style="flex-direction:column;align-items:stretch;">
           <span class="zone-label">退出区域 <code>POST /api/zones/exit</code></span>
-          <input type="text" id="zoneExitInput"
+          <input type="text" id="zoneExitInput" title="退出区域接口地址"
             style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
                    border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
                    font-family:inherit;outline:none;margin-top:4px;"
@@ -633,7 +635,7 @@ body {
         </div>
         <div class="zone-row" style="flex-direction:column;align-items:stretch;">
           <span class="zone-label">状态查询 <code>GET /api/zones/status</code></span>
-          <input type="text" id="zoneStatusInput"
+          <input type="text" id="zoneStatusInput" title="区域状态查询接口地址"
             style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
                    border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;
                    font-family:inherit;outline:none;margin-top:4px;"
@@ -716,7 +718,7 @@ body {
             <span style="font-size:9px;color:var(--text-muted);">POST /changeDoorStatus</span>
           </span>
           <div style="display:flex;gap:6px;margin-top:4px;">
-            <input type="text" id="rcsReportUrlInput"
+            <input type="text" id="rcsReportUrlInput" title="RCS 状态上报地址"
               style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
                      border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
                      font-family:inherit;outline:none;"
@@ -749,7 +751,7 @@ body {
       <div class="zone-row" style="flex-direction:column;align-items:stretch;">
         <span class="zone-label">AB 门 base URL <span style="font-weight:400;color:var(--text-muted);">(POST/GET /acs/door/{doorId})</span></span>
         <div style="display:flex;gap:6px;margin-top:4px;">
-          <input type="text" id="angelBaseUrlInput"
+          <input type="text" id="angelBaseUrlInput" title="AB 自动门 base URL"
             style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
                    border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
                    font-family:inherit;outline:none;"
@@ -788,7 +790,7 @@ body {
           <button class="btn btn-success" onclick="saveConfigFile()">💾 保存</button>
         </div>
       </div>
-      <textarea id="configFileEditor" spellcheck="false"
+      <textarea id="configFileEditor" title="配置文件编辑器 - config/env.toml" spellcheck="false"
         style="width:100%;min-height:500px;background:rgba(0,0,0,0.25);border:1px solid var(--card-border);
                border-radius:10px;padding:14px;color:var(--text-primary);font-size:13px;
                font-family:'SF Mono','Fira Code','Consolas',monospace;line-height:1.6;
@@ -836,15 +838,15 @@ body {
         <div class="upload-icon">📦</div>
         <div><strong>点击选择或拖拽 .zip 文件到此处</strong></div>
         <div class="hint">仅支持 .zip 格式</div>
-        <input type="file" id="upgradeFileInput" accept=".zip">
+        <input type="file" id="upgradeFileInput" accept=".zip" title="选择升级包文件(.zip)">
       </div>
       <div class="file-info" id="upgradeFileInfo">
         <span>📦</span>
         <span class="name" id="upgradeFileName"></span>
         <span class="size" id="upgradeFileSize"></span>
-        <button class="btn btn-sm" id="upgradeBtnClearFile" style="margin-top:0;">✕</button>
+        <button class="btn btn-sm" id="upgradeBtnClearFile" style="margin-top:0;" title="清除选择">✕</button>
       </div>
-      <textarea class="remark-input" id="upgradeRemarkInput"
+      <textarea class="remark-input" id="upgradeRemarkInput" title="升级说明（可选）"
         style="width:100%;margin-top:10px;padding:8px 12px;background:var(--card-bg);border:1px solid var(--card-border);
                border-radius:6px;color:var(--text-primary);font-size:12px;font-family:inherit;
                resize:vertical;min-height:50px;outline:none;"
@@ -1024,10 +1026,25 @@ async function refreshDoorStatus() {
   try {
     const resp = await fetch("/api/asap/refresh-doors", { method: "POST" });
     const data = await resp.json();
-    if (data.outer_door) updateDoorCard("outer", data.outer_door);
-    if (data.inner_door) updateDoorCard("inner", data.inner_door);
+    console.log("[DoorStatus] API响应:", JSON.stringify(data));
+    // 更新门卡 + 显示调试信息
+    if (data.outer_door) {
+      updateDoorCard("outer", data.outer_door);
+      const dbg = document.getElementById("outerDebugStatus");
+      if (dbg) dbg.textContent = "raw: " + (data.outer_door.door_status ?? "?");
+    }
+    if (data.inner_door) {
+      updateDoorCard("inner", data.inner_door);
+      const dbg = document.getElementById("innerDebugStatus");
+      if (dbg) dbg.textContent = "raw: " + (data.inner_door.door_status ?? "?");
+    }
   } catch (e) {
-    // ignore
+    console.error("[DoorStatus] 请求失败:", e);
+    // 在门卡显示错误
+    ["outer","inner"].forEach(pos => {
+      const dbg = document.getElementById(pos + "DebugStatus");
+      if (dbg) dbg.textContent = "❌ " + e.message;
+    });
   }
 }
 
@@ -1053,6 +1070,7 @@ function updateDoorMapping() {
 
 function updateDoorCard(pos, door) {
   const status = door.door_status || "UNKNOWN";
+  console.log(`[DoorCard] ${pos}: door_status=${JSON.stringify(door.door_status)}, status=${status}, full=`, door);
   const card = document.getElementById(`${pos}Door`);
   const statusEl = document.getElementById(`${pos}DoorStatus`);
   const textEl = document.getElementById(`${pos}DoorText`);

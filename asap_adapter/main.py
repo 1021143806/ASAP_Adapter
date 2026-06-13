@@ -128,7 +128,11 @@ def create_app(config: AppConfig) -> FastAPI:
 
         @app.get("/")
         async def index():
-            return FileResponse(str(static_dir / "index.html"))
+            return FileResponse(
+                str(static_dir / "index.html"),
+                media_type="text/html; charset=utf-8",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+            )
 
         @app.get("/upgrade")
         async def upgrade_page():

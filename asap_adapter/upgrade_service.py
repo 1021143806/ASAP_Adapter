@@ -10,7 +10,6 @@ import zipfile
 import shutil
 import time
 import threading
-import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -387,16 +386,11 @@ def do_rollback(backup_name: str) -> dict:
 # ── 重启 ──────────────────────────────────
 
 def trigger_restart(delay: int = 3):
-    """延迟触发 supervisor 重启"""
+    """延迟退出进程，依靠 supervisor autorestart 自动拉起（避免自杀式重启）"""
     def _restart():
         time.sleep(delay)
-        try:
-            subprocess.run(
-                ["supervisorctl", "restart", SERVICE_NAME],
-                timeout=10, capture_output=True,
-            )
-        except Exception as e:
-            print(f"[Upgrade] 重启失败: {e}")
+        import os
+        os._exit(0)
 
     thread = threading.Thread(target=_restart, daemon=True)
     thread.start()

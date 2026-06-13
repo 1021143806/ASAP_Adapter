@@ -6,7 +6,7 @@
 
 ### 1.1 门状态主动上报
 
-**Endpoint:** `POST /changeDoorStatus`
+**Endpoint:** `POST ip:7110/changeDoorStatus`
 
 由第三方系统在门状态发生变化时主动调用。
 

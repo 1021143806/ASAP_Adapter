@@ -249,6 +249,11 @@ configure_supervisor() {
 
     VENV_PYTHON="$VENV_PATH/bin/python"
 
+    # ⚠️ 这些日志目录必须在 supervisor 启动前确保权限，即使配置已存在也要执行
+    mkdir -p "$LOG_DIR" "$PROJECT_DIR/logs" 2>/dev/null || true
+    chown -R "${SUPERVISOR_USER}:${SUPERVISOR_USER}" "$LOG_DIR" 2>/dev/null || true
+    chown -R "${SUPERVISOR_USER}:${SUPERVISOR_USER}" "$PROJECT_DIR/logs" 2>/dev/null || true
+
     if [ -f "$SUPERVISOR_CONF" ]; then
         # 检查配置是否指向当前 venv 的 python
         current_python="$VENV_PATH/bin/python"
@@ -260,12 +265,6 @@ configure_supervisor() {
     fi
 
     log_info "创建 Supervisor 配置..."
-    mkdir -p "$LOG_DIR" 2>/dev/null || true
-    # 确保日志目录对运行用户可写（避免 supervisor EACCES）
-    chown -R "${SUPERVISOR_USER}:${SUPERVISOR_USER}" "$LOG_DIR" 2>/dev/null || true
-    # 应用自身日志目录（config.py 中 file = "logs/asap.log"）
-    mkdir -p "$PROJECT_DIR/logs" 2>/dev/null || true
-    chown -R "${SUPERVISOR_USER}:${SUPERVISOR_USER}" "$PROJECT_DIR/logs" 2>/dev/null || true
 
     cat > "$SUPERVISOR_CONF" << EOF
 [program:${SERVICE_NAME}]

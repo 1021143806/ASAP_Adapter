@@ -263,6 +263,9 @@ configure_supervisor() {
     mkdir -p "$LOG_DIR" 2>/dev/null || true
     # 确保日志目录对运行用户可写（避免 supervisor EACCES）
     chown -R "${SUPERVISOR_USER}:${SUPERVISOR_USER}" "$LOG_DIR" 2>/dev/null || true
+    # 应用自身日志目录（config.py 中 file = "logs/asap.log"）
+    mkdir -p "$PROJECT_DIR/logs" 2>/dev/null || true
+    chown -R "${SUPERVISOR_USER}:${SUPERVISOR_USER}" "$PROJECT_DIR/logs" 2>/dev/null || true
 
     cat > "$SUPERVISOR_CONF" << EOF
 [program:${SERVICE_NAME}]

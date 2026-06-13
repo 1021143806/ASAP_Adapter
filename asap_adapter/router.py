@@ -574,6 +574,37 @@ def create_router(app: FastAPI) -> APIRouter:
 
     # ── 模拟器控制 ──────────────────────────
 
+    # ── 模拟器开关 ────────────────────────────
+
+    @router.get("/api/asap/config/all")
+    async def get_unified_config(request: Request):
+        """获取统一配置（/data/config.toml）"""
+        from .config import read_unified_config
+        return read_unified_config()
+
+    @router.post("/api/asap/config/all")
+    async def save_unified_config(request: Request):
+        """保存统一配置到 /data/config.toml（自动版本递增，热更新）"""
+        from .config import save_unified_config, apply_runtime_string, UNIFIED_CONFIG_PATH, read_unified_config
+        data = await request.json()
+        result = save_unified_config(data)
+        if result.get("success"):
+            # 热更新到内存
+            try:
+                raw = read_unified_config().get("raw", "")
+                if raw:
+                    apply_runtime_string(request.app.state.config, raw)
+            except Exception as e:
+                logger.warning("热更新统一配置失败: %s", e)
+            # 同步到 SimController
+            sim_ctrl = getattr(request.app.state, 'sim_controller', None)
+            if sim_ctrl:
+                sim_ctrl.config.auto_open_delay = request.app.state.config.sim.auto_open_delay
+                sim_ctrl.config.auto_close_delay = request.app.state.config.sim.auto_close_delay
+                sim_ctrl.config.zone_always_busy = request.app.state.config.sim.zone_always_busy
+                sim_ctrl.zone.zone_id = request.app.state.config.sim.zone_id
+        return result
+
     @router.post("/api/asap/sim/enable")
     async def sim_enable(request: Request):
         """启用模拟器模式（DoorClient/ZoneClient 重定向到本地模拟端点）"""

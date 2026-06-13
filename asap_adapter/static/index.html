@@ -695,6 +695,20 @@ body {
   <div id="cfg-visual">
   <div class="dashboard">
 
+    <!-- 统一配置版本 + 保存 -->
+    <div class="glass" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:13px;font-weight:600;">📋 统一配置</span>
+        <span style="font-size:12px;color:var(--text-muted);">data/config.toml</span>
+        <span style="font-size:11px;color:var(--accent);" id="cfgVersion">版本 --</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn" onclick="loadAllConfig()">🔄 读取配置</button>
+        <button class="btn btn-success" onclick="saveAllConfig()">💾 统一保存</button>
+        <span id="cfgSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+      </div>
+    </div>
+
     <!-- RCS 配置信息 -->
     <div class="glass log-panel-full">
       <div class="card-title">🔗 RCS 第三方对接配置</div>
@@ -1190,7 +1204,7 @@ function switchView(name) {
   if (name === "simulator") simRefresh();
   else if (name === "door") loadRcsLogs();
   else if (name === "zone") { refreshStatus(); fetchZoneStatus(); }
-  else if (name === "config") { loadAngelConfig(); loadZoneConfig(); loadRuntimeConfig(); loadEnvConfig(); loadSimConfig(); }
+  else if (name === "config") { loadAllConfig(); loadRuntimeConfig(); loadEnvConfig(); }
   else if (name === "upgrade") { loadUpgradeVersion(); loadUpgradeRecords(); }
 }
 
@@ -1836,6 +1850,129 @@ function loadZoneConfig() {
       document.getElementById("cfgZoneExitCodeInput").value = data.exit_door_code || "q002";
     })
     .catch(() => {});
+}
+
+// ── 统一配置加载/保存 ──────────────────
+
+async function loadAllConfig() {
+  const statusEl = document.getElementById("cfgSaveStatus");
+  try {
+    const resp = await fetch("/api/asap/config/all");
+    const data = await resp.json();
+    if (data.error) { console.error(data.error); return; }
+
+    // 版本号
+    document.getElementById("cfgVersion").textContent = "版本 " + (data.version || 0);
+
+    // RCS
+    const rcs = data.rcs || {};
+    document.getElementById("rcsReportUrlInput").value = rcs.change_status_url || "";
+    const rcsMap = rcs.door_code_mapping || {};
+    const outerRcsId = document.getElementById("rcsOuterDoorId");
+    const outerCode = rcsMap[doorIds.outer || "DOOR_OUTER"] || Object.values(rcsMap)[0] || "1001";
+    const innerCode = rcsMap[doorIds.inner || "DOOR_INNER"] || Object.values(rcsMap)[1] || "1002";
+    document.getElementById("rcsOuterCodeInput").value = outerCode;
+    if (outerRcsId) outerRcsId.textContent = doorIds.outer || "DOOR_OUTER";
+    document.getElementById("rcsInnerCodeInput").value = innerCode;
+    const innerRcsEl = document.getElementById("rcsInnerDoorId");
+    if (innerRcsEl) innerRcsEl.textContent = doorIds.inner || "DOOR_INNER";
+
+    // Angel
+    const angel = data.angel || {};
+    document.getElementById("angelBaseUrlInput").value = angel.base_url || "";
+    document.getElementById("angelOuterDoorIdInput").value = angel.outer_door_id || "DOOR_OUTER";
+    document.getElementById("angelInnerDoorIdInput").value = angel.inner_door_id || "DOOR_INNER";
+
+    // Zone
+    const zone = data.zone || {};
+    document.getElementById("cfgZoneEnterInput").value = zone.enter_url || "";
+    document.getElementById("cfgZoneExitInput").value = zone.exit_url || "";
+    document.getElementById("cfgZoneStatusInput").value = zone.status_url || "";
+    document.getElementById("cfgZoneEntryCodeInput").value = zone.entry_door_code || "q001";
+    document.getElementById("cfgZoneExitCodeInput").value = zone.exit_door_code || "q002";
+
+    // Air shower
+    const ash = data.air_shower || {};
+    // (no air_shower UI yet, but values available)
+
+    // Sim
+    const sim = data.sim || {};
+    document.getElementById("simOpenDelayInput").value = sim.auto_open_delay ?? 2.0;
+    document.getElementById("simCloseDelayInput").value = sim.auto_close_delay ?? 2.0;
+    document.getElementById("simZoneIdInput").value = sim.zone_id || "zone_001";
+    document.getElementById("simZoneBusyCheck").checked = sim.zone_always_busy || false;
+
+    if (statusEl) { statusEl.textContent = "✓ 已读取"; statusEl.style.display = "inline"; statusEl.style.color = "var(--success)"; }
+    setTimeout(() => { if (statusEl) statusEl.style.display = "none"; }, 2000);
+  } catch (e) {
+    console.error("加载配置失败:", e);
+    if (statusEl) { statusEl.textContent = "✗ 加载失败"; statusEl.style.display = "inline"; statusEl.style.color = "var(--danger)"; }
+  }
+}
+
+async function saveAllConfig() {
+  const statusEl = document.getElementById("cfgSaveStatus");
+  statusEl.textContent = "保存中..."; statusEl.style.display = "inline"; statusEl.style.color = "var(--text-muted)";
+
+  // 收集所有配置
+  const rcsMap = {};
+  const outerRcsCode = document.getElementById("rcsOuterCodeInput").value.trim();
+  const innerRcsCode = document.getElementById("rcsInnerCodeInput").value.trim();
+  const outerId = doorIds.outer || "DOOR_OUTER";
+  const innerId = doorIds.inner || "DOOR_INNER";
+  if (outerRcsCode) rcsMap[outerId] = outerRcsCode;
+  if (innerRcsCode) rcsMap[innerId] = innerRcsCode;
+
+  const payload = {
+    angel: {
+      base_url: document.getElementById("angelBaseUrlInput").value.trim(),
+      outer_door_id: document.getElementById("angelOuterDoorIdInput").value.trim(),
+      inner_door_id: document.getElementById("angelInnerDoorIdInput").value.trim(),
+    },
+    zone: {
+      enter_url: document.getElementById("cfgZoneEnterInput").value.trim(),
+      exit_url: document.getElementById("cfgZoneExitInput").value.trim(),
+      status_url: document.getElementById("cfgZoneStatusInput").value.trim(),
+      entry_door_code: document.getElementById("cfgZoneEntryCodeInput").value.trim(),
+      exit_door_code: document.getElementById("cfgZoneExitCodeInput").value.trim(),
+    },
+    rcs: {
+      change_status_url: document.getElementById("rcsReportUrlInput").value.trim(),
+      door_code_mapping: rcsMap,
+    },
+    air_shower: {
+      duration: 4.0,
+    },
+    sim: {
+      auto_open_delay: parseFloat(document.getElementById("simOpenDelayInput").value) || 2.0,
+      auto_close_delay: parseFloat(document.getElementById("simCloseDelayInput").value) || 2.0,
+      zone_always_busy: document.getElementById("simZoneBusyCheck").checked,
+      zone_id: document.getElementById("simZoneIdInput").value.trim() || "zone_001",
+    },
+  };
+
+  try {
+    const resp = await fetch("/api/asap/config/all", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      document.getElementById("cfgVersion").textContent = "版本 " + (data.version || "?");
+      statusEl.textContent = "✓ " + data.message;
+      statusEl.style.color = "var(--success)";
+    } else {
+      statusEl.textContent = "✗ " + (data.error || "保存失败");
+      statusEl.style.color = "var(--danger)";
+    }
+    statusEl.style.display = "inline";
+    setTimeout(() => { statusEl.style.display = "none"; }, 4000);
+  } catch (e) {
+    statusEl.textContent = "✗ 保存失败: " + e.message;
+    statusEl.style.color = "var(--danger)";
+    statusEl.style.display = "inline";
+  }
 }
 
 // ── 模拟器配置 ──────────────────────────

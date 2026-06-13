@@ -315,3 +315,232 @@ def save_override(section: str, key: str, value):
     with open(overrides_path, "w", encoding="utf-8") as f:
         json.dump(overrides, f, ensure_ascii=False, indent=2)
     logger.info("运行时配置已更新: [%s] %s = %s", section, key, value)
+
+
+# ═══════════════════════════════════════════
+#  统一运行时配置 (/data/config.toml)
+# ═══════════════════════════════════════════
+
+CONFIG_VERSION = 1
+UNIFIED_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "config.toml")
+
+
+def _load_unified(cfg: AppConfig):
+    """加载 /data/config.toml 统一配置（最高优先级）"""
+    if not os.path.exists(UNIFIED_CONFIG_PATH):
+        return
+    try:
+        with open(UNIFIED_CONFIG_PATH, "rb") as f:
+            data = tomllib.load(f)
+        _apply_section(cfg, data, "angel",
+                       ("base_url", "outer_door_id", "inner_door_id",
+                        "poll_interval", "poll_timeout"))
+        _apply_section(cfg, data, "zone",
+                       ("enter_url", "exit_url", "status_url", "zone_id",
+                        "client_id", "entry_door_code", "exit_door_code",
+                        "retry_interval", "max_retries",
+                        "exit_retry_interval", "exit_max_retries",
+                        "zone_poll_interval"))
+        _apply_section(cfg, data, "rcs",
+                       ("change_status_url", "report_interval", "door_code_mapping"))
+        _apply_section(cfg, data, "air_shower",
+                       ("duration", "agv_enter_timeout", "agv_exit_timeout"))
+        _apply_section(cfg, data, "sim",
+                       ("auto_open_delay", "auto_close_delay",
+                        "zone_always_busy", "zone_id"))
+        # 读取版本号
+        version = data.get("meta", {}).get("version", 0)
+        global CONFIG_VERSION
+        CONFIG_VERSION = version if version > CONFIG_VERSION else CONFIG_VERSION
+        logger.info("已加载 /data/config.toml (版本 %d)", CONFIG_VERSION)
+    except Exception as e:
+        logger.error("加载 /data/config.toml 失败: %s", e)
+
+
+def read_unified_config() -> dict:
+    """读取统一配置（供 WebUI 使用）"""
+    if not os.path.exists(UNIFIED_CONFIG_PATH):
+        # 从当前内存配置生成默认文件
+        return _generate_default_config()
+    try:
+        with open(UNIFIED_CONFIG_PATH, "rb") as f:
+            data = tomllib.load(f)
+        return {
+            "version": data.get("meta", {}).get("version", 0),
+            "angel": data.get("angel", {}),
+            "zone": data.get("zone", {}),
+            "rcs": data.get("rcs", {}),
+            "air_shower": data.get("air_shower", {}),
+            "sim": data.get("sim", {}),
+            "raw": _read_raw(UNIFIED_CONFIG_PATH),
+        }
+    except Exception as e:
+        logger.error("读取 /data/config.toml 失败: %s", e)
+        return {"error": str(e)}
+
+
+def save_unified_config(data: dict) -> dict:
+    """
+    保存统一配置到 data/config.toml
+    自动递增版本号，备份旧文件，合并现有配置
+    返回 {success, message, version, backup?}
+    """
+    try:
+        # 读取当前配置（作为基础）
+        old_data = {}
+        old_version = 0
+        if os.path.exists(UNIFIED_CONFIG_PATH):
+            try:
+                with open(UNIFIED_CONFIG_PATH, "rb") as f:
+                    old_data = tomllib.load(f)
+                old_version = old_data.get("meta", {}).get("version", 0)
+            except Exception:
+                pass
+
+        new_version = old_version + 1
+        now = __import__('datetime').datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # 合并：新数据覆盖旧数据
+        merged = {k: v for k, v in old_data.items() if k != "meta"}
+        for section, values in data.items():
+            if section == "meta":
+                continue
+            if section not in merged:
+                merged[section] = {}
+            if isinstance(values, dict):
+                merged[section].update(values)
+            else:
+                merged[section] = values
+
+        # 构建 TOML 内容
+        sections = []
+        sections.append("# ASAP Adapter 统一配置")
+        sections.append(f"# 版本: {new_version} | 更新: {now}")
+        sections.append("")
+
+        # [angel]
+        angel = merged.get("angel", {})
+        if angel:
+            sections.append("[angel]")
+            for k in ("base_url", "outer_door_id", "inner_door_id",
+                      "poll_interval", "poll_timeout"):
+                if k in angel:
+                    sections.append(_toml_kv(k, angel[k]))
+            sections.append("")
+
+        # [zone]
+        zone = merged.get("zone", {})
+        if zone:
+            sections.append("[zone]")
+            for k in ("enter_url", "exit_url", "status_url", "zone_id",
+                      "client_id", "entry_door_code", "exit_door_code",
+                      "retry_interval", "max_retries",
+                      "exit_retry_interval", "exit_max_retries",
+                      "zone_poll_interval"):
+                if k in zone:
+                    sections.append(_toml_kv(k, zone[k]))
+            sections.append("")
+
+        # [rcs]
+        rcs = merged.get("rcs", {})
+        if rcs:
+            sections.append("[rcs]")
+            for k in ("change_status_url", "report_interval"):
+                if k in rcs:
+                    sections.append(_toml_kv(k, rcs[k]))
+            dcm = rcs.get("door_code_mapping", {})
+            if dcm:
+                sections.append("")
+                sections.append("[rcs.door_code_mapping]")
+                for dk, dv in dcm.items():
+                    sections.append(f'{dk} = "{dv}"')
+            sections.append("")
+
+        # [air_shower]
+        ash = merged.get("air_shower", {})
+        if ash:
+            sections.append("[air_shower]")
+            for k in ("duration", "agv_enter_timeout", "agv_exit_timeout"):
+                if k in ash:
+                    sections.append(_toml_kv(k, ash[k]))
+            sections.append("")
+
+        # [sim]
+        sim = merged.get("sim", {})
+        if sim:
+            sections.append("[sim]")
+            for k in ("auto_open_delay", "auto_close_delay", "zone_always_busy", "zone_id"):
+                if k in sim:
+                    sections.append(_toml_kv(k, sim[k]))
+            sections.append("")
+
+        # [meta]
+        sections.append("[meta]")
+        sections.append(f'version = {new_version}')
+        sections.append(f'updated = "{now}"')
+        sections.append("")
+
+        content = "\n".join(sections)
+
+        # 备份
+        backup = ""
+        if os.path.exists(UNIFIED_CONFIG_PATH):
+            import shutil
+            backup = UNIFIED_CONFIG_PATH + ".bak"
+            shutil.copy2(UNIFIED_CONFIG_PATH, backup)
+
+        # 确保目录存在
+        os.makedirs(os.path.dirname(UNIFIED_CONFIG_PATH), exist_ok=True)
+
+        # 写入
+        with open(UNIFIED_CONFIG_PATH, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        global CONFIG_VERSION
+        CONFIG_VERSION = new_version
+
+        logger.info("统一配置已保存: /data/config.toml (版本 %d)", new_version)
+        return {
+            "success": True,
+            "message": f"配置已保存 (版本 {new_version})",
+            "version": new_version,
+            "backup": backup,
+        }
+    except Exception as e:
+        logger.error("保存统一配置失败: %s", e)
+        return {"success": False, "error": str(e)}
+
+
+def _generate_default_config() -> dict:
+    """生成默认统一配置"""
+    return {
+        "version": 0,
+        "angel": {"base_url": "http://localhost:8080", "outer_door_id": "DOOR01", "inner_door_id": "DOOR02"},
+        "zone": {"enter_url": "", "exit_url": "", "status_url": "", "zone_id": "zone_001",
+                 "entry_door_code": "q001", "exit_door_code": "q002", "zone_poll_interval": 300.0},
+        "rcs": {"change_status_url": "", "report_interval": 0.5,
+                "door_code_mapping": {"DOOR01": "1001", "DOOR02": "1002"}},
+        "air_shower": {"duration": 4.0},
+        "sim": {"auto_open_delay": 2.0, "auto_close_delay": 2.0, "zone_always_busy": False, "zone_id": "zone_001"},
+        "raw": "",
+    }
+
+
+def _read_raw(path: str) -> str:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return ""
+
+
+def _toml_kv(key: str, value) -> str:
+    """格式化为 TOML 键值对"""
+    if isinstance(value, bool):
+        return f'{key} = {"true" if value else "false"}'
+    elif isinstance(value, (int, float)):
+        return f'{key} = {value}'
+    elif isinstance(value, str):
+        return f'{key} = "{value}"'
+    else:
+        return f'{key} = {value}'

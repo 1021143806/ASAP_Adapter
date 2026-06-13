@@ -502,9 +502,21 @@ body {
         <span style="font-size:9px;color:var(--text-muted);">POST · RCS → ASAP</span>
       </div>
       <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label">状态上报 (ASAP → RCS)</span>
-        <code class="zone-value" id="rcsReportUrl" style="font-size:11px;word-break:break-all;color:var(--text-muted);">配置在 env.toml</code>
-        <span style="font-size:9px;color:var(--text-muted);">POST · ASAP → RCS /changeDoorStatus</span>
+        <span class="zone-label" style="display:flex;justify-content:space-between;align-items:center;">
+          状态上报 URL (ASAP → RCS)
+          <span style="font-size:9px;color:var(--text-muted);">POST /changeDoorStatus</span>
+        </span>
+        <div style="display:flex;gap:6px;margin-top:4px;">
+          <input type="text" id="rcsReportUrlInput"
+            style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
+                   font-family:inherit;outline:none;"
+            placeholder="http://rcs-host/changeDoorStatus"
+            onfocus="this.style.borderColor='var(--accent)'"
+            onblur="this.style.borderColor='var(--card-border)'">
+          <button class="btn btn-success btn-sm" onclick="saveRcsUrl()" id="rcsSaveBtn">保存</button>
+          <span id="rcsSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+        </div>
       </div>
     </div>
     <div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text-muted);">
@@ -872,16 +884,53 @@ function toggleTheme() {
 // ── RCS 配置地址 ─────────────────────────
 
 function setRcsUrls() {
-  const host = window.location.host;  // HOST:5012
+  const host = window.location.host;
   document.getElementById("rcsControlUrl").textContent =
     `http://${host}/api/rcs/controlDoor`;
   document.getElementById("rcsStatusUrl").textContent =
     `http://${host}/api/rcs/doorStatus`;
 
-  // 从 env.toml 读配置（通过 API 获取），但这里仅显示模板
-  fetch("/api/asap/status")
+  // 从 API 加载当前 RCS 配置
+  fetch("/api/asap/config/rcs")
     .then(r => r.json())
+    .then(cfg => {
+      const input = document.getElementById("rcsReportUrlInput");
+      if (cfg.change_status_url) {
+        input.value = cfg.change_status_url;
+        input.placeholder = cfg.change_status_url;
+      }
+    })
     .catch(() => {});
+}
+
+async function saveRcsUrl() {
+  const url = document.getElementById("rcsReportUrlInput").value.trim();
+  const btn = document.getElementById("rcsSaveBtn");
+  const status = document.getElementById("rcsSaveStatus");
+
+  btn.disabled = true;
+  btn.textContent = "保存中...";
+  status.style.display = "none";
+
+  try {
+    const resp = await fetch("/api/asap/config/rcs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ change_status_url: url, report_interval: 0.5 }),
+    });
+    const data = await resp.json();
+    status.textContent = "✓ 已保存";
+    status.style.display = "inline";
+    status.style.color = "var(--success)";
+    setTimeout(() => { status.style.display = "none"; }, 3000);
+  } catch (e) {
+    status.textContent = "✗ 保存失败";
+    status.style.display = "inline";
+    status.style.color = "var(--danger)";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "保存";
+  }
 }
 
 function copyText(el) {

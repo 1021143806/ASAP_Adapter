@@ -17,12 +17,20 @@ from datetime import datetime
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, PlainTextResponse
 
+from pydantic import BaseModel
+
 from .models import (
     AngelDoorStatus,
     RcsDoorControlRequest, RcsDoorControlResponse,
     RcsStatusQueryRequest, RcsStatusQueryResponse, RcsStatusData,
 )
 from .state_machine import StateMachine, DoorClientError, ZoneClientError
+
+
+class RcsConfigUpdate(BaseModel):
+    """RCS 配置更新请求"""
+    change_status_url: str = ""
+    report_interval: float = 0.5
 
 logger = logging.getLogger(__name__)
 
@@ -195,5 +203,31 @@ def create_router(app: FastAPI) -> APIRouter:
             return {"message": f"门[{door_id}]已关闭"}
         except (DoorClientError, ZoneClientError) as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+    # ── RCS 配置管理 ──────────────────────────
+
+    @router.get("/api/asap/config/rcs")
+    async def get_rcs_config(request: Request):
+        """获取 RCS 配置"""
+        rcs = request.app.state.rcs
+        return {
+            "change_status_url": rcs.config.change_status_url,
+            "report_interval": rcs.config.report_interval,
+            "door_code_mapping": rcs.config.door_code_mapping,
+        }
+
+    @router.post("/api/asap/config/rcs")
+    async def update_rcs_config(request: Request, cfg: RcsConfigUpdate):
+        """更新 RCS 配置（运行时生效，不持久化到文件）"""
+        rcs = request.app.state.rcs
+        rcs.config.change_status_url = cfg.change_status_url
+        if cfg.report_interval > 0:
+            rcs.config.report_interval = cfg.report_interval
+        logger.info("RCS配置已更新: change_status_url=%s", cfg.change_status_url)
+        return {
+            "status": "ok",
+            "change_status_url": rcs.config.change_status_url,
+            "report_interval": rcs.config.report_interval,
+        }
 
     return router

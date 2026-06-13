@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 class SimController:
     """模拟控制器核心"""
 
-    def __init__(self):
-        self.outer_door = SimDoor(door_id="DOOR_OUTER")
-        self.inner_door = SimDoor(door_id="DOOR_INNER")
+    def __init__(self, outer_door_id: str = "DOOR_OUTER", inner_door_id: str = "DOOR_INNER"):
+        self.outer_door = SimDoor(door_id=outer_door_id)
+        self.inner_door = SimDoor(door_id=inner_door_id)
         self.zone = SimZone(zone_id="air_shower_room")
         self.config = SimConfig()
         self.request_log: list[dict] = []
@@ -256,10 +256,24 @@ class SimController:
         self.inner_door.close_delay = close_delay
         self._log("config", "", f"延迟设置: 开={open_delay}s 关={close_delay}s")
 
+    def set_door_ids(self, outer_id: str, inner_id: str):
+        """更新门ID（支持热更新）"""
+        changed = False
+        if outer_id and outer_id != self.outer_door.door_id:
+            self.outer_door = SimDoor(door_id=outer_id)
+            changed = True
+        if inner_id and inner_id != self.inner_door.door_id:
+            self.inner_door = SimDoor(door_id=inner_id)
+            changed = True
+        if changed:
+            self._log("config", "", f"门ID更新: 外={outer_id} 内={inner_id}")
+
     def reset_all(self):
         """重置所有状态"""
-        self.outer_door = SimDoor(door_id="DOOR_OUTER")
-        self.inner_door = SimDoor(door_id="DOOR_INNER")
+        outer_id = self.outer_door.door_id
+        inner_id = self.inner_door.door_id
+        self.outer_door = SimDoor(door_id=outer_id)
+        self.inner_door = SimDoor(door_id=inner_id)
         self.zone = SimZone(zone_id="air_shower_room")
         self.config = SimConfig()
         self.request_log.clear()

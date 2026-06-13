@@ -1,0 +1,25 @@
+# ═══════════════════════════════════════════
+#  运行时配置 — 修改即时生效，无需重启服务
+#  优先级高于 config/env.toml（覆盖同名键）
+# ═══════════════════════════════════════════
+
+[angel]
+# AB 自动门 base URL
+# base_url = "http://172.31.43.181:8080"
+# 外门ID / 内门ID
+# outer_door_id = "DOOR01"
+# inner_door_id = "DOOR02"
+
+[zone]
+# 区域管控对接地址
+# enter_url = "http://zone-server:8080/api/zones/enter"
+# exit_url = "http://zone-server:8080/api/zones/exit"
+# status_url = "http://zone-server:8080/api/zones/status"
+
+[rcs]
+# 状态上报 URL (ASAP → RCS)
+# change_status_url = "http://rcs-host/changeDoorStatus"
+# 上报间隔（秒）
+# report_interval = 0.5
+# 门编码映射 {ASAP门ID = "RCS门编码"}
+# door_code_mapping = {DOOR_OUTER = "1001", DOOR_INNER = "1002"}

@@ -424,7 +424,7 @@ body {
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 /* 配置管理编辑器聚焦效果 */
-#configFileEditor:focus { border-color: var(--accent) !important; box-shadow: 0 0 12px var(--accent-glow); }
+#cfgRuntimeEditor:focus, #cfgEnvEditor:focus { border-color: var(--accent) !important; box-shadow: 0 0 12px var(--accent-glow); }
 
 /* 升级管理样式 */
 .upgrade-grid { display:flex; flex-direction:column; gap:16px; }
@@ -532,8 +532,8 @@ body {
           <div class="door-status-value closed" id="outerDoorStatus">--</div>
           <div class="door-status-text" id="outerDoorText">未知</div>
           <div class="door-controls">
-            <button class="btn btn-success" onclick="manualOpen('DOOR_OUTER')" disabled>开门</button>
-            <button class="btn btn-warning" onclick="manualClose('DOOR_OUTER')" disabled>关门</button>
+            <button class="btn btn-success" onclick="manualOpen(doorIds.outer)" disabled>开门</button>
+            <button class="btn btn-warning" onclick="manualClose(doorIds.outer)" disabled>关门</button>
           </div>
           <div id="outerDebugStatus" style="font-size:9px;color:var(--text-muted);margin-top:4px;font-family:monospace;"></div>
         </div>
@@ -544,8 +544,8 @@ body {
           <div class="door-status-value closed" id="innerDoorStatus">--</div>
           <div class="door-status-text" id="innerDoorText">未知</div>
           <div class="door-controls">
-            <button class="btn btn-success" onclick="manualOpen('DOOR_INNER')" disabled>开门</button>
-            <button class="btn btn-warning" onclick="manualClose('DOOR_INNER')" disabled>关门</button>
+            <button class="btn btn-success" onclick="manualOpen(doorIds.inner)" disabled>开门</button>
+            <button class="btn btn-warning" onclick="manualClose(doorIds.inner)" disabled>关门</button>
           </div>
           <div id="innerDebugStatus" style="font-size:9px;color:var(--text-muted);margin-top:4px;font-family:monospace;"></div>
         </div>
@@ -688,7 +688,8 @@ body {
   <!-- 配置管理子导航 -->
   <nav style="display:flex;gap:4px;margin-bottom:16px;">
     <a href="javascript:void(0)" class="nav-tab nav-tab-active" onclick="switchConfigTab('visual')" id="cfgTabVisual">👁 可视化编辑</a>
-    <a href="javascript:void(0)" class="nav-tab" onclick="switchConfigTab('file')" id="cfgTabFile">📄 文件编辑</a>
+    <a href="javascript:void(0)" class="nav-tab" onclick="switchConfigTab('runtime')" id="cfgTabRuntime">⚡ 运行时配置</a>
+    <a href="javascript:void(0)" class="nav-tab" onclick="switchConfigTab('env')" id="cfgTabEnv">🔧 静态配置</a>
   </nav>
 
   <!-- ── 可视化编辑 ── -->
@@ -748,24 +749,38 @@ body {
       <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
         ASAP 通过以下 base URL + <code>/acs/door/{doorId}</code> 控制 AB 自动门
       </div>
-      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label">AB 门 base URL <span style="font-weight:400;color:var(--text-muted);">(POST/GET /acs/door/{doorId})</span></span>
-        <div style="display:flex;gap:6px;margin-top:4px;">
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;">
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">base URL <span style="font-weight:400;color:var(--text-muted);">(POST/GET /acs/door/{doorId})</span></span>
           <input type="text" id="angelBaseUrlInput" title="AB 自动门 base URL"
-            style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
                    border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
                    font-family:inherit;outline:none;"
-            placeholder="http://172.31.43.181:8080"
-            onfocus="this.style.borderColor='var(--accent)'"
-            onblur="this.style.borderColor='var(--card-border)'">
-          <button class="btn btn-success btn-sm" onclick="saveAngelUrl()">保存</button>
-          <span id="angelSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+            placeholder="http://172.31.43.181:8080">
+        </div>
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">外门ID</span>
+          <input type="text" id="angelOuterDoorIdInput" title="外门 ID"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
+                   font-family:inherit;outline:none;" placeholder="DOOR_OUTER">
+        </div>
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">内门ID</span>
+          <input type="text" id="angelInnerDoorIdInput" title="内门 ID"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
+                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
+                   font-family:inherit;outline:none;" placeholder="DOOR_INNER">
         </div>
       </div>
-      <div style="margin-top:6px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
-        <span><code>POST /acs/door/DOOR_OUTER</code> 开/关外门</span>
-        <span><code>POST /acs/door/DOOR_INNER</code> 开/关内门</span>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+        <button class="btn btn-success btn-sm" onclick="saveAngelUrl()">💾 保存</button>
+        <span id="angelSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
+        <span><code>POST /acs/door/{doorId}</code> 控制门</span>
         <span><code>GET /acs/door/{doorId}</code> 查询门状态</span>
+        <span>💡 门ID修改后需重新加载页面生效</span>
       </div>
     </div>
 
@@ -780,28 +795,51 @@ body {
   </div>
   </div> <!-- /cfg-visual -->
 
-  <!-- ── 文件编辑 ── -->
-  <div id="cfg-file" style="display:none;">
+  <!-- ── 运行时配置（热更新） ── -->
+  <div id="cfg-runtime" style="display:none;">
     <div class="glass">
       <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-        <span>📄 配置文件 (config/env.toml)</span>
+        <span>⚡ 运行时配置 (config/runtime.toml)</span>
         <div style="display:flex;gap:8px;">
-          <button class="btn" onclick="loadConfigFile()">🔄 重新加载</button>
-          <button class="btn btn-success" onclick="saveConfigFile()">💾 保存</button>
+          <button class="btn" onclick="loadRuntimeConfig()">🔄 重新加载</button>
+          <button class="btn btn-success" onclick="saveRuntimeConfig()">💾 保存并热更新</button>
         </div>
       </div>
-      <textarea id="configFileEditor" title="配置文件编辑器 - config/env.toml" spellcheck="false"
+      <textarea id="cfgRuntimeEditor" title="运行时配置编辑器 - config/runtime.toml" spellcheck="false"
         style="width:100%;min-height:500px;background:rgba(0,0,0,0.25);border:1px solid var(--card-border);
                border-radius:10px;padding:14px;color:var(--text-primary);font-size:13px;
                font-family:'SF Mono','Fira Code','Consolas',monospace;line-height:1.6;
                outline:none;resize:vertical;tab-size:2;"
         placeholder="加载中..."></textarea>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
-        <span id="cfgFileStatus" style="font-size:12px;color:var(--text-muted);"></span>
-        <span style="font-size:11px;color:var(--warning);">⚠ 修改后需重启服务才能生效。TOML 格式错误将无法保存。</span>
+        <span id="cfgRuntimeStatus" style="font-size:12px;color:var(--text-muted);"></span>
+        <span style="font-size:11px;color:var(--success);">✅ 保存后即时生效，无需重启。含地址/URL/映射等运行时配置。</span>
       </div>
     </div>
-  </div> <!-- /cfg-file -->
+  </div> <!-- /cfg-runtime -->
+
+  <!-- ── 静态配置（需重启） ── -->
+  <div id="cfg-env" style="display:none;">
+    <div class="glass">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>🔧 静态配置 (config/env.toml)</span>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="loadEnvConfig()">🔄 重新加载</button>
+          <button class="btn btn-success" onclick="saveEnvConfig()">💾 保存</button>
+        </div>
+      </div>
+      <textarea id="cfgEnvEditor" title="静态配置编辑器 - config/env.toml" spellcheck="false"
+        style="width:100%;min-height:500px;background:rgba(0,0,0,0.25);border:1px solid var(--card-border);
+               border-radius:10px;padding:14px;color:var(--text-primary);font-size:13px;
+               font-family:'SF Mono','Fira Code','Consolas',monospace;line-height:1.6;
+               outline:none;resize:vertical;tab-size:2;"
+        placeholder="加载中..."></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <span id="cfgEnvStatus" style="font-size:12px;color:var(--text-muted);"></span>
+        <span style="font-size:11px;color:var(--warning);">⚠ 修改后需重启服务才能生效。含 server/log/duration 等静态配置。</span>
+      </div>
+    </div>
+  </div> <!-- /cfg-env -->
 </div>    <!-- view-config -->
 
 <!-- ════════════════════════════════════
@@ -907,9 +945,9 @@ curl http://HOST:5012/api/asap/upgrade/version
             <div class="door-code" id="simOuterCode">DOOR_OUTER</div>
             <div class="door-status-value closed" id="simOuterState">关闭</div>
             <div class="door-controls" style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">
-              <button class="btn btn-success btn-sm" onclick="simSetDoor('DOOR_OUTER','1')">开门</button>
-              <button class="btn btn-warning btn-sm" onclick="simSetDoor('DOOR_OUTER','0')">关门</button>
-              <button class="btn btn-danger btn-sm" onclick="simFault('DOOR_OUTER')">故障</button>
+              <button class="btn btn-success btn-sm" onclick="simSetDoor(doorIds.outer,'1')">开门</button>
+              <button class="btn btn-warning btn-sm" onclick="simSetDoor(doorIds.outer,'0')">关门</button>
+              <button class="btn btn-danger btn-sm" onclick="simFault(doorIds.outer)">故障</button>
             </div>
           </div>
           <div class="door-card" id="simInnerCard">
@@ -917,9 +955,9 @@ curl http://HOST:5012/api/asap/upgrade/version
             <div class="door-code" id="simInnerCode">DOOR_INNER</div>
             <div class="door-status-value closed" id="simInnerState">关闭</div>
             <div class="door-controls" style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">
-              <button class="btn btn-success btn-sm" onclick="simSetDoor('DOOR_INNER','1')">开门</button>
-              <button class="btn btn-warning btn-sm" onclick="simSetDoor('DOOR_INNER','0')">关门</button>
-              <button class="btn btn-danger btn-sm" onclick="simFault('DOOR_INNER')">故障</button>
+              <button class="btn btn-success btn-sm" onclick="simSetDoor(doorIds.inner,'1')">开门</button>
+              <button class="btn btn-warning btn-sm" onclick="simSetDoor(doorIds.inner,'0')">关门</button>
+              <button class="btn btn-danger btn-sm" onclick="simFault(doorIds.inner)">故障</button>
             </div>
           </div>
         </div>
@@ -974,17 +1012,14 @@ const stateStepMap = {
 let currentState = "IDLE";
 let currentStep = 0;
 let sseConnected = false;
+let doorIds = { outer: "DOOR_OUTER", inner: "DOOR_INNER" };
 
 // ── 初始化 ──────────────────────────────
 
 function init() {
-  renderSteps();
   updateClock();
   setInterval(updateClock, 1000);
-  connectSSE();
   setRcsUrls();
-  loadAngelConfig();
-  loadZoneConfig();
   loadRcsLogs();
   setInterval(loadRcsLogs, 3000);
   fixSimulatorUrl();
@@ -1015,6 +1050,7 @@ function switchView(name) {
   if (name === "simulator") simRefresh();
   else if (name === "door") loadRcsLogs();
   else if (name === "zone") refreshStatus();
+  else if (name === "config") { loadAngelConfig(); loadZoneConfig(); loadRuntimeConfig(); loadEnvConfig(); }
   else if (name === "upgrade") { loadUpgradeVersion(); loadUpgradeRecords(); }
 }
 
@@ -1027,6 +1063,9 @@ async function refreshDoorStatus() {
     const resp = await fetch("/api/asap/refresh-doors", { method: "POST" });
     const data = await resp.json();
     console.log("[DoorStatus] API响应:", JSON.stringify(data));
+    // 更新门ID（来自API）
+    if (data.outer_door?.door_id) doorIds.outer = data.outer_door.door_id;
+    if (data.inner_door?.door_id) doorIds.inner = data.inner_door.door_id;
     // 更新门卡 + 显示调试信息
     if (data.outer_door) {
       updateDoorCard("outer", data.outer_door);
@@ -1305,18 +1344,27 @@ async function saveRcsUrl() {
 // ── AB 门配置 ──────────────────────────
 async function saveAngelUrl() {
   const url = document.getElementById("angelBaseUrlInput").value.trim();
+  const outerId = document.getElementById("angelOuterDoorIdInput").value.trim();
+  const innerId = document.getElementById("angelInnerDoorIdInput").value.trim();
   const status = document.getElementById("angelSaveStatus");
-  if (!url) { status.textContent = "✗ URL 不能为空"; status.style.display = "inline"; status.style.color = "var(--danger)"; return; }
+  if (!url && !outerId && !innerId) { status.textContent = "✗ 至少填写一项"; status.style.display = "inline"; status.style.color = "var(--danger)"; return; }
   try {
+    const body = {};
+    if (url) body.base_url = url;
+    if (outerId) body.outer_door_id = outerId;
+    if (innerId) body.inner_door_id = innerId;
     const resp = await fetch("/api/asap/config/angel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ base_url: url }),
+      body: JSON.stringify(body),
     });
     const data = await resp.json();
-    status.textContent = "✓ 已保存";
+    status.textContent = "✓ 已保存 (热更新)";
     status.style.display = "inline";
     status.style.color = "var(--success)";
+    // 同步更新门ID变量
+    if (data.outer_door_id) doorIds.outer = data.outer_door_id;
+    if (data.inner_door_id) doorIds.inner = data.inner_door_id;
     setTimeout(() => { status.style.display = "none"; }, 3000);
   } catch (e) {
     status.textContent = "✗ 保存失败";
@@ -1330,6 +1378,12 @@ function loadAngelConfig() {
     .then(r => r.json())
     .then(data => {
       document.getElementById("angelBaseUrlInput").value = data.base_url || "";
+      const outerEl = document.getElementById("angelOuterDoorIdInput");
+      const innerEl = document.getElementById("angelInnerDoorIdInput");
+      if (outerEl) outerEl.value = data.outer_door_id || "DOOR_OUTER";
+      if (innerEl) innerEl.value = data.inner_door_id || "DOOR_INNER";
+      if (data.outer_door_id) doorIds.outer = data.outer_door_id;
+      if (data.inner_door_id) doorIds.inner = data.inner_door_id;
     })
     .catch(() => {});
 }
@@ -1394,7 +1448,10 @@ async function simRefresh() {
 function simUpdateDoor(pos, door) {
   const card = document.getElementById(`sim${pos}Card`);
   const stateEl = document.getElementById(`sim${pos}State`);
+  const codeEl = document.getElementById(`sim${pos}Code`);
   if (!card || !stateEl) return;
+  // 更新门ID显示
+  if (codeEl && door?.door_id) codeEl.textContent = door.door_id;
   const state = door?.state || "0";
   let label, cls;
   if (state === "1" || state === "OPENED") { label = "打开"; cls = "open"; }
@@ -1753,26 +1810,31 @@ function upgradeRollback(backupName) {
 
 // ── 配置管理子标签切换 ──────────────────
 function switchConfigTab(name) {
-  document.getElementById("cfg-visual").style.display = name === "visual" ? "" : "none";
-  document.getElementById("cfg-file").style.display = name === "file" ? "" : "none";
-  document.getElementById("cfgTabVisual").className = "nav-tab" + (name === "visual" ? " nav-tab-active" : "");
-  document.getElementById("cfgTabFile").className = "nav-tab" + (name === "file" ? " nav-tab-active" : "");
-  if (name === "file") loadConfigFile();
+  const tabs = ["visual", "runtime", "env"];
+  tabs.forEach(t => {
+    const el = document.getElementById("cfg-" + t);
+    if (el) el.style.display = t === name ? "" : "none";
+    const tabEl = document.getElementById("cfgTab" + t.charAt(0).toUpperCase() + t.slice(1));
+    if (tabEl) tabEl.className = "nav-tab" + (t === name ? " nav-tab-active" : "");
+  });
+  if (name === "runtime") loadRuntimeConfig();
+  else if (name === "env") loadEnvConfig();
 }
 
-// ── 配置文件读取/保存 ──────────────────
-async function loadConfigFile() {
-  const editor = document.getElementById("configFileEditor");
-  const status = document.getElementById("cfgFileStatus");
+// ── 通用: 配置文件加载/保存模板 ────────
+async function _loadConfigFile(editorId, statusId, url) {
+  const editor = document.getElementById(editorId);
+  const status = document.getElementById(statusId);
   if (!editor) return;
   editor.placeholder = "加载中...";
   status.textContent = "正在加载...";
+  status.style.color = "var(--text-muted)";
   try {
-    const resp = await fetch("/api/asap/config/file");
+    const resp = await fetch(url);
     const data = await resp.json();
     if (data.success) {
       editor.value = data.content;
-      status.textContent = "✓ 已加载 (" + data.path + ")";
+      status.textContent = "✓ 已加载";
       status.style.color = "var(--success)";
     } else {
       status.textContent = "✗ 加载失败";
@@ -1780,37 +1842,46 @@ async function loadConfigFile() {
     }
   } catch (e) {
     editor.value = "";
-    status.textContent = "✗ 加载失败: " + e.message;
+    status.textContent = "✗ " + e.message;
     status.style.color = "var(--danger)";
   }
 }
 
-async function saveConfigFile() {
-  const editor = document.getElementById("configFileEditor");
-  const status = document.getElementById("cfgFileStatus");
+async function _saveConfigFile(editorId, statusId, url) {
+  const editor = document.getElementById(editorId);
+  const status = document.getElementById(statusId);
   if (!editor) return;
-  const content = editor.value;
   status.textContent = "正在保存...";
   status.style.color = "var(--text-muted)";
   try {
-    const resp = await fetch("/api/asap/config/file", {
+    const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: content }),
+      body: JSON.stringify({ content: editor.value }),
     });
     const data = await resp.json();
     if (data.success) {
-      status.textContent = "✓ " + data.message;
+      let msg = "✓ " + data.message;
+      if (data.hot_reloaded) msg += " 🔥";
+      status.textContent = msg;
       status.style.color = "var(--success)";
     } else {
       status.textContent = "✗ " + (data.error || "保存失败");
       status.style.color = "var(--danger)";
     }
   } catch (e) {
-    status.textContent = "✗ 保存失败: " + e.message;
+    status.textContent = "✗ " + e.message;
     status.style.color = "var(--danger)";
   }
 }
+
+// ── 运行时配置（热更新） ────────────────
+function loadRuntimeConfig() { _loadConfigFile("cfgRuntimeEditor", "cfgRuntimeStatus", "/api/asap/config/runtime"); }
+function saveRuntimeConfig() { _saveConfigFile("cfgRuntimeEditor", "cfgRuntimeStatus", "/api/asap/config/runtime"); }
+
+// ── 静态配置（需重启） ──────────────────
+function loadEnvConfig() { _loadConfigFile("cfgEnvEditor", "cfgEnvStatus", "/api/asap/config/env"); }
+function saveEnvConfig() { _saveConfigFile("cfgEnvEditor", "cfgEnvStatus", "/api/asap/config/env"); }
 
 // ── 启动 ──────────────────────────────────
 init();

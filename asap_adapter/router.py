@@ -51,6 +51,8 @@ class LogQueryRequest(BaseModel):
 class AngelConfigUpdate(BaseModel):
     """AB 门配置更新"""
     base_url: str = ""
+    outer_door_id: str = ""
+    inner_door_id: str = ""
 
 
 class ZoneConfigUpdate(BaseModel):
@@ -58,11 +60,6 @@ class ZoneConfigUpdate(BaseModel):
     enter_url: str = ""
     exit_url: str = ""
     status_url: str = ""
-
-
-class AngelConfigUpdate(BaseModel):
-    """AB 门配置更新"""
-    base_url: str = ""
 
 
 # ── 请求日志记录 ──────────────────────────
@@ -368,20 +365,47 @@ def create_router(app: FastAPI) -> APIRouter:
         cfg = request.app.state.config
         return {
             "base_url": cfg.angel.base_url,
+            "outer_door_id": cfg.angel.outer_door_id,
+            "inner_door_id": cfg.angel.inner_door_id,
         }
 
     @router.post("/api/asap/config/angel")
     async def update_angel_config(request: Request, cfg: AngelConfigUpdate):
         """更新 AB 门配置（运行时生效，持久化到 overrides.json）"""
         config = request.app.state.config
+        changed = False
+        from .config import save_override
+
         if cfg.base_url:
             config.angel.base_url = cfg.base_url
-            from .config import save_override
             save_override("angel", "base_url", cfg.base_url)
-            # 重建 DoorClient 的 httpx 客户端
             request.app.state.door.set_sim_mode(False)
-            logger.info("AB门配置已更新: base_url=%s", cfg.base_url)
-        return {"status": "ok", "base_url": config.angel.base_url}
+            changed = True
+        if cfg.outer_door_id:
+            config.angel.outer_door_id = cfg.outer_door_id
+            save_override("angel", "outer_door_id", cfg.outer_door_id)
+            changed = True
+        if cfg.inner_door_id:
+            config.angel.inner_door_id = cfg.inner_door_id
+            save_override("angel", "inner_door_id", cfg.inner_door_id)
+            changed = True
+
+        # 同步门ID到模拟器
+        if changed and request.app.state._sim_available and request.app.state.sim_controller:
+            request.app.state.sim_controller.set_door_ids(
+                config.angel.outer_door_id,
+                config.angel.inner_door_id,
+            )
+
+        if changed:
+            logger.info("AB门配置已更新: base_url=%s, outer=%s, inner=%s",
+                        config.angel.base_url, config.angel.outer_door_id, config.angel.inner_door_id)
+        return {
+            "status": "ok",
+            "base_url": config.angel.base_url,
+            "outer_door_id": config.angel.outer_door_id,
+            "inner_door_id": config.angel.inner_door_id,
+        }
 
     # ── 区域管控配置管理 ────────────────────
 
@@ -602,51 +626,75 @@ def create_router(app: FastAPI) -> APIRouter:
 
     # ── 配置文件直接编辑 ──────────────────────
 
-    class ConfigFileUpdate(BaseModel):
+    class ConfigFileContent(BaseModel):
         content: str
 
-    def _get_config_path() -> str:
-        base_dir = Path(__file__).resolve().parent.parent
-        return str(base_dir / "config" / "env.toml")
+    # ── 运行时配置（热更新） ────────────────
+
+    @router.get("/api/asap/config/runtime")
+    async def get_runtime_config():
+        """获取运行时配置 (config/runtime.toml) — 修改即时生效"""
+        from .config import read_runtime
+        content = read_runtime()
+        return {"success": True, "content": content}
+
+    @router.post("/api/asap/config/runtime")
+    async def save_runtime_config(req: ConfigFileContent, request: Request):
+        """保存运行时配置 — 写入后自动热更新，无需重启"""
+        from .config import save_runtime, apply_runtime_string
+        result = save_runtime(req.content)
+        if not result.get("success"):
+            return result
+        try:
+            # 热更新到内存
+            apply_runtime_string(request.app.state.config, req.content)
+            # 重建 DoorClient（base_url 变化时 httpx client 需重建）
+            request.app.state.door.set_sim_mode(False)
+            # 同步门ID到模拟器
+            if request.app.state._sim_available and request.app.state.sim_controller:
+                request.app.state.sim_controller.set_door_ids(
+                    request.app.state.config.angel.outer_door_id,
+                    request.app.state.config.angel.inner_door_id,
+                )
+            logger.info("运行时配置已热更新: base_url=%s, doors=%s/%s",
+                        request.app.state.config.angel.base_url,
+                        request.app.state.config.angel.outer_door_id,
+                        request.app.state.config.angel.inner_door_id)
+            result["hot_reloaded"] = True
+        except Exception as e:
+            logger.error("运行时配置热更新失败: %s", e)
+            result["hot_reloaded"] = False
+            result["warning"] = f"文件已保存，但热更新部分失败: {e}"
+        return result
+
+    # ── 静态配置（需重启） ──────────────────
+
+    @router.get("/api/asap/config/env")
+    async def get_env_config():
+        """获取静态配置 (config/env.toml) — 修改需重启服务"""
+        from .config import read_env
+        content = read_env()
+        return {"success": True, "content": content}
+
+    @router.post("/api/asap/config/env")
+    async def save_env_config(req: ConfigFileContent):
+        """保存静态配置 — 写入后需重启服务生效"""
+        from .config import save_env
+        return save_env(req.content)
+
+    # ── 向后兼容：旧 /api/asap/config/file 指向静态配置 ──
 
     @router.get("/api/asap/config/file")
     async def get_config_file():
-        """获取配置文件 (config/env.toml) 原始内容"""
-        path = _get_config_path()
-        if not os.path.exists(path):
-            return {"success": True, "content": "", "path": path}
-        with open(path, "r", encoding="utf-8") as f:
-            content = f.read()
-        return {"success": True, "content": content, "path": path}
+        """[兼容] 获取静态配置 (config/env.toml)"""
+        from .config import read_env
+        content = read_env()
+        return {"success": True, "content": content}
 
     @router.post("/api/asap/config/file")
-    async def save_config_file(req: ConfigFileUpdate):
-        """保存配置文件（写入前验证 TOML 格式，自动备份）"""
-        path = _get_config_path()
-        # 验证 TOML 格式
-        try:
-            try:
-                import tomllib
-                _toml_parse = tomllib.loads
-            except ImportError:
-                import tomli as _tomli
-                _toml_parse = _tomli.loads
-            _toml_parse(req.content)
-        except Exception as e:
-            return {"success": False, "error": f"TOML 格式错误: {e}"}
-        # 备份当前文件
-        backup_path = path + ".bak"
-        import shutil
-        if os.path.exists(path):
-            shutil.copy2(path, backup_path)
-        # 写入
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(req.content)
-        logger.info("配置文件已更新，备份保存至: %s", backup_path)
-        return {
-            "success": True,
-            "message": "配置文件已保存，重启后生效",
-            "backup": backup_path,
-        }
+    async def save_config_file(req: ConfigFileContent):
+        """[兼容] 保存静态配置"""
+        from .config import save_env
+        return save_env(req.content)
 
     return router

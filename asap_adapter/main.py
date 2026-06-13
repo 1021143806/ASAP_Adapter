@@ -33,7 +33,7 @@ from .logger import setup_logging
 try:
     from sim_controller.state import SimController
     from sim_controller.router import create_router as create_sim_router
-    _sim_controller = SimController()
+    _sim_controller = None  # 在 create_app 中初始化
     _sim_available = True
 except ImportError:
     _sim_controller = None
@@ -46,6 +46,16 @@ logger = logging.getLogger(__name__)
 def create_app(config: AppConfig) -> FastAPI:
     """创建并配置 FastAPI 应用"""
 
+    # ── 模拟器初始化（使用配置的门ID） ──
+    if _sim_available:
+        from sim_controller.state import SimController as _SimCtor
+        _app_sim = _SimCtor(
+            outer_door_id=config.angel.outer_door_id,
+            inner_door_id=config.angel.inner_door_id,
+        )
+    else:
+        _app_sim = None
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         """应用生命周期：启动→运行→关闭"""
@@ -56,7 +66,7 @@ def create_app(config: AppConfig) -> FastAPI:
         sm = StateMachine(config, door, zone, rcs)
 
         # ── 模拟器状态 ────────────────────
-        app.state.sim_controller = _sim_controller
+        app.state.sim_controller = _app_sim
         app.state.sim_enabled = False
         app.state._sim_available = _sim_available
         app.state._orig_door_base_url = config.angel.base_url
@@ -114,10 +124,11 @@ def create_app(config: AppConfig) -> FastAPI:
     app.include_router(router)
 
     # ── 模拟器路由（可选挂载） ──
-    if _sim_available:
-        sim_router = create_sim_router(_sim_controller)
+    if _sim_available and _app_sim:
+        sim_router = create_sim_router(_app_sim)
         app.include_router(sim_router, prefix="/sim")
-        logger.info("模拟器路由已挂载到 /sim")
+        logger.info("模拟器路由已挂载到 /sim, 门ID: %s/%s",
+                     config.angel.outer_door_id, config.angel.inner_door_id)
     else:
         logger.info("模拟器不可用，/sim 路由未挂载")
 

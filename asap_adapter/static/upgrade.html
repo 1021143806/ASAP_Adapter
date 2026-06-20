@@ -110,15 +110,40 @@ async function loadUpgradeRecords() {
       return;
     }
     container.innerHTML = '<table class="record-table"><thead><tr><th>时间</th><th>版本</th><th>说明</th><th>备份</th><th>操作</th></tr></thead><tbody>' +
-      records.map(r => {
-        const t = (r.timestamp || "").replace(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/, '$1-$2-$3 $4:$5:$6');
-        const notes = (r.release_notes || []).join(", ");
-        const title = r.release_title || r.description || (r.old_version + " → " + r.new_version);
-        const status = r.status === "rollback" ? " ↩ 回滚" : "";
-        return '<tr><td style="white-space:nowrap;">' + t + '</td><td>' + title + status + '</td><td>' + notes + '</td><td style="font-size:10px;">' + (r.backup_name || "-") + '</td><td>' +
-          (r.status === "success" ? '<button class="btn btn-sm btn-warning" onclick="rollbackUpgrade(\'' + r.backup_name + '\')">↩ 回滚</button>' : "") +
-        '</td></tr>';
-      }).join("") + '</tbody></table>';
+      (() => {
+        // 合并同版本记录：按版本号分组，每组只显示最新一条 + 可展开的子记录
+        const groups = {};
+        records.forEach(r => {
+          const ver = r.release_title || (r.old_version + " → " + r.new_version);
+          if (!groups[ver]) groups[ver] = [];
+          groups[ver].push(r);
+        });
+        return Object.entries(groups).map(([ver, items]) => {
+          const latest = items[0];
+          const sameCount = items.length;
+          const t = (latest.timestamp || "").replace(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/, '$1-$2-$3 $4:$5:$6');
+          const notes = latest.release_notes?.join(", ") || "";
+          const status = latest.status === "rollback" ? " ↩ 回滚" : "";
+          const backup = latest.backup_name || "-";
+          let html = '<tr><td style="white-space:nowrap;">' + t + '</td><td>' + ver + status +
+            (sameCount > 1 ? ' <span style="color:var(--text-muted);font-size:9px;">(' + sameCount + '次)</span>' : '') +
+            '</td><td>' + notes + '</td><td style="font-size:10px;">' + backup + '</td><td>' +
+            (latest.status === "success" ? '<button class="btn btn-sm btn-warning" onclick="rollbackUpgrade(\'' + backup + '\')">↩ 回滚</button>' : "") +
+            (sameCount > 1 ? ' <button class="btn btn-sm" onclick="var d=this.parentElement.parentElement.nextElementSibling;d.style.display=d.style.display===\'none\'?\'table-row\':\'none\'">展开</button>' : "") +
+            '</td></tr>';
+          // 子记录（隐藏）
+          if (sameCount > 1) {
+            html += '<tr style="display:none;"><td colspan="5" style="padding:0 0 0 30px;font-size:9px;">' +
+              items.slice(1).map(rr => {
+                const tt = (rr.timestamp || "").replace(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/, '$1-$2-$3 $4:$5:$6');
+                const nn = rr.release_notes?.join(", ") || "";
+                return '<div style="margin:2px 0;color:var(--text-muted);">' + tt + ' ' + nn + '</div>';
+              }).join("") +
+            '</td></tr>';
+          }
+          return html;
+        }).join("");
+      })() + '</tbody></table>';
   } catch (e) { console.error(e); }
 }
 

@@ -9,11 +9,11 @@ from pydantic import BaseModel
 
 
 class DoorSimState(str, Enum):
-    """门模拟状态"""
-    CLOSED = "0"           # 门已关闭
-    OPENING = "opening"    # 正在打开（过渡）
-    OPENED = "1"           # 门完全打开
-    CLOSING = "closing"    # 正在关闭（过渡）
+    """自动门状态 — 符合 ACS API 规范，仅 "0"/"1"/"2" """
+    CLOSED = "0"           # 门已关闭 / 未开到位（含开关过渡态）
+    OPENING = "0"          # 正在打开（上报为未开到位）
+    OPENED = "1"           # 门完全打开到位
+    CLOSING = "0"          # 正在关闭（上报为未开到位）
     FAULT = "2"            # 故障
 
 

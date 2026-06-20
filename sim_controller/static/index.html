@@ -11,8 +11,6 @@
   .state-open { color: var(--success); background: rgba(52,211,153,0.1); }
   .state-closed { color: var(--text-secondary); background: rgba(255,255,255,0.04); }
   .state-fault { color: var(--danger); background: rgba(248,113,113,0.1); }
-  .state-opening, .state-closing { color: var(--warning); background: rgba(251,191,36,0.1); animation: pulse 1s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
   .state-text { display:inline-block; padding:4px 12px; border-radius:6px; font-size:14px; font-weight:700; }
   .config-row { display:flex; align-items:center; gap:8px; padding:6px 0; }
   .config-row label { font-size:12px; color:var(--text-secondary); min-width:70px; }
@@ -205,8 +203,6 @@ function renderDoor(pos, door) {
     case "1": case "OPENED": label = "已打开"; cls = "state-open"; break;
     case "0": case "CLOSED": label = "已关闭"; cls = "state-closed"; break;
     case "2": case "FAULT": label = "故 障"; cls = "state-fault"; break;
-    case "opening": label = "打开中"; cls = "state-opening"; break;
-    case "closing": label = "关闭中"; cls = "state-closing"; break;
     default: label = state; cls = "state-closed";
   }
   stateText.textContent = label;

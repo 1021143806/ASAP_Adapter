@@ -43,9 +43,9 @@ class LogConfig:
 
 @dataclass
 class AngelConfig:
-    base_url: str = "http://localhost:8080"
-    outer_door_id: str = "DOOR_OUTER"
-    inner_door_id: str = "DOOR_INNER"
+    base_url: str = "http://127.0.0.1:5012/sim"
+    outer_door_id: str = "DOOR01"
+    inner_door_id: str = "DOOR02"
     poll_interval: float = 1.0
     poll_timeout: float = 30.0
 
@@ -57,13 +57,13 @@ class ZoneConfig:
     status_url: str = ""
     zone_id: str = "zone_001"
     client_id: str = "asap_adapter_01"
-    entry_door_code: str = "q001"   # RCS doorNum → 进入区域
+    entry_door_code: str = "q001"
     retry_interval: float = 3.0
     max_retries: int = 10
-    enter_retry_max: int = 30        # 进入区域最大重试次数（每次间隔1s）
+    enter_retry_max: int = 30
     exit_retry_interval: float = 1.0
     exit_max_retries: int = 30
-    zone_poll_interval: float = 300.0  # 区域状态定时轮询间隔(秒)，默认5分钟
+    zone_poll_interval: float = 300.0
 
 
 @dataclass
@@ -83,10 +83,10 @@ class RcsConfig:
 @dataclass
 class SimConfig:
     """内置模拟器配置"""
-    auto_open_delay: float = 2.0     # 门自动打开过渡时间(秒)
-    auto_close_delay: float = 2.0    # 门自动关闭过渡时间(秒)
-    zone_always_busy: bool = False   # 区域始终占用(测试用)
-    zone_id: str = "air_shower_room" # 模拟区域ID
+    auto_open_delay: float = 2.0
+    auto_close_delay: float = 2.0
+    zone_always_busy: bool = False
+    zone_id: str = "zone_001"
 
 
 @dataclass
@@ -518,7 +518,7 @@ def _generate_default_config() -> dict:
     """生成默认统一配置"""
     return {
         "version": 0,
-        "angel": {"base_url": "http://localhost:8080", "outer_door_id": "DOOR01", "inner_door_id": "DOOR02"},
+        "angel": {"base_url": "http://127.0.0.1:5012/sim", "outer_door_id": "DOOR01", "inner_door_id": "DOOR02"},
         "zone": {"enter_url": "", "exit_url": "", "status_url": "", "zone_id": "zone_001",
                  "entry_door_code": "q001", "zone_poll_interval": 300.0},
         "rcs": {"change_status_url": "", "report_interval": 0.5,

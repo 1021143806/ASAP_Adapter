@@ -26,7 +26,7 @@
 # 上报间隔（秒）
 # report_interval = 0.5
 # 门编码映射 {ASAP门ID = "RCS门编码"}
-# door_code_mapping = {DOOR_OUTER = "1001", DOOR_INNER = "1002"}
+# door_code_mapping = {DOOR01 = "1001", DOOR02 = "1002"}
 
 [air_shower]
 # 风淋时长（秒），默认4
@@ -41,4 +41,4 @@
 # auto_open_delay = 2.0
 # auto_close_delay = 2.0
 # zone_always_busy = false
-# zone_id = "air_shower_room"
+# zone_id = "zone_001"

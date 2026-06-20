@@ -54,6 +54,7 @@ def create_app(config: AppConfig) -> FastAPI:
         _app_sim = _SimCtor(
             outer_door_id=config.angel.outer_door_id,
             inner_door_id=config.angel.inner_door_id,
+            zone_id=config.sim.zone_id,
         )
     else:
         _app_sim = None

@@ -172,7 +172,10 @@ let simAutoScroll = true;
 let simLogEntries = [];
 
 function init() { updateStatus(); setInterval(updateStatus, 1000); }
-async function api(path, opts = {}) { return (await fetch(path, opts)).json(); }
+async function api(path, opts = {}) {
+  const resp = await fetch(path, opts);
+  return resp.json();
+}
 
 async function updateStatus() {
   try {
@@ -279,14 +282,47 @@ function scrollLogBottom() {
 function escHtml(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
 
 // ── 手动控制 ──
-async function setDoor(doorId, state) { await api("/sim/api/sim/door/set?door_id=" + doorId + "&state=" + state, {method:"POST"}); }
-async function injectFault(doorId) { await api("/sim/api/sim/door/fault?door_id=" + doorId + "&enable=true", {method:"POST"}); }
-async function setZoneBusy(busy) { await api("/sim/api/sim/zone/busy?busy=" + busy, {method:"POST"}); }
-async function toggleAlwaysBusy() { await api("/sim/api/sim/config/zone-always-busy?enable=" + document.getElementById("alwaysBusyToggle").checked, {method:"POST"}); }
-async function applyDelays() {
-  await api("/sim/api/sim/config/delays?open_delay=" + document.getElementById("openDelay").value + "&close_delay=" + document.getElementById("closeDelay").value, {method:"POST"});
+async function setDoor(doorId, state) {
+  await api("/sim/api/sim/door/set", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ door_id: doorId, state: state }),
+  });
 }
-async function resetSim() { await api("/sim/api/sim/reset", {method:"POST"}); }
+async function injectFault(doorId) {
+  await api("/sim/api/sim/door/fault", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ door_id: doorId, enable: true }),
+  });
+}
+async function setZoneBusy(busy) {
+  await api("/sim/api/sim/zone/busy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ busy: busy, client: "webui" }),
+  });
+}
+async function toggleAlwaysBusy() {
+  await api("/sim/api/sim/zone/busy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ busy: document.getElementById("alwaysBusyToggle").checked, client: "always_busy_toggle" }),
+  });
+}
+async function applyDelays() {
+  await api("/sim/api/sim/config/delays", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      open_delay: parseFloat(document.getElementById("openDelay").value) || 2.0,
+      close_delay: parseFloat(document.getElementById("closeDelay").value) || 2.0,
+    }),
+  });
+}
+async function resetSim() {
+  await api("/sim/api/sim/reset", { method: "POST" });
+}
 
 // ── 快速测试 ──
 async function quickTest() {

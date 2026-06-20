@@ -99,28 +99,65 @@ def create_router(sim: SimController) -> APIRouter:
         return snap.model_dump()
 
     @router.post("/api/sim/door/set")
-    async def set_door_state(door_id: str, state: str):
-        """手动设置门状态 (0=关, 1=开, 2=故障)"""
+    async def set_door_state(request: Request):
+        """手动设置门状态 (支持JSON body或query params)"""
+        import json as _json
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        door_id = body.get("door_id") or request.query_params.get("door_id", "")
+        state = body.get("state") or request.query_params.get("state", "0")
+        sim._log("manual", door_id, f"设置门状态: {state}", req_body=body if body else {"door_id": door_id, "state": state},
+                 resp_body={"status": "ok", "door_id": door_id, "state": state})
         ok = sim.manual_set_door_state(door_id, state)
         if not ok:
             raise HTTPException(400, f"未知门ID: {door_id}")
         return {"status": "ok", "door_id": door_id, "state": state}
 
     @router.post("/api/sim/door/fault")
-    async def inject_fault(door_id: str, enable: bool = True):
+    async def inject_fault(request: Request):
         """注入/清除门故障"""
+        import json as _json
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        door_id = body.get("door_id") or request.query_params.get("door_id", "")
+        enable = body.get("enable", True) if "enable" in body else request.query_params.get("enable", "true") != "false"
+        sim._log("manual", door_id, f"注入故障: enable={enable}", req_body=body if body else {"door_id": door_id, "enable": enable})
         sim.manual_inject_fault(door_id, enable)
         return {"status": "ok", "door_id": door_id, "fault": enable}
 
     @router.post("/api/sim/zone/busy")
-    async def set_zone_busy(busy: bool = True, client: str = ""):
+    async def set_zone_busy(request: Request):
         """强制设置区域占用/释放"""
+        import json as _json
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        busy = body.get("busy", True) if "busy" in body else request.query_params.get("busy", "true") != "false"
+        client = body.get("client") or request.query_params.get("client", "")
+        sim._log("manual", sim.config.zone_id, f"设置区域: busy={busy} client={client}", req_body=body if body else {"busy": busy, "client": client})
         sim.manual_set_zone_busy(busy, client)
         return {"status": "ok", "busy": busy}
 
     @router.post("/api/sim/config/delays")
-    async def set_delays(open_delay: float = 2.0, close_delay: float = 2.0):
+    async def set_delays(request: Request):
         """设置门过渡延时"""
+        import json as _json
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        open_delay = float(body.get("open_delay", "2.0") if "open_delay" in body else request.query_params.get("open_delay", "2.0"))
+        close_delay = float(body.get("close_delay", "2.0") if "close_delay" in body else request.query_params.get("close_delay", "2.0"))
+        sim._log("config", "delays", f"设置延时 open={open_delay}s close={close_delay}s", req_body=body if body else {"open_delay": open_delay, "close_delay": close_delay})
         sim.manual_set_delays(open_delay, close_delay)
         return {"status": "ok", "open_delay": open_delay, "close_delay": close_delay}
 

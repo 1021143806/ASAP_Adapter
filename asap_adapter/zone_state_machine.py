@@ -112,10 +112,13 @@ class ZoneStateMachine:
 
     async def handle_open(self, door_code: str, agv_id: str = "") -> (bool, str):
         """RCS doorStatus=1 — 开门
-        非阻塞：收到请求立即返回 1000，后台异步重试进入区域。
-        RCS 通过门状态查询（door_status_by_code）获知实际开闭状态：
-          - 区域未进入 → status=2 (关门)
-          - 区域进入成功 → status=1 (开门)
+
+        先查询区域占用状态，按占用者决定行为：
+          - 区域被其他AGV占用 → 拒绝开门，返回忙(门关)
+          - 区域被本AGV占用(agv_id匹配) → 直接开门(已在区域内)
+          - 区域空闲 → 启动异步进入流程
+
+        RCS 通过门状态查询获知实际开闭状态。
         """
         entry = self.config.zone.entry_door_code
 
@@ -125,6 +128,43 @@ class ZoneStateMachine:
         if self.is_busy:
             return False, f"区域流程忙碌中: {self._state.value}"
 
+        # ── 先查询区域当前占用状态 ──
+        try:
+            status = await self.zone.get_status()
+            current_occupier = status.occupied_by or ""
+            is_occupied = status.status == "occupied"
+
+            if is_occupied:
+                if current_occupier == agv_id or not current_occupier:
+                    # 本 AGV 已占用 或 占用者未知 → 直接开门
+                    self._status = ZoneFlowStatus()
+                    self._status.door_code = entry
+                    self._status.zone_id = self.config.zone.zone_id
+                    self._status.current_agv = agv_id
+                    self._status.started_at = datetime.now().isoformat()
+                    self._status.zone_status = "granted"
+                    self._status.zone_occupied_by = agv_id
+                    self._set_state(ZoneFlowState.INSIDE)
+                    self._status.door_status = "1"
+                    self._status.current_step = 2
+                    self._log_step(2, f"q001 已开(已被{agv_id or '本AGV'}占用)", "q001_open",
+                                   "info", "", {"door": entry, "status": "open",
+                                                  "zone_occupied_by": current_occupier})
+                    self._publish()
+                    return True, "已在区域内，门已开"
+                else:
+                    # 被其他 AGV 占用 → 拒绝
+                    logger.warning("Zone 被 %s 占用, 拒绝 %s 进入", current_occupier, agv_id)
+                    self._status.zone_status = "occupied"
+                    self._status.zone_occupied_by = current_occupier
+                    self._publish()
+                    return False, f"区域被 {current_occupier} 占用，等待释放"
+
+        except ZoneClientError as e:
+            logger.warning("查询区域状态失败, 尝试直接进入: %s", e)
+            # 查不到状态时降级为直接尝试进入
+
+        # ── 区域空闲 → 启动异步进入 ──
         self._cancel_event.clear()
         self._status = ZoneFlowStatus()
         self._status.door_code = entry
@@ -159,18 +199,17 @@ class ZoneStateMachine:
 
     async def _enter_flow(self):
         """
-        进入区域：POST enter, 间隔1s重试直到 granted 且 zone_id 匹配
-        - 被占用或 zone_id 不匹配 → 继续重试，门保持关闭 (status=2)
-        - 成功 → 门状态变为打开 (status=1)
+        进入区域：POST enter，立即尝试。
+        因 handle_open 已预检区域空闲，这里直接请求进入。
+        若偶然被占用（并发竞争），退避重试。
         """
         try:
             self._set_state(ZoneFlowState.ENTERING)
             self._status.current_step = 1
 
-            result = None
-            attempt = 0
             zone_id = self.config.zone.zone_id
             enter_url = self.config.zone.enter_url
+            attempt = 0
 
             while not self._cancel_event.is_set():
                 attempt += 1
@@ -181,10 +220,9 @@ class ZoneStateMachine:
                     result = await self.zone.enter()
                     resp_zone_id = result.zone_id if hasattr(result, 'zone_id') else getattr(result, 'zone_id', '')
 
-                    # 校验返回的 zone_id 是否匹配配置
                     if resp_zone_id and resp_zone_id != zone_id:
-                        logger.warning("Zone 返回 zone_id 不匹配: got=%s expected=%s, 重试...",
-                                       resp_zone_id, zone_id)
+                        logger.warning("进入区域 zone_id 不匹配: got=%s expected=%s", resp_zone_id, zone_id)
+                        self._status.zone_status = "occupied"
                         self._status.zone_occupied_by = f"zone mismatch: {resp_zone_id}"
                         self._publish()
                         await asyncio.sleep(1)
@@ -202,7 +240,7 @@ class ZoneStateMachine:
                         self._status.zone_status = "occupied"
                         self._status.zone_occupied_by = err_str.split(":")[-1].strip() if ":" in err_str else err_str
                         self._publish()
-                        logger.info("Zone 被占用(%s), 1s后重试 (第%d次)",
+                        logger.info("区域被占用(%s), 1s后重试 (第%d次)",
                                      self._status.zone_occupied_by, attempt)
                         await asyncio.sleep(1)
                         continue
@@ -216,17 +254,17 @@ class ZoneStateMachine:
             self._status.door_status = "1"
             self._status.current_step = 2
             self._status.zone_status = "granted"
-            self._status.zone_occupied_by = ""
+            self._status.zone_occupied_by = self._status.current_agv
             self._log_step(2, "q001 已开(区域已进入)", "q001_open", "info", "",
                            {"door": self._status.door_code, "status": "open"})
             self._publish()
-            logger.info("Zone: 进入区域完成, q001 已开")
+            logger.info("进入区域完成, q001 已开")
 
         except asyncio.CancelledError:
-            logger.info("Zone 进入流程被取消")
+            logger.info("进入流程被取消")
             await self._cleanup()
         except ZoneClientError as e:
-            logger.error("Zone 进入流程失败: %s", e)
+            logger.error("进入流程失败: %s", e)
             self._status.error_message = str(e)
             self._set_state(ZoneFlowState.ERROR)
             await self._cleanup()

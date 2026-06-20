@@ -1431,6 +1431,25 @@ function updateZoneDashboard(data) {
       fsEl.textContent = labels[s] || s;
     }
     updateZoneDoorCard(data.door_code || "q001", data.door_status || "2");
+
+    // 更新区域信息卡片
+    const zidEl = document.getElementById("zoneId");
+    const zsEl = document.getElementById("zoneStatus");
+    const zbyEl = document.getElementById("zoneOccupiedBy");
+    const agvEl = document.getElementById("currentAgv");
+    const zlcEl = document.getElementById("zoneLastCheck");
+
+    if (zidEl) zidEl.textContent = data.zone_id || "--";
+    if (zsEl) {
+      const s = data.zone_status || "unknown";
+      zsEl.textContent = s === "occupied" ? "占用中" : s === "granted" ? "已授权" : s === "available" ? "可用" : s;
+      zsEl.className = "zone-value " + (s === "occupied" ? "occupied" : s === "granted" ? "active" : "unknown");
+    }
+    if (zbyEl) zbyEl.textContent = data.zone_occupied_by || "--";
+    if (agvEl) agvEl.textContent = data.current_agv || "--";
+    if (zlcEl) zlcEl.textContent = data.last_check
+      ? new Date(data.last_check + "Z").toLocaleTimeString()
+      : "等待中...";
   } catch(e) { console.error('updateZoneDashboard:', e); }
 }
 

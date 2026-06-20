@@ -76,27 +76,27 @@
       <div class="card-title">🚪 门状态</div>
       <div style="display:flex;gap:12px;">
         <div class="door-card tag-closed" id="outerCard">
-          <div class="door-name"><span class="door-icon">🚪</span>外门 <span style="font-size:10px;color:var(--text-muted);" id="outerDoorId">(DOOR_OUTER)</span></div>
+          <div class="door-name"><span class="door-icon">🚪</span>外门 <span style="font-size:10px;color:var(--text-muted);" id="outerDoorId">(DOOR01)</span></div>
           <div class="state-text state-closed" id="outerStateText">关闭</div>
           <div style="font-size:10px;color:var(--text-muted);margin:4px 0;">
             AGV: <span id="outerAgv">-</span> | 指令: <span id="outerCmd">0</span>
           </div>
           <div class="door-controls">
-            <button class="btn btn-success btn-sm" onclick="setDoor('DOOR_OUTER','1')">开门</button>
-            <button class="btn btn-warning btn-sm" onclick="setDoor('DOOR_OUTER','0')">关门</button>
-            <button class="btn btn-danger btn-sm" onclick="injectFault('DOOR_OUTER')">故障</button>
+            <button class="btn btn-success btn-sm" onclick="setDoor(doorIds.outer,'1')">开门</button>
+            <button class="btn btn-warning btn-sm" onclick="setDoor(doorIds.outer,'0')">关门</button>
+            <button class="btn btn-danger btn-sm" onclick="injectFault(doorIds.outer)">故障</button>
           </div>
         </div>
         <div class="door-card tag-closed" id="innerCard">
-          <div class="door-name"><span class="door-icon">🚪</span>内门 <span style="font-size:10px;color:var(--text-muted);" id="innerDoorId">(DOOR_INNER)</span></div>
+          <div class="door-name"><span class="door-icon">🚪</span>内门 <span style="font-size:10px;color:var(--text-muted);" id="innerDoorId">(DOOR02)</span></div>
           <div class="state-text state-closed" id="innerStateText">关闭</div>
           <div style="font-size:10px;color:var(--text-muted);margin:4px 0;">
             AGV: <span id="innerAgv">-</span> | 指令: <span id="innerCmd">0</span>
           </div>
           <div class="door-controls">
-            <button class="btn btn-success btn-sm" onclick="setDoor('DOOR_INNER','1')">开门</button>
-            <button class="btn btn-warning btn-sm" onclick="setDoor('DOOR_INNER','0')">关门</button>
-            <button class="btn btn-danger btn-sm" onclick="injectFault('DOOR_INNER')">故障</button>
+            <button class="btn btn-success btn-sm" onclick="setDoor(doorIds.inner,'1')">开门</button>
+            <button class="btn btn-warning btn-sm" onclick="setDoor(doorIds.inner,'0')">关门</button>
+            <button class="btn btn-danger btn-sm" onclick="injectFault(doorIds.inner)">故障</button>
           </div>
         </div>
       </div>
@@ -163,6 +163,8 @@
 //  SimController WebUI — 统一风格版
 // ═══════════════════════════════════════
 
+let doorIds = { outer: "DOOR01", inner: "DOOR02" };
+
 function init() { updateStatus(); setInterval(updateStatus, 1000); }
 async function api(path, opts = {}) { return (await fetch(path, opts)).json(); }
 
@@ -181,7 +183,14 @@ async function updateStatus() {
   }
 }
 
-function renderDoors(data) { renderDoor("outer", data.outer_door); renderDoor("inner", data.inner_door); }
+function renderDoors(data) {
+  doorIds.outer = data.outer_door.door_id || "DOOR01";
+  doorIds.inner = data.inner_door.door_id || "DOOR02";
+  document.getElementById("outerDoorId").textContent = "(" + doorIds.outer + ")";
+  document.getElementById("innerDoorId").textContent = "(" + doorIds.inner + ")";
+  renderDoor("outer", data.outer_door);
+  renderDoor("inner", data.inner_door);
+}
 
 function renderDoor(pos, door) {
   const state = door.state;
@@ -259,7 +268,7 @@ async function quickTest() {
   r.innerHTML = "▶ 执行风淋流程模拟...";
   const steps = [
     ["申请区域", "/api/zones/enter", {zone_id:"air_shower_room",client_id:"AGV001"}],
-    ["开外门", "/acs/door/DOOR_OUTER", {doorSerial:"DOOR_OUTER",command:"1",Direction:"1",RobotName:"AGV001"}],
+    ["开外门", "/acs/door/" + doorIds.outer, {doorSerial:doorIds.outer,command:"1",Direction:"1",RobotName:"AGV001"}],
   ];
   for (const [name, path, body] of steps) {
     try {
@@ -275,8 +284,8 @@ async function quickTestWithConflict() {
   setTimeout(async () => { await setZoneBusy(false); document.getElementById("quickTestResult").innerHTML += "<br>↻ 已释放"; }, 3000);
 }
 async function quickTestFault() {
-  document.getElementById("quickTestResult").innerHTML = "🔥 注入外门故障 (3s后恢复)...";
-  await injectFault("DOOR_OUTER");
+  document.getElementById("quickTestResult").innerHTML = "🔥 注入门故障 (3s后恢复)...";
+  await injectFault(doorIds.outer);
 }
 
 // ── 报文详情弹窗 ──

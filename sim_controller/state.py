@@ -29,7 +29,7 @@ class SimController:
     def __init__(self, outer_door_id: str = "DOOR_OUTER", inner_door_id: str = "DOOR_INNER"):
         self.outer_door = SimDoor(door_id=outer_door_id)
         self.inner_door = SimDoor(door_id=inner_door_id)
-        self.zone = SimZone(zone_id="air_shower_room")
+        self.zone = SimZone(zone_id="zone_001")
         self.config = SimConfig()
         self.request_log: list[dict] = []
 

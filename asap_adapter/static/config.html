@@ -111,6 +111,9 @@
         <div class="zone-row"><span class="zone-label">Status URL</span>
           <input type="text" id="cfgZoneStatusInput" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;margin-left:8px;">
         </div>
+        <div class="zone-row"><span class="zone-label">区域名 (zone_id)</span>
+          <input type="text" id="cfgZoneIdInput" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;margin-left:8px;" placeholder="zone_001">
+        </div>
         <div class="zone-row"><span class="zone-label">区域门编码</span>
           <input type="text" id="cfgZoneEntryCodeInput" value="q001" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;margin-left:8px;">
         </div>
@@ -172,6 +175,7 @@ async function loadAllConfig() {
     setVal("cfgZoneExitInput", zone.exit_url);
     setVal("cfgZoneStatusInput", zone.status_url);
     setVal("cfgZoneEntryCodeInput", zone.entry_door_code);
+    setVal("cfgZoneIdInput", zone.zone_id);
   } catch (e) { console.error("加载配置失败:", e); }
 }
 
@@ -191,6 +195,7 @@ async function saveAllConfig() {
       exit_url: document.getElementById("cfgZoneExitInput").value.trim(),
       status_url: document.getElementById("cfgZoneStatusInput").value.trim(),
       entry_door_code: document.getElementById("cfgZoneEntryCodeInput").value.trim(),
+      zone_id: document.getElementById("cfgZoneIdInput").value.trim(),
     },
     rcs: {
       change_status_url: document.getElementById("rcsReportUrlInput").value.trim(),

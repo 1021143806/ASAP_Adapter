@@ -55,7 +55,7 @@ class ZoneConfig:
     enter_url: str = ""
     exit_url: str = ""
     status_url: str = ""
-    zone_id: str = "air_shower_room"
+    zone_id: str = "zone_001"
     client_id: str = "asap_adapter_01"
     entry_door_code: str = "q001"   # RCS doorNum → 进入区域
     retry_interval: float = 3.0

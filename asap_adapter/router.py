@@ -61,6 +61,7 @@ class ZoneConfigUpdate(BaseModel):
     enter_url: str = ""
     exit_url: str = ""
     status_url: str = ""
+    zone_id: Optional[str] = None
     entry_door_code: Optional[str] = None
     zone_poll_interval: Optional[float] = None
 
@@ -433,6 +434,7 @@ def create_router(app: FastAPI) -> APIRouter:
             "enter_url": cfg.zone.enter_url,
             "exit_url": cfg.zone.exit_url,
             "status_url": cfg.zone.status_url,
+            "zone_id": cfg.zone.zone_id,
             "entry_door_code": cfg.zone.entry_door_code,
             "zone_poll_interval": cfg.zone.zone_poll_interval,
         }
@@ -461,12 +463,17 @@ def create_router(app: FastAPI) -> APIRouter:
             config.zone.entry_door_code = cfg.entry_door_code
             from .config import save_override
             save_override("zone", "entry_door_code", cfg.entry_door_code)
+        if cfg.zone_id is not None:
+            config.zone.zone_id = cfg.zone_id
+            from .config import save_override
+            save_override("zone", "zone_id", cfg.zone_id)
         logger.info("区域管控配置已更新")
         return {
             "status": "ok",
             "enter_url": config.zone.enter_url,
             "exit_url": config.zone.exit_url,
             "status_url": config.zone.status_url,
+            "zone_id": config.zone.zone_id,
             "entry_door_code": config.zone.entry_door_code,
             "zone_poll_interval": config.zone.zone_poll_interval,
         }

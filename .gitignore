@@ -30,6 +30,8 @@ plans/
 # Upgrade packages
 upgrade_*.zip
 hotfix_*.zip
+v.json
+*.tmp.zip
 
 # OS
 .DS_Store

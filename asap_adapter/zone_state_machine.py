@@ -270,7 +270,7 @@ class ZoneStateMachine:
     # ── 退出区域流程 ──────────────────────────
 
     async def _exit_flow(self):
-        """退出区域：POST exit, 最多20次间隔5s, 直到 released"""
+        """退出区域：POST exit, 最多 N 次间隔 S 秒, 直到 released"""
         try:
             self._set_state(ZoneFlowState.EXITING)
             self._status.current_step = 3
@@ -278,8 +278,8 @@ class ZoneStateMachine:
             released = False
             exit_url = self.config.zone.exit_url
             zone_id = self.config.zone.zone_id
-            max_retries = 20
-            retry_interval = 5
+            max_retries = self.config.zone.exit_max_retries
+            retry_interval = self.config.zone.exit_retry_interval
 
             for attempt in range(1, max_retries + 1):
                 if self._cancel_event.is_set():

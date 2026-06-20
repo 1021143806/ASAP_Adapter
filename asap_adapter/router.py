@@ -303,8 +303,9 @@ def create_router(app: FastAPI) -> APIRouter:
         data = await request.json()
         door_code = data.get("door_code", "")
         status = str(data.get("status", "2"))
-        if door_code not in ("q001", "q002", "", None):
-            return {"code": 2001, "msg": f"无效门编号: {door_code}"}
+        entry = request.app.state.config.zone.entry_door_code
+        if door_code not in (entry, "", None):
+            return {"code": 2001, "msg": f"无效门编号: {door_code}，当前区域门为 {entry}"}
         if status not in ("1", "2"):
             return {"code": 2002, "msg": f"无效状态: {status}，需为 1(开) 或 2(关)"}
 

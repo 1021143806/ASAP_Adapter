@@ -1,7 +1,7 @@
 """
 SimController 主入口
 
-启动 FastAPI 模拟服务（端口 5112）。
+启动 FastAPI 模拟服务 — 挂载到 ASAP 主程序 /sim 路由
 """
 
 import logging
@@ -29,7 +29,7 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.sim = sim
-        logger.info("SimController 启动完成，端口 5112")
+        logger.info("SimController 启动完成（独立模式端口 5112 / 集成模式路由 /sim）")
         yield
         logger.info("SimController 已关闭")
 

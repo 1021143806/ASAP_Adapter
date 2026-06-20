@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class SimController:
     """模拟控制器核心"""
 
-    def __init__(self, outer_door_id: str = "DOOR_OUTER", inner_door_id: str = "DOOR_INNER", zone_id: str = "zone_001"):
+    def __init__(self, outer_door_id: str = "DOOR01", inner_door_id: str = "DOOR02", zone_id: str = "zone_001"):
         self.outer_door = SimDoor(door_id=outer_door_id)
         self.inner_door = SimDoor(door_id=inner_door_id)
         self.zone = SimZone(zone_id=zone_id)

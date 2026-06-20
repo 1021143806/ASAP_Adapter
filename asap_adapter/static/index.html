@@ -3,503 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ASAP Adapter — 风淋门区域管控</title>
-<style>
-/* ═══════════════════════════════════════
-   全局变量 & 主题
-   ═══════════════════════════════════════ */
-:root {
-  --bg-gradient: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #16213e 100%);
-  --card-bg: rgba(255,255,255,0.06);
-  --card-border: rgba(255,255,255,0.10);
-  --card-shadow: 0 8px 32px rgba(0,0,0,0.37);
-  --text-primary: #f0f0f0;
-  --text-secondary: rgba(255,255,255,0.60);
-  --text-muted: rgba(255,255,255,0.35);
-  --accent: #5e9eff;
-  --accent-glow: rgba(94,158,255,0.25);
-  --success: #34d399;
-  --warning: #fbbf24;
-  --danger: #f87171;
-  --state-idle: #6b7280;
-  --state-running: #5e9eff;
-  --state-error: #f87171;
-  --state-done: #34d399;
-}
-
-[data-theme="light"] {
-  --bg-gradient: linear-gradient(135deg, #e8ecf1 0%, #dbe1e8 50%, #f0f2f5 100%);
-  --card-bg: rgba(255,255,255,0.55);
-  --card-border: rgba(255,255,255,0.40);
-  --card-shadow: 0 8px 32px rgba(0,0,0,0.08);
-  --text-primary: #1a1a2e;
-  --text-secondary: rgba(0,0,0,0.55);
-  --text-muted: rgba(0,0,0,0.30);
-  --accent: #3b82f6;
-  --accent-glow: rgba(59,130,246,0.15);
-}
-
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-               "Helvetica Neue", Arial, sans-serif;
-  background: var(--bg-gradient);
-  color: var(--text-primary);
-  min-height: 100vh;
-  padding: 20px;
-  transition: background 0.3s, color 0.3s;
-}
-
-/* 玻璃卡片 */
-.glass {
-  background: var(--card-bg);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  backdrop-filter: blur(20px) saturate(1.4);
-  border: 1px solid var(--card-border);
-  border-radius: 16px;
-  box-shadow: var(--card-shadow);
-  padding: 20px;
-  transition: all 0.3s ease;
-}
-
-/* 布局 */
-.app-container {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 24px;
-  margin-bottom: 20px;
-}
-
-.header h1 {
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.3px;
-}
-
-.header-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.status-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.status-dot.online { background: var(--success); box-shadow: 0 0 8px rgba(52,211,153,0.5); }
-.status-dot.busy { background: var(--warning); box-shadow: 0 0 8px rgba(251,191,36,0.5); }
-.status-dot.error { background: var(--danger); box-shadow: 0 0 8px rgba(248,113,113,0.5); }
-.status-dot.offline { background: #6b7280; }
-
-.theme-toggle {
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  color: var(--text-primary);
-  width: 36px; height: 36px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-.theme-toggle:hover { background: var(--accent-glow); border-color: var(--accent); }
-
-/* Dashboard 网格 */
-.dashboard {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.card-title {
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
-  margin-bottom: 14px;
-}
-
-/* 状态机进度 */
-.state-machine { grid-column: 1 / -1; }
-
-.steps-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
-  overflow-x: auto;
-  padding: 8px 0;
-}
-
-.step-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1;
-  min-width: 60px;
-  position: relative;
-}
-
-.step-dot {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--card-bg);
-  border: 2px solid var(--card-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  transition: all 0.4s ease;
-  z-index: 1;
-  margin-bottom: 6px;
-}
-
-.step-dot.active {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 0 16px var(--accent-glow);
-  transform: scale(1.15);
-}
-
-.step-dot.done {
-  border-color: var(--success);
-  background: var(--success);
-  color: #fff;
-}
-
-.step-dot.error {
-  border-color: var(--danger);
-  background: var(--danger);
-  color: #fff;
-  animation: pulse 1s infinite;
-}
-
-.step-item[data-has-log] .step-dot::after {
-  content: "";
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--success);
-  border: 2px solid var(--card-bg);
-  z-index: 2;
-}
-
-@keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0.5); }
-  50% { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
-}
-
-.step-line {
-  position: absolute;
-  top: 14px;
-  left: 50%;
-  width: 100%;
-  height: 2px;
-  background: var(--card-border);
-  z-index: 0;
-}
-
-.step-line.done { background: var(--success); }
-.step-line.running { background: linear-gradient(90deg, var(--accent) 50%, var(--card-border) 50%); }
-
-.step-label {
-  font-size: 10px;
-  color: var(--text-muted);
-  text-align: center;
-  line-height: 1.2;
-  max-width: 64px;
-  word-break: break-all;
-}
-
-/* 门状态面板 */
-.door-panel { display: flex; flex-direction: column; }
-
-.door-cards {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  flex: 1;
-}
-
-.door-card {
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 12px;
-  padding: 14px;
-  transition: all 0.3s;
-}
-
-.door-card.open { border-color: var(--success); }
-.door-card.closed { border-color: var(--text-muted); }
-.door-card.fault { border-color: var(--danger); animation: pulse 1s infinite; }
-
-.door-name {
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.door-code {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent);
-  font-family: "SF Mono", "Fira Code", monospace;
-  margin-bottom: 6px;
-  letter-spacing: 0.5px;
-}
-
-.door-rcs-status {
-  font-size: 10px;
-  color: var(--text-muted);
-  margin: 2px 0 4px;
-  font-family: "SF Mono", "Fira Code", monospace;
-}
-
-.door-icon {
-  font-size: 20px;
-  opacity: 0.7;
-}
-
-.door-status-text {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.door-status-value {
-  font-size: 22px;
-  font-weight: 700;
-  margin: 4px 0;
-}
-
-.door-status-value.open { color: var(--success); }
-.door-status-value.closed { color: var(--text-secondary); }
-.door-status-value.fault { color: var(--danger); }
-
-.door-controls {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.btn {
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--card-border);
-  background: var(--card-bg);
-  color: var(--text-primary);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-  backdrop-filter: blur(8px);
-}
-
-.btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
-.btn:active { transform: scale(0.96); }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn:hover:disabled { background: var(--card-bg); color: var(--text-primary); border-color: var(--card-border); }
-
-.btn-success { border-color: var(--success); color: var(--success); }
-.btn-success:hover { background: var(--success); color: #fff; }
-
-.btn-danger { border-color: var(--danger); color: var(--danger); }
-.btn-danger:hover { background: var(--danger); color: #fff; }
-
-.btn-warning { border-color: var(--warning); color: var(--warning); }
-.btn-warning:hover { background: var(--warning); color: #000; }
-
-/* 区域控制面板 */
-.zone-info {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.zone-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  background: var(--card-bg);
-  border-radius: 8px;
-  border: 1px solid var(--card-border);
-}
-
-.zone-label { font-size: 12px; color: var(--text-secondary); }
-
-.zone-value {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.zone-value.available { color: var(--success); }
-.zone-value.occupied { color: var(--warning); }
-.zone-value.granted { color: var(--accent); }
-.zone-value.released { color: var(--success); }
-.zone-value.unknown { color: var(--text-muted); }
-
-.flow-controls {
-  display: flex;
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 12px;
-}
-
-/* 日志面板 */
-.log-panel {
-  margin-top: 16px;
-}
-
-.log-container {
-  height: 200px;
-  overflow-y: auto;
-  font-family: "SF Mono", "Menlo", "Consolas", monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  padding: 12px;
-  background: rgba(0,0,0,0.2);
-  border-radius: 10px;
-  border: 1px solid var(--card-border);
-}
-
-.log-entry {
-  padding: 2px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-  color: var(--text-secondary);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.log-entry .time { color: var(--text-muted); margin-right: 8px; }
-.log-entry .level { font-weight: 600; margin-right: 8px; }
-.log-entry .level.INFO { color: var(--accent); }
-.log-entry .level.WARN { color: var(--warning); }
-.log-entry .level.ERROR { color: var(--danger); }
-.log-entry .level.DEBUG { color: var(--text-muted); }
-
-/* 全宽日志 */
-.log-panel-full { grid-column: 1 / -1; }
-
-/* 响应式 */
-@media (max-width: 900px) {
-  .dashboard { grid-template-columns: 1fr; }
-  .door-cards { grid-template-columns: 1fr; }
-  .steps-row { gap: 2px; }
-  .step-item { min-width: 40px; }
-  .step-label { display: none; }
-}
-
-/* 滚动条 */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 2px; }
-
-/* 导航标签 */
-.nav-tab {
-  color: var(--text-muted); text-decoration: none; font-size: 12px;
-  padding: 5px 12px; border-radius: 8px;
-  border: 1px solid transparent; transition: all 0.2s;
-  font-weight: 500; white-space: nowrap;
-}
-.nav-tab:hover { background: var(--card-bg); border-color: var(--card-border); color: var(--text-primary); }
-.nav-tab-active {
-  background: var(--accent-glow); border-color: var(--accent);
-  color: var(--accent); font-weight: 600;
-}
-
-/* 加载过渡 */
-.fade-in { animation: fadeIn 0.4s ease; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-
-/* 配置管理编辑器聚焦效果 */
-#cfgRuntimeEditor:focus, #cfgEnvEditor:focus { border-color: var(--accent) !important; box-shadow: 0 0 12px var(--accent-glow); }
-
-/* 升级管理样式 */
-.upgrade-grid { display:flex; flex-direction:column; gap:16px; }
-.upload-zone {
-  border: 2px dashed var(--card-border); border-radius: 12px;
-  padding: 28px 20px; text-align: center; cursor: pointer;
-  transition: all 0.2s; position: relative;
-}
-.upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: var(--accent-glow); }
-.upload-zone .upload-icon { font-size: 36px; margin-bottom: 6px; }
-.upload-zone .hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
-.upload-zone input[type="file"] { position:absolute; inset:0; opacity:0; cursor:pointer; }
-.file-info {
-  display:none; align-items:center; gap:8px;
-  padding:8px 12px; background: var(--accent-glow); border-radius:8px; margin-top:8px;
-}
-.file-info.show { display:flex; }
-.file-info .name { flex:1; font-size:13px; font-weight:500; }
-.file-info .size { font-size:11px; color:var(--text-muted); font-family:monospace; }
-.progress-bar {
-  display:none; height:4px; border-radius:2px;
-  background: var(--card-border); margin-top:10px; overflow:hidden;
-}
-.progress-bar.show { display:block; }
-.progress-bar .bar {
-  height:100%; width:100%; background: linear-gradient(90deg, var(--accent), var(--success));
-  animation: upgradeProgress 1.5s ease infinite;
-}
-@keyframes upgradeProgress {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(200%); }
-}
-.result-box { display:none; padding:10px 14px; border-radius:8px; margin-top:10px; font-size:13px; }
-.result-box.show { display:block; }
-.result-box.success { background:rgba(52,211,153,0.1); border:1px solid rgba(52,211,153,0.3); color:var(--success); }
-.result-box.error { background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.3); color:var(--danger); }
-.exclude-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:10px; }
-.exclude-tags .tag { font-size:10px; padding:2px 8px; border-radius:4px; background:var(--card-bg); color:var(--text-muted); }
-.record-table { width:100%; font-size:12px; border-collapse:collapse; }
-.record-table th { text-align:left; padding:8px 10px; color:var(--text-muted); border-bottom:1px solid var(--card-border); font-weight:600; }
-.record-table td { padding:8px 10px; border-bottom:1px solid var(--card-border); vertical-align:middle; }
-.record-table tr:hover td { background:var(--card-bg); }
-.version-tag { font-family:"SF Mono", monospace; font-size:12px; }
-</style>
+<title>风淋门 — ASAP Adapter</title>
+<link rel="stylesheet" href="/static/common.css">
 </head>
 <body>
   <div id="jsErrorBar" style="display:none;background:var(--danger);color:#fff;padding:8px 16px;font-size:12px;text-align:center;position:sticky;top:0;z-index:9999;" onclick="this.style.display='none'"></div>
 
 <div class="app-container">
-  <!-- Header -->
-  <header class="header glass">
+  <!-- ══ 导航栏 ══ -->
+  <header class="header">
     <div style="display:flex;align-items:center;gap:16px;">
-      <div>
-        <h1>ASAP Adapter</h1>
-        <div style="font-size:12px;color:var(--text-muted);">风淋门 · 区域管控协议适配器</div>
-      </div>
-      <nav style="display:flex;gap:4px;margin-left:12px;">
-        <a href="javascript:void(0)" class="nav-tab nav-tab-active" onclick="switchView('door')" id="tabDoor">🚪 风淋门</a>
-        <a href="javascript:void(0)" class="nav-tab" onclick="switchView('zone')" id="tabZone">📡 区域管控</a>
-        <a href="javascript:void(0)" class="nav-tab" onclick="switchView('config')" id="tabConfig">⚙ 配置管理</a>
-        <a href="javascript:void(0)" class="nav-tab" onclick="switchView('upgrade')" id="tabUpgrade">⬆ 升级</a>
-        <a href="javascript:void(0)" class="nav-tab" onclick="switchView('simulator')" id="tabSimulator">🎮 模拟器</a>
+      <h1>🚪 ASAP Adapter</h1>
+      <nav style="display:flex;gap:4px;">
+        <a href="/" class="nav-tab nav-tab-active">🚪 风淋门</a>
+        <a href="/zone" class="nav-tab">📡 区域管控</a>
+        <a href="/config" class="nav-tab">⚙ 配置</a>
+        <a href="/upgrade" class="nav-tab">⬆ 升级</a>
+        <a href="/sim" class="nav-tab">🎮 模拟器</a>
       </nav>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
@@ -507,17 +27,13 @@ body {
         <span class="status-dot online" id="connDot"></span>
         <span id="connStatus">已连接</span>
       </div>
-      <span style="font-size:12px;color:var(--text-muted);" id="clock"></span>
-      <button id="simToggleBtn" class="btn btn-success btn-sm" onclick="toggleSimMode()" style="font-size:10px;padding:3px 8px;" title="启用后 Door/Zone 指向模拟器">🔌 未启用</button>
+      <button id="simToggleBtn" class="btn btn-success btn-sm" onclick="toggleSimMode()" style="font-size:10px;padding:3px 8px;">🔌 模拟器</button>
       <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
     </div>
   </header>
 
-  <!-- ════════════════════════════════════
-       风淋门视图
-       ════════════════════════════════════ -->
-   <div id="view-door">
-   <div class="dashboard">
+  <!-- ══ 风淋门视图 ══ -->
+  <div class="dashboard">
 
     <!-- 方向状态 -->
     <div class="glass state-machine">
@@ -527,7 +43,7 @@ body {
       </div>
     </div>
 
-    <!-- 门状态（双门独立） -->
+    <!-- 门状态 -->
     <div class="glass door-panel">
       <div class="card-title">🚪 门状态 <span id="doorCodeMapping" style="font-size:10px;font-weight:400;color:var(--text-muted);"></span></div>
       <div class="door-cards" id="doorCards">
@@ -576,294 +92,10 @@ body {
     </div>
     <div class="log-container" id="logContainer"></div>
   </div>
-</div>    <!-- view-door -->
-
-<!-- ════════════════════════════════════
-     区域管控视图
-     ════════════════════════════════════ -->
-<div id="view-zone" style="display:none;">
-  <div class="dashboard">
-
-    <!-- 区域管控门状态 -->
-    <div class="glass door-panel">
-      <div class="card-title">🚪 区域门状态 <span id="zoneFlowState" style="font-size:10px;font-weight:400;color:var(--text-muted);"></span></div>
-      <div class="door-cards" id="zoneDoorCards">
-        <div class="door-card" id="zoneEntryDoor">
-          <div class="door-name"><span class="door-icon">🚪</span>q001 <span style="font-size:10px;color:var(--text-muted);font-weight:400;" id="zoneEntryDoorId">(q001)</span></div>
-          <div class="door-code" id="zoneEntryDoorCode">─</div>
-          <div class="door-status-value closed" id="zoneEntryDoorStatus">--</div>
-          <div class="door-status-text" id="zoneEntryDoorText">未知</div>
-          <div class="door-controls" style="margin-top:6px;display:flex;gap:4px;">
-            <button class="btn btn-success btn-sm" onclick="zoneForceDoor('q001','1')" title="强制开门(调试)">🔓 强制开</button>
-            <button class="btn btn-warning btn-sm" onclick="zoneForceDoor('q001','2')" title="强制关门(调试)">🔒 强制关</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 区域管控状态 -->
-    <div class="glass">
-      <div class="card-title">📡 区域状态</div>
-      <div class="zone-info">
-        <div class="zone-row">
-          <span class="zone-label">区域ID</span>
-          <span class="zone-value" id="zoneId">--</span>
-        </div>
-        <div class="zone-row">
-          <span class="zone-label">占用状态</span>
-          <span class="zone-value unknown" id="zoneStatus">--</span>
-        </div>
-        <div class="zone-row">
-          <span class="zone-label">被占用者</span>
-          <span class="zone-value" id="zoneOccupiedBy" style="font-size:12px;">--</span>
-        </div>
-        <div class="zone-row">
-          <span class="zone-label">当前AGV</span>
-          <span class="zone-value" id="currentAgv" style="font-size:12px;">--</span>
-        </div>
-        <div class="zone-row">
-          <span class="zone-label">上次查询</span>
-          <span class="zone-value" id="zoneLastCheck" style="font-size:11px;">--</span>
-        </div>
-      </div>
-      <div class="flow-controls">
-        <button class="btn" onclick="refreshStatus()">🔄 刷新</button>
-      </div>
-    </div>
-
-    <!-- 模拟器接入指引 -->
-    <div class="glass log-panel-full">
-      <div class="card-title">🎮 模拟器测试配置</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
-        使用内置模拟器测试时，将上述地址填写为以下值（先点右上角「启用模拟」）：
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
-        <div style="background:var(--card-bg);border-radius:8px;padding:10px;">
-          <div style="font-weight:600;margin-bottom:4px;">🚪 AB 门 base URL</div>
-          <code style="font-size:11px;color:var(--accent);word-break:break-all;">http://10.68.2.10:5012/sim</code>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">→ /sim/acs/door/{doorId}</div>
-        </div>
-        <div style="background:var(--card-bg);border-radius:8px;padding:10px;">
-          <div style="font-weight:600;margin-bottom:4px;">📡 区域管控接口</div>
-          <div style="font-size:10px;"><code style="color:var(--accent);">http://10.68.2.10:5012/sim/api/zones/enter</code></div>
-          <div style="font-size:10px;"><code style="color:var(--accent);">http://10.68.2.10:5012/sim/api/zones/exit</code></div>
-          <div style="font-size:10px;"><code style="color:var(--accent);">http://10.68.2.10:5012/sim/api/zones/status</code></div>
-        </div>
-      </div>
-      <div style="margin-top:6px;font-size:10px;color:var(--warning);">
-        ⚠ 填写后点「保存」，然后在右上角点「启用模拟」即可开始本地仿真测试
-      </div>
-    </div>
-  </div>
-</div>    <!-- view-zone -->
-
-<!-- ════════════════════════════════════
-     配置管理视图
-     ════════════════════════════════════ -->
-<div id="view-config" style="display:none;">
-  <!-- 配置管理子导航 -->
-  <nav style="display:flex;gap:4px;margin-bottom:16px;">
-    <a href="javascript:void(0)" class="nav-tab nav-tab-active" onclick="switchConfigTab('visual')" id="cfgTabVisual">👁 可视化编辑</a>
-    <a href="javascript:void(0)" class="nav-tab" onclick="switchConfigTab('runtime')" id="cfgTabRuntime">⚡ 运行时配置</a>
-    <a href="javascript:void(0)" class="nav-tab" onclick="switchConfigTab('env')" id="cfgTabEnv">🔧 静态配置</a>
-  </nav>
-
-  <!-- ── 可视化编辑 ── -->
-  <div id="cfg-visual">
-  <div class="dashboard">
-
-    <!-- 统一配置版本 + 保存 -->
-    <div class="glass" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;margin-bottom:8px;">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <span style="font-size:13px;font-weight:600;">📋 统一配置</span>
-        <span style="font-size:12px;color:var(--text-muted);">data/config.toml</span>
-        <span style="font-size:11px;color:var(--accent);" id="cfgVersion">版本 --</span>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <button class="btn" onclick="loadAllConfig()">🔄 读取配置</button>
-        <button class="btn btn-success" onclick="saveAllConfig()">💾 统一保存</button>
-        <span id="cfgSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
-      </div>
-    </div>
-
-    <!-- RCS 配置信息 -->
-    <div class="glass log-panel-full">
-      <div class="card-title">🔗 RCS 第三方对接配置</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
-        请将 RCS/WDCS 系统的 <code style="background:var(--card-bg);padding:1px 6px;border-radius:4px;">access_config</code> 表配置为以下地址：
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">控制接口 (door_control_relation_id)</span>
-          <code class="zone-value" id="rcsControlUrl" style="font-size:11px;word-break:break-all;cursor:pointer;" onclick="copyText(this)">http://HOST:5012/api/rcs/controlDoor</code>
-          <span style="font-size:9px;color:var(--text-muted);">POST · RCS → ASAP</span>
-        </div>
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">状态查询 (door_status_relation_id)</span>
-          <code class="zone-value" id="rcsStatusUrl" style="font-size:11px;word-break:break-all;cursor:pointer;" onclick="copyText(this)">http://HOST:5012/api/rcs/doorStatus</code>
-          <span style="font-size:9px;color:var(--text-muted);">POST · RCS → ASAP</span>
-        </div>
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label" style="display:flex;justify-content:space-between;align-items:center;">
-            状态上报 URL (ASAP → RCS)
-            <span style="font-size:9px;color:var(--text-muted);">POST /changeDoorStatus</span>
-          </span>
-          <div style="display:flex;gap:6px;margin-top:4px;">
-            <input type="text" id="rcsReportUrlInput" title="RCS 状态上报地址"
-              style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                     border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
-                     font-family:inherit;outline:none;"
-              placeholder="http://10.68.2.xx:7110/changeDoorStatus"
-              onfocus="this.style.borderColor='var(--accent)'"
-              onblur="this.style.borderColor='var(--card-border)'">
-            <button class="btn btn-success btn-sm" onclick="saveRcsUrl()" id="rcsSaveBtn">保存</button>
-            <span id="rcsSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
-          </div>
-          <div style="font-size:9px;color:var(--text-muted);margin-top:4px;line-height:1.5;">
-            <div><code style="background:transparent;padding:0;">POST {"doorNum":"1001","doorStatus":"1"}</code></div>
-            <div>→ <code style="background:transparent;padding:0;">{"code":1000,"msg":"success"}</code></div>
-          </div>
-        </div>
-      </div>
-      <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">外门 RCS 编码 <span style="font-weight:400;color:var(--text-muted);">(doorCode → door_id)</span></span>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <input type="text" id="rcsOuterCodeInput" title="外门 RCS doorCode"
-              style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                     border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
-                     font-family:inherit;outline:none;"
-              placeholder="1001">
-            <span style="color:var(--text-muted);font-size:12px;">→</span>
-            <span id="rcsOuterDoorId" style="color:var(--accent);font-size:12px;font-family:monospace;min-width:60px;">DOOR01</span>
-          </div>
-        </div>
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">内门 RCS 编码 <span style="font-weight:400;color:var(--text-muted);">(doorCode → door_id)</span></span>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <input type="text" id="rcsInnerCodeInput" title="内门 RCS doorCode"
-              style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                     border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
-                     font-family:inherit;outline:none;"
-              placeholder="1002">
-            <span style="color:var(--text-muted);font-size:12px;">→</span>
-            <span id="rcsInnerDoorId" style="color:var(--accent);font-size:12px;font-family:monospace;min-width:60px;">DOOR02</span>
-          </div>
-    </div>
-  </div>
-  </div>
-</div>    <!-- view-config -->
-
-<!-- ════════════════════════════════════
-      模拟器视图
-      ════════════════════════════════════ -->
-<div id="view-simulator" style="display:none;">
-  <div class="dashboard" style="display:flex;gap:16px;flex-wrap:wrap;">
-    <div class="glass" style="flex:1;min-width:300px;">
-        <div class="card-title">🚪 模拟器门控制</div>
-        <div id="simDoorArea" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <div class="door-card" id="simOuterCard">
-            <div class="door-name"><span class="door-icon">🚪</span>外门</div>
-            <div class="door-code" id="simOuterCode">DOOR_OUTER</div>
-            <div class="door-status-value closed" id="simOuterState">关闭</div>
-            <div class="door-controls" style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">
-              <button class="btn btn-success btn-sm" onclick="simSetDoor(doorIds.door1,'1')">开门</button>
-              <button class="btn btn-warning btn-sm" onclick="simSetDoor(doorIds.door1,'0')">关门</button>
-              <button class="btn btn-danger btn-sm" onclick="simFault(doorIds.door1)">故障</button>
-            </div>
-          </div>
-          <div class="door-card" id="simInnerCard">
-            <div class="door-name"><span class="door-icon">🚪</span>内门</div>
-            <div class="door-code" id="simInnerCode">DOOR_INNER</div>
-            <div class="door-status-value closed" id="simInnerState">关闭</div>
-            <div class="door-controls" style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">
-              <button class="btn btn-success btn-sm" onclick="simSetDoor(doorIds.door2,'1')">开门</button>
-              <button class="btn btn-warning btn-sm" onclick="simSetDoor(doorIds.door2,'0')">关门</button>
-              <button class="btn btn-danger btn-sm" onclick="simFault(doorIds.door2)">故障</button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="glass" style="flex:1;min-width:300px;">
-        <div class="card-title">📡 模拟器区域控制</div>
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          <div><span style="font-size:12px;color:var(--text-muted);">区域</span> <code id="simZoneId">air_shower_room</code></div>
-          <div><span style="font-size:12px;color:var(--text-muted);">状态</span> <strong id="simZoneState" style="color:var(--success);">空闲</strong></div>
-          <div><span style="font-size:12px;color:var(--text-muted);">占用者</span> <code id="simZoneBy">-</code></div>
-          <div style="display:flex;gap:6px;margin-top:4px;">
-            <button class="btn btn-warning btn-sm" onclick="simZoneBusy(true)">强制占用</button>
-            <button class="btn btn-success btn-sm" onclick="simZoneBusy(false)">释放</button>
-            <button class="btn btn-danger btn-sm" onclick="simReset()">重置模拟器</button>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="glass log-panel-full">
-      <div class="card-title" style="display:flex;justify-content:space-between;">
-        <span>📋 模拟器请求日志</span>
-        <button class="btn" onclick="simRefreshLogs()" style="font-size:10px;padding:3px 8px;">🔄 刷新</button>
-      </div>
-      <div id="simLogContainer" style="max-height:250px;overflow-y:auto;font-size:11px;font-family:'SF Mono','Fira Code',monospace;line-height:1.6;">
-        <div style="color:var(--text-muted);padding:10px;text-align:center;">加载中...</div>
-      </div>
-    </div>
-  </div>
-</div>    <!-- view-simulator -->
-
-<!-- ════════════════════════════════════
-      升级管理视图
-      ════════════════════════════════════ -->
-<div id="view-upgrade" style="display:none;">
-  <div class="upgrade-grid">
-
-    <!-- 当前版本 -->
-    <div class="glass">
-      <div class="card-title">当前版本</div>
-      <div style="display:flex;gap:24px;flex-wrap:wrap;">
-        <div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">应用版本</div>
-          <div style="font-size:18px;font-weight:600;font-family:monospace;" id="upgradeAppVersion">加载中...</div>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">项目路径</div>
-          <div style="font-size:13px;font-family:monospace;" id="upgradeProjectDir">加载中...</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 上传升级 -->
-    <div class="glass">
-      <div class="card-title">📦 上传升级包</div>
-      <div class="upload-zone" id="upgradeUploadZone">
-        <div class="upload-icon">📦</div>
-        <div><strong>点击选择或拖拽 .zip 文件到此处</strong></div>
-        <div class="hint">仅支持 .zip 格式</div>
-        <input type="file" id="upgradeFileInput" accept=".zip" title="选择升级包文件(.zip)">
-      </div>
-      <div class="file-info" id="upgradeFileInfo">
-        <span>📦</span>
-        <span class="name" id="upgradeFileName"></span>
-        <span class="size" id="upgradeFileSize"></span>
-        <button class="btn btn-sm" id="upgradeBtnClearFile">✕</button>
-      </div>
-      <button class="btn btn-success" id="upgradeBtnUpload" disabled style="margin-top:10px;">⬆ 开始升级</button>
-      <div class="progress-bar" id="upgradeProgressBar"><div class="bar"></div></div>
-      <div class="result-box" id="upgradeResultBox"></div>
-      <div class="exclude-tags" id="upgradeExcludeTags"></div>
-    </div>
-
-    <!-- 升级记录 -->
-    <div class="glass">
-      <div class="card-title">📋 升级记录</div>
-      <div id="upgradeRecordsContainer"><div style="padding:20px;text-align:center;color:var(--text-muted);">加载中...</div></div>
-    </div>
-  </div>
-</div>    <!-- view-upgrade -->
-
-</div>    <!-- app-container -->
+</div>
 
 <script>
-// ── 全局JS错误展示 ──────────────────────
+// ══ 全局JS错误展示 ══
 window.onerror = function(msg, url, line) {
   const bar = document.getElementById("jsErrorBar");
   if (bar) { bar.textContent = "⚠ JS错误: " + msg + " (行" + line + ") — 点击关闭"; bar.style.display = "block"; }
@@ -874,186 +106,100 @@ window.addEventListener('unhandledrejection', function(e) {
   if (bar) { bar.textContent = "⚠ 异步错误: " + (e.reason?.message || e.reason) + " — 点击关闭"; bar.style.display = "block"; }
   console.error('Unhandled rejection:', e.reason);
 });
-// ═══════════════════════════════════════
-//  WebUI 主逻辑
-// ═══════════════════════════════════════
 
-let currentState = "IDLE";
+// ══ 状态变量 ══
 let sseConnected = false;
 let doorIds = { door1: "DOOR01", door2: "DOOR02" };
+let simEnabled = false;
 
-// ── 初始化 ──────────────────────────────
-
+// ══ 初始化 ══
 function init() {
   const safe = (fn, name) => { try { fn(); } catch(e) { console.error('[Init] '+name+' 失败:', e); } };
-  safe(updateClock, 'updateClock');
-  setInterval(updateClock, 1000);
-  safe(setRcsUrls, 'setRcsUrls');
   safe(loadRcsLogs, 'loadRcsLogs');
   setInterval(loadRcsLogs, 3000);
-  safe(fixSimulatorUrl, 'fixSimulatorUrl');
   safe(refreshDoorStatus, 'refreshDoorStatus');
   setInterval(refreshDoorStatus, 3000);
-  safe(simRefresh, 'simRefresh');
   safe(checkSimStatus, 'checkSimStatus');
   setInterval(checkSimStatus, 5000);
-  safe(upgradeInitUpload, 'upgradeInitUpload');
   safe(connectSSE, 'connectSSE');
 }
 
-// ── 视图切换 ──────────────────────────
-function switchView(name) {
-  // 所有视图列表
-  const views = ["door","zone","config","upgrade","simulator"];
-  views.forEach(v => {
-    const el = document.getElementById("view-" + v);
-    if (el) el.style.display = v === name ? "" : "none";
-  });
-  // 更新导航标签高亮
-  views.forEach(v => {
-    const tabId = "tab" + v.charAt(0).toUpperCase() + v.slice(1);
-    const tab = document.getElementById(tabId);
-    if (tab) tab.className = "nav-tab" + (v === name ? " nav-tab-active" : "");
-  });
-  // 刷新对应视图数据
-  if (name === "simulator") simRefresh();
-  else if (name === "door") loadRcsLogs();
-  else if (name === "zone") { refreshStatus(); fetchZoneStatus(); }
-  else if (name === "config") { loadAllConfig(); loadRuntimeConfig(); loadEnvConfig(); }
-  else if (name === "upgrade") { loadUpgradeVersion(); loadUpgradeRecords(); }
+// ══ 模拟器状态 ══
+async function checkSimStatus() {
+  try {
+    const r = await fetch("/api/asap/sim/status");
+    const d = await r.json();
+    simEnabled = d.enabled;
+    const btn = document.getElementById("simToggleBtn");
+    if (btn) {
+      btn.textContent = simEnabled ? "🔌 已启用" : "🔌 未启用";
+      btn.className = "btn btn-sm " + (simEnabled ? "btn-success" : "btn-warning");
+    }
+  } catch(e) {}
+}
+async function toggleSimMode() {
+  if (simEnabled) {
+    await fetch("/api/asap/sim/disable", {method:"POST"});
+  } else {
+    await fetch("/api/asap/sim/enable", {method:"POST"});
+  }
+  await checkSimStatus();
 }
 
-function fixSimulatorUrl() {
-  // 模拟器已集成到页面内，无需外部链接
-}
-
+// ══ 门状态刷新 ══
 async function refreshDoorStatus() {
   try {
     const resp = await fetch("/api/asap/refresh-doors", { method: "POST" });
     const data = await resp.json();
-    if (data.door1) {
-      doorIds.door1 = data.door1.door_id || "DOOR01";
-      updateDoorCard("door1", data.door1);
-    }
-    if (data.door2) {
-      doorIds.door2 = data.door2.door_id || "DOOR02";
-      updateDoorCard("door2", data.door2);
-    }
-  } catch (e) {
-    console.error("[DoorStatus] 请求失败:", e);
-  }
-}
-
-function toggleDetail(el) {
-  const detail = el.querySelector(".req-detail");
-  if (detail) detail.style.display = detail.style.display === "none" ? "block" : "none";
-}
-
-
-// ── 门编码映射提示 ──────────────────────
-function updateDoorMapping() {
-  const el = document.getElementById("doorCodeMapping");
-  const d1Code = document.getElementById("door1Code");
-  const d2Code = document.getElementById("door2Code");
-  const c1 = d1Code ? d1Code.textContent : "?";
-  const c2 = d2Code ? d2Code.textContent : "?";
-  if (c1 && c2 && c1 !== "─" && c2 !== "─") {
-    el.textContent = `门1:${c1} | 门2:${c2}`;
-  } else {
-    el.textContent = "";
-  }
+    if (data.door1) { doorIds.door1 = data.door1.door_id || "DOOR01"; updateDoorCard("door1", data.door1); }
+    if (data.door2) { doorIds.door2 = data.door2.door_id || "DOOR02"; updateDoorCard("door2", data.door2); }
+  } catch (e) { console.error("[DoorStatus] 请求失败:", e); }
 }
 
 function updateDoorCard(pos, door) {
-  // 适配新旧格式：acs_status (新) 或 door_status (旧)
   const acsStatus = door.acs_status || door.door_status || "?";
-  const rcsStatus = door.rcs_status;  // 新格式直接有翻译值
-  const card = document.getElementById(`${pos}Card`);
-  const statusEl = document.getElementById(`${pos}DoorStatus`);
-  const textEl = document.getElementById(`${pos}DoorText`);
-  const codeEl = document.getElementById(`${pos}Code`);
-  const rcsEl = document.getElementById(`${pos}RcsStatus`);
-
-  // 门编码（RCS doorCode）
+  const rcsStatus = door.rcs_status;
+  const card = document.getElementById(pos + "Card");
+  const statusEl = document.getElementById(pos + "DoorStatus");
+  const textEl = document.getElementById(pos + "DoorText");
+  const codeEl = document.getElementById(pos + "Code");
+  const rcsEl = document.getElementById(pos + "RcsStatus");
   if (codeEl) codeEl.textContent = door.door_code || (pos === "door1" ? "1001" : "1002");
-  // 门 ID
-  const idEl = document.getElementById(`${pos}Id`);
-  if (idEl) idEl.textContent = `(${door.door_id || pos.toUpperCase()})`;
-  // RCS 状态
+  const idEl = document.getElementById(pos + "Id");
+  if (idEl) idEl.textContent = "(" + (door.door_id || pos.toUpperCase()) + ")";
   if (rcsEl) {
     const r = rcsStatus !== undefined ? rcsStatus : (acsStatus === "1" ? 1 : acsStatus === "0" ? 2 : 0);
     const labels = { 0: "离线/故障", 1: "开", 2: "关" };
-    rcsEl.textContent = `status: ${r} (${labels[r] || "?"})`;
+    rcsEl.textContent = "status: " + r + " (" + (labels[r] || "?") + ")";
   }
-
-  // 更新映射提示
-  updateDoorMapping();
-
+  const d1Code = document.getElementById("door1Code");
+  const d2Code = document.getElementById("door2Code");
+  if (d1Code && d2Code) {
+    document.getElementById("doorCodeMapping").textContent = "门1:" + d1Code.textContent + " | 门2:" + d2Code.textContent;
+  }
   if (card) card.className = "door-card";
-
   let statusText, valueText, cls;
-  if (acsStatus === "1") {
-    cls = "open"; statusText = "已打开"; valueText = "开";
-  } else if (acsStatus === "0") {
-    cls = "closed"; statusText = "已关闭"; valueText = "关";
-  } else if (acsStatus === "2") {
-    cls = "fault"; statusText = "故障"; valueText = "故";
-  } else {
-    cls = ""; statusText = "未知"; valueText = "?";
-  }
-
+  if (acsStatus === "1") { cls = "open"; statusText = "已打开"; valueText = "开"; }
+  else if (acsStatus === "0") { cls = "closed"; statusText = "已关闭"; valueText = "关"; }
+  else if (acsStatus === "2") { cls = "fault"; statusText = "故障"; valueText = "故"; }
+  else { cls = ""; statusText = "未知"; valueText = "?"; }
   if (card) card.classList.add(cls);
   if (statusEl) { statusEl.textContent = valueText; statusEl.className = "door-status-value " + cls; }
   if (textEl) textEl.textContent = statusText;
 }
 
-// ── HTTP 请求 ───────────────────────────
-
+// ══ 状态查询 ══
 async function fetchStatus() {
   try {
     const resp = await fetch("/api/asap/status");
     const data = await resp.json();
     updateDashboard(data);
-  } catch (e) {
-    console.error("获取状态失败:", e);
-  }
+  } catch (e) { console.error("获取状态失败:", e); }
 }
-
-async function fetchZoneStatus() {
-  try {
-    const resp = await fetch("/api/asap/zone-status");
-    const data = await resp.json();
-    updateZoneDashboard(data);
-  } catch (e) {
-    console.error("获取区域状态失败:", e);
-  }
-}
-
-async function zoneForceDoor(doorCode, status) {
-  const label = status === "1" ? "开" : "关";
-  if (!confirm(`确认强制设置 ${doorCode} 为${label}？`)) return;
-  try {
-    const resp = await fetch("/api/asap/zone/force-door", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ door_code: doorCode, status: status }),
-    });
-    const data = await resp.json();
-    if (data.code === 1000) {
-      setTimeout(fetchZoneStatus, 500); // 刷新状态
-    }
-  } catch (e) {
-    console.error("强制设置门状态失败:", e);
-  }
-}
-
-// ── SSE 事件流 + 状态更新 ────────────────
 
 function updateDashboard(data) {
-  // 更新门状态（新格式：door1/door2）
   if (data.door1) updateDoorCard("door1", data.door1);
   if (data.door2) updateDoorCard("door2", data.door2);
-  // 更新方向
   const dirEl = document.getElementById("directionLabel");
   if (dirEl && data.direction_label) {
     dirEl.textContent = data.direction_label || "未判定";
@@ -1061,57 +207,46 @@ function updateDashboard(data) {
   }
 }
 
-// ── 区域视图 ────────────────────────────
-
-function updateZoneDashboard(data) {
+// ══ 手动控制 ══
+async function manualOpen(doorId) {
   try {
-    const fsEl = document.getElementById("zoneFlowState");
-    if (fsEl) {
-      const s = data.state || "idle";
-      const labels = { idle: "空闲", entering: "进入中", inside: "区域内", exiting: "退出中", error: "异常" };
-      fsEl.textContent = labels[s] || s;
-    }
-    updateZoneDoorCard(data.door_code || "q001", data.door_status || "2");
-
-    // 更新区域信息卡片
-    const zidEl = document.getElementById("zoneId");
-    const zsEl = document.getElementById("zoneStatus");
-    const zbyEl = document.getElementById("zoneOccupiedBy");
-    const agvEl = document.getElementById("currentAgv");
-    const zlcEl = document.getElementById("zoneLastCheck");
-
-    if (zidEl) zidEl.textContent = data.zone_id || "--";
-    if (zsEl) {
-      const s = data.zone_status || "unknown";
-      zsEl.textContent = s === "occupied" ? "占用中" : s === "granted" ? "已授权" : s === "available" ? "可用" : s;
-      zsEl.className = "zone-value " + (s === "occupied" ? "occupied" : s === "granted" ? "active" : "unknown");
-    }
-    if (zbyEl) zbyEl.textContent = data.zone_occupied_by || "--";
-    if (agvEl) agvEl.textContent = data.current_agv || "--";
-    if (zlcEl) zlcEl.textContent = data.last_check
-      ? new Date(data.last_check + "Z").toLocaleTimeString()
-      : "等待中...";
-  } catch(e) { console.error('updateZoneDashboard:', e); }
+    await fetch("/api/asap/manual/open?door_id=" + doorId, { method: "POST" });
+    await fetchStatus();
+  } catch (e) { console.error("开门失败:", e); }
+}
+async function manualClose(doorId) {
+  try {
+    await fetch("/api/asap/manual/close?door_id=" + doorId, { method: "POST" });
+    await fetchStatus();
+  } catch (e) { console.error("关门失败:", e); }
 }
 
-function updateZoneDoorCard(doorCode, doorStatus) {
+// ══ RCS 请求日志 ══
+async function loadRcsLogs() {
   try {
-    const prefix = "zoneEntry";
-    const card = document.getElementById(prefix + "Door");
-    const statusEl = document.getElementById(prefix + "DoorStatus");
-    const textEl = document.getElementById(prefix + "DoorText");
-    const idEl = document.getElementById(prefix + "DoorId");
-    if (!card || !statusEl) return;
-    if (idEl) idEl.textContent = "(" + doorCode + ")";
-    card.className = "door-card";
-    const isOpen = doorStatus === "1";
-    card.classList.add(isOpen ? "open" : "closed");
-    statusEl.className = "door-status-value " + (isOpen ? "open" : "closed");
-    statusEl.textContent = isOpen ? "开" : "关";
-    if (textEl) textEl.textContent = isOpen ? "已打开" : "已关闭";
-  } catch(e) { console.error('updateZoneDoorCard:', e); }
+    const resp = await fetch("/api/asap/request-log?limit=50");
+    const data = await resp.json();
+    const container = document.getElementById("rcsLogContainer");
+    if (!container) return;
+    const count = document.getElementById("rcsReqCount");
+    if (count) count.textContent = "(共" + data.total + "条)";
+    if (!data.logs || data.logs.length === 0) {
+      container.innerHTML = '<div style="color:var(--text-muted);padding:10px;text-align:center;">无请求记录</div>';
+      return;
+    }
+    container.innerHTML = data.logs.reverse().map(l => {
+      const catColor = l.category === "control" ? "var(--warning)" : "var(--accent)";
+      return '<div style="margin:4px 0;padding:4px 8px;background:var(--card-bg);border-radius:4px;">' +
+        '<span style="font-size:10px;color:var(--text-muted);margin-right:8px;">' + (l.time || "") + '</span>' +
+        '<span style="font-size:10px;color:' + catColor + ';margin-right:8px;">' + (l.category || "") + '</span>' +
+        '<span style="font-size:11px;">' + JSON.stringify(l.request) + '</span>' +
+        '<span style="font-size:10px;color:var(--text-muted);margin-left:8px;">→ ' + (l.status || "") + '</span>' +
+        '</div>';
+    }).join("");
+  } catch (e) { console.error("RCS日志加载失败:", e); }
 }
 
+// ══ SSE 事件流 ══
 function connectSSE() {
   if (sseConnected) return;
   try {
@@ -1119,930 +254,53 @@ function connectSSE() {
     es.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
-        if (msg.event_type === "snapshot" && msg.data) {
-          // 初始快照（可能来自旧格式，向下兼容）
-          if (msg.data.door1 || msg.data.door2) updateDashboard(msg.data);
-        } else if (msg.event_type === "air_shower_snapshot" && msg.data) {
-          updateDashboard(msg.data);
-        } else if (msg.event_type === "zone_snapshot" && msg.data) {
-          updateZoneDashboard(msg.data);
-        } else if (msg.event_type !== "heartbeat") {
-          addLog(msg);
-        }
-      } catch (err) { /* ignore parse errors */ }
+        if (msg.event_type === "air_shower_snapshot" && msg.data) updateDashboard(msg.data);
+        else if (msg.event_type === "snapshot" && msg.data) updateDashboard(msg.data);
+        else if (msg.event_type !== "heartbeat") addLog(msg);
+      } catch (err) {}
     };
     es.onerror = () => { sseConnected = false; es.close(); };
     es.onopen = () => { sseConnected = true; };
   } catch (e) {
-    console.error('SSE连接失败:', e);
-    // 回退到轮询
     sseConnected = false;
     fetchStatus();
     setInterval(fetchStatus, 3000);
   }
 }
 
-async function manualOpen(doorId) {
-  try {
-    const resp = await fetch(`/api/asap/manual/open?door_id=${doorId}`, { method: "POST" });
-    addLog({ event_type: "command", data: { msg: `手动开门: ${doorId}` } });
-    await fetchStatus();
-  } catch (e) {
-    console.error("开门失败:", e);
-  }
-}
-
-async function manualClose(doorId) {
-  try {
-    const resp = await fetch(`/api/asap/manual/close?door_id=${doorId}`, { method: "POST" });
-    addLog({ event_type: "command", data: { msg: `手动关门: ${doorId}` } });
-    await fetchStatus();
-  } catch (e) {
-    console.error("关门失败:", e);
-  }
-}
-
-async function refreshStatus() {
-  await fetchStatus();
-  addLog({ event_type: "command", data: { msg: "手动刷新状态" } });
-}
-
-// ── 日志 ──────────────────────────────────
-
-function addLog(msg) {
+// ══ 事件日志 ══
+function addLog(entry) {
   const container = document.getElementById("logContainer");
-  const entry = document.createElement("div");
-  entry.className = "log-entry fade-in";
-
-  const time = msg.timestamp
-    ? new Date(msg.timestamp).toLocaleTimeString()
-    : new Date().toLocaleTimeString();
-
-  let level = "INFO";
-  let text = "";
-
-  switch (msg.event_type) {
-    case "snapshot": return;
-    case "state_change": text = `状态: ${msg.data?.from || ""} → ${msg.data?.to || ""}`; break;
-    case "door_opened": text = `${msg.data?.door_id} 已打开`; break;
-    case "door_closed": text = `${msg.data?.door_id} 已关闭`; break;
-    case "door_control": text = `${msg.data?.door_id} ${msg.data?.action === "open" ? "开门" : "关门"}`; break;
-    case "zone_granted": text = `区域授权: ${msg.data?.permission_id}`; break;
-    case "zone_released": text = "区域已释放"; break;
-    case "shower_complete": text = "风淋完成"; break;
-    case "agv_entered": text = `AGV(${msg.data?.agv}) 进入`; break;
-    case "agv_exited": text = `AGV(${msg.data?.agv}) 驶离`; break;
-    case "flow_complete": text = "流程完成"; level = "INFO"; break;
-    case "command": text = `操作: ${msg.data?.msg || ""}`; break;
-    case "heartbeat": return;
-    default: text = msg.event_type + ": " + JSON.stringify(msg.data || {}); break;
-  }
-
-  entry.innerHTML = `<span class="time">${time}</span><span class="level ${level}">${level}</span>${text}`;
-  container.appendChild(entry);
-  container.scrollTop = container.scrollHeight;
-
-  // 限制日志条目
-  while (container.children.length > 200) {
-    container.removeChild(container.firstChild);
-  }
+  if (!container) return;
+  const time = new Date().toLocaleTimeString();
+  const div = document.createElement("div");
+  div.className = "log-entry";
+  div.innerHTML = '<span class="time">' + time + '</span>' + JSON.stringify(entry);
+  container.appendChild(div);
+  while (container.children.length > 200) container.removeChild(container.firstChild);
 }
-
 function clearLog() {
-  document.getElementById("logContainer").innerHTML = "";
+  const container = document.getElementById("logContainer");
+  if (container) container.innerHTML = "";
 }
 
-// ── 时钟 ──────────────────────────────────
-
-function updateClock() {
-  const now = new Date();
-  document.getElementById("clock").textContent =
-    now.toLocaleTimeString("zh-CN", { hour12: false });
-}
-
-// ── 主题切换 ──────────────────────────────
-
+// ══ 主题切换 ══
 function toggleTheme() {
   const html = document.documentElement;
   const current = html.getAttribute("data-theme");
   const next = current === "dark" ? "light" : "dark";
   html.setAttribute("data-theme", next);
-  document.querySelector(".theme-toggle").textContent =
-    next === "dark" ? "🌙" : "☀️";
   localStorage.setItem("theme", next);
+  document.querySelector(".theme-toggle").textContent = next === "dark" ? "🌙" : "☀️";
 }
 
-// 恢复主题
+// ══ 启动 ══
 (function() {
   const saved = localStorage.getItem("theme");
-  if (saved) {
-    document.documentElement.setAttribute("data-theme", saved);
-    document.querySelector(".theme-toggle").textContent =
-      saved === "dark" ? "🌙" : "☀️";
-  }
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+  document.querySelector(".theme-toggle").textContent = (saved || "dark") === "dark" ? "🌙" : "☀️";
+  init();
 })();
-
-// ── RCS 配置地址 ─────────────────────────
-
-function setRcsUrls() {
-  const host = window.location.host;
-  document.getElementById("rcsControlUrl").textContent =
-    `http://${host}/api/rcs/controlDoor`;
-  document.getElementById("rcsStatusUrl").textContent =
-    `http://${host}/api/rcs/doorStatus`;
-
-  // 从 API 加载当前 RCS 配置
-  fetch("/api/asap/config/rcs")
-    .then(r => r.json())
-    .then(cfg => {
-      const input = document.getElementById("rcsReportUrlInput");
-      if (cfg.change_status_url) {
-        input.value = cfg.change_status_url;
-        input.placeholder = cfg.change_status_url;
-      }
-      // 加载门编码映射
-      const mapping = cfg.door_code_mapping || {};
-      const outerId = doorIds.door1 || "DOOR01";
-      const innerId = doorIds.door2 || "DOOR02";
-      const outerInput = document.getElementById("rcsOuterCodeInput");
-      const innerInput = document.getElementById("rcsInnerCodeInput");
-      if (outerInput) outerInput.value = mapping[outerId] || Object.values(mapping)[0] || "1001";
-      if (innerInput) innerInput.value = mapping[innerId] || Object.values(mapping)[1] || "1002";
-      // 显示对应的 door_id
-      const outerLabel = document.getElementById("rcsOuterDoorId");
-      const innerLabel = document.getElementById("rcsInnerDoorId");
-      if (outerLabel) outerLabel.textContent = outerId;
-      if (innerLabel) innerLabel.textContent = innerId;
-    })
-    .catch(() => {});
-}
-
-async function saveRcsUrl() {
-  const url = document.getElementById("rcsReportUrlInput").value.trim();
-  const outerCode = document.getElementById("rcsOuterCodeInput").value.trim();
-  const innerCode = document.getElementById("rcsInnerCodeInput").value.trim();
-  const btn = document.getElementById("rcsSaveBtn");
-  const status = document.getElementById("rcsSaveStatus");
-
-  btn.disabled = true;
-  btn.textContent = "保存中...";
-  status.style.display = "none";
-
-  try {
-    const body = { change_status_url: url, report_interval: 0.5 };
-    // 构建门编码映射
-    if (outerCode || innerCode) {
-      const outerId = doorIds.door1 || "DOOR01";
-      const innerId = doorIds.door2 || "DOOR02";
-      body.door_code_mapping = {};
-      if (outerCode) body.door_code_mapping[outerId] = outerCode;
-      if (innerCode) body.door_code_mapping[innerId] = innerCode;
-    }
-    const resp = await fetch("/api/asap/config/rcs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await resp.json();
-    status.textContent = "✓ 已保存";
-    status.style.display = "inline";
-    status.style.color = "var(--success)";
-    setTimeout(() => { status.style.display = "none"; }, 3000);
-  } catch (e) {
-    status.textContent = "✗ 保存失败";
-    status.style.display = "inline";
-    status.style.color = "var(--danger)";
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "保存";
-  }
-}
-
-// ── AB 门配置 ──────────────────────────
-async function saveAngelUrl() {
-  const url = document.getElementById("angelBaseUrlInput").value.trim();
-  const outerId = document.getElementById("angelOuterDoorIdInput").value.trim();
-  const innerId = document.getElementById("angelInnerDoorIdInput").value.trim();
-  const status = document.getElementById("angelSaveStatus");
-  if (!url && !outerId && !innerId) { status.textContent = "✗ 至少填写一项"; status.style.display = "inline"; status.style.color = "var(--danger)"; return; }
-  try {
-    const body = {};
-    if (url) body.base_url = url;
-    if (outerId) body.outer_door_id = outerId;
-    if (innerId) body.inner_door_id = innerId;
-    const resp = await fetch("/api/asap/config/angel", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await resp.json();
-    status.textContent = "✓ 已保存 (热更新)";
-    status.style.display = "inline";
-    status.style.color = "var(--success)";
-    // 同步更新门ID变量
-    if (data.outer_door_id) doorIds.door1 = data.outer_door_id;
-    if (data.inner_door_id) doorIds.door2 = data.inner_door_id;
-    setTimeout(() => { status.style.display = "none"; }, 3000);
-  } catch (e) {
-    status.textContent = "✗ 保存失败";
-    status.style.display = "inline";
-    status.style.color = "var(--danger)";
-  }
-}
-
-function loadAngelConfig() {
-  fetch("/api/asap/config/angel")
-    .then(r => r.json())
-    .then(data => {
-      document.getElementById("angelBaseUrlInput").value = data.base_url || "";
-      const outerEl = document.getElementById("angelOuterDoorIdInput");
-      const innerEl = document.getElementById("angelInnerDoorIdInput");
-      if (outerEl) outerEl.value = data.outer_door_id || "DOOR_OUTER";
-      if (innerEl) innerEl.value = data.inner_door_id || "DOOR_INNER";
-      if (data.outer_door_id) doorIds.door1 = data.outer_door_id;
-      if (data.inner_door_id) doorIds.door2 = data.inner_door_id;
-    })
-    .catch(() => {});
-}
-
-// ── 区域管控配置 ────────────────────────
-async function saveZoneConfig() {
-  const enter = document.getElementById("cfgZoneEnterInput").value.trim();
-  const exit = document.getElementById("cfgZoneExitInput").value.trim();
-  const status = document.getElementById("cfgZoneStatusInput").value.trim();
-  const entryCode = document.getElementById("cfgZoneEntryCodeInput").value.trim();
-  const statusEl = document.getElementById("cfgZoneSaveStatus");
-  try {
-    const body = {};
-    if (enter) body.enter_url = enter;
-    if (exit) body.exit_url = exit;
-    if (status) body.status_url = status;
-    if (entryCode) body.entry_door_code = entryCode;
-    const resp = await fetch("/api/asap/config/zone", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await resp.json();
-    statusEl.textContent = "✓ 已保存";
-    statusEl.style.display = "inline";
-    statusEl.style.color = "var(--success)";
-    setTimeout(() => { statusEl.style.display = "none"; }, 3000);
-  } catch (e) {
-    statusEl.textContent = "✗ 保存失败";
-    statusEl.style.display = "inline";
-    statusEl.style.color = "var(--danger)";
-  }
-}
-
-function loadZoneConfig() {
-  fetch("/api/asap/config/zone")
-    .then(r => r.json())
-    .then(data => {
-      document.getElementById("cfgZoneEnterInput").value = data.enter_url || "";
-      document.getElementById("cfgZoneExitInput").value = data.exit_url || "";
-      document.getElementById("cfgZoneStatusInput").value = data.status_url || "";
-      document.getElementById("cfgZoneEntryCodeInput").value = data.entry_door_code || "q001";
-      document.getElementById("cfgZoneExitCodeInput").value = data.exit_door_code || "q002";
-    })
-    .catch(() => {});
-}
-
-// ── 统一配置加载/保存 ──────────────────
-
-async function loadAllConfig() {
-  const statusEl = document.getElementById("cfgSaveStatus");
-  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
-  const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  try {
-    const resp = await fetch("/api/asap/config/all");
-    const data = await resp.json();
-    if (data.error) { console.error(data.error); return; }
-
-    // 版本号
-    setText("cfgVersion", "版本 " + (data.version || 0));
-
-    // RCS
-    const rcs = data.rcs || {};
-    setVal("rcsReportUrlInput", rcs.change_status_url || "");
-    const rcsMap = rcs.door_code_mapping || {};
-    const outerCode = rcsMap[doorIds.door1 || "DOOR01"] || Object.values(rcsMap)[0] || "1001";
-    const innerCode = rcsMap[doorIds.door2 || "DOOR02"] || Object.values(rcsMap)[1] || "1002";
-    setVal("rcsOuterCodeInput", outerCode);
-    setVal("rcsInnerCodeInput", innerCode);
-
-    // Angel
-    const angel = data.angel || {};
-    setVal("angelBaseUrlInput", angel.base_url || "");
-    setVal("angelOuterDoorIdInput", angel.outer_door_id || "DOOR_OUTER");
-    setVal("angelInnerDoorIdInput", angel.inner_door_id || "DOOR_INNER");
-
-    // Zone
-    const zone = data.zone || {};
-    setVal("cfgZoneEnterInput", zone.enter_url || "");
-    setVal("cfgZoneExitInput", zone.exit_url || "");
-    setVal("cfgZoneStatusInput", zone.status_url || "");
-    setVal("cfgZoneEntryCodeInput", zone.entry_door_code || "q001");
-
-    // Air shower
-    const ash = data.air_shower || {};
-    // (no air_shower UI yet, but values available)
-
-    // Sim
-    const sim = data.sim || {};
-    document.getElementById("simOpenDelayInput").value = sim.auto_open_delay ?? 2.0;
-    document.getElementById("simCloseDelayInput").value = sim.auto_close_delay ?? 2.0;
-    document.getElementById("simZoneIdInput").value = sim.zone_id || "zone_001";
-    document.getElementById("simZoneBusyCheck").checked = sim.zone_always_busy || false;
-
-    if (statusEl) { statusEl.textContent = "✓ 已读取"; statusEl.style.display = "inline"; statusEl.style.color = "var(--success)"; }
-    setTimeout(() => { if (statusEl) statusEl.style.display = "none"; }, 2000);
-  } catch (e) {
-    console.error("加载配置失败:", e);
-    if (statusEl) { statusEl.textContent = "✗ 加载失败"; statusEl.style.display = "inline"; statusEl.style.color = "var(--danger)"; }
-  }
-}
-
-async function saveAllConfig() {
-  const statusEl = document.getElementById("cfgSaveStatus");
-  statusEl.textContent = "保存中..."; statusEl.style.display = "inline"; statusEl.style.color = "var(--text-muted)";
-
-  // 收集所有配置
-  const rcsMap = {};
-  const outerRcsCode = document.getElementById("rcsOuterCodeInput").value.trim();
-  const innerRcsCode = document.getElementById("rcsInnerCodeInput").value.trim();
-  const outerId = doorIds.door1 || "DOOR01";
-  const innerId = doorIds.door2 || "DOOR02";
-  if (outerRcsCode) rcsMap[outerId] = outerRcsCode;
-  if (innerRcsCode) rcsMap[innerId] = innerRcsCode;
-
-  const payload = {
-    angel: {
-      base_url: document.getElementById("angelBaseUrlInput").value.trim(),
-      outer_door_id: document.getElementById("angelOuterDoorIdInput").value.trim(),
-      inner_door_id: document.getElementById("angelInnerDoorIdInput").value.trim(),
-    },
-    zone: {
-      enter_url: document.getElementById("cfgZoneEnterInput").value.trim(),
-      exit_url: document.getElementById("cfgZoneExitInput").value.trim(),
-      status_url: document.getElementById("cfgZoneStatusInput").value.trim(),
-      entry_door_code: document.getElementById("cfgZoneEntryCodeInput").value.trim(),
-    },
-    rcs: {
-      change_status_url: document.getElementById("rcsReportUrlInput").value.trim(),
-      door_code_mapping: rcsMap,
-    },
-    air_shower: {
-      duration: 4.0,
-    },
-    sim: {
-      auto_open_delay: parseFloat(document.getElementById("simOpenDelayInput").value) || 2.0,
-      auto_close_delay: parseFloat(document.getElementById("simCloseDelayInput").value) || 2.0,
-      zone_always_busy: document.getElementById("simZoneBusyCheck").checked,
-      zone_id: document.getElementById("simZoneIdInput").value.trim() || "zone_001",
-    },
-  };
-
-  try {
-    const resp = await fetch("/api/asap/config/all", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await resp.json();
-    if (data.success) {
-      document.getElementById("cfgVersion").textContent = "版本 " + (data.version || "?");
-      statusEl.textContent = "✓ " + data.message;
-      statusEl.style.color = "var(--success)";
-    } else {
-      statusEl.textContent = "✗ " + (data.error || "保存失败");
-      statusEl.style.color = "var(--danger)";
-    }
-    statusEl.style.display = "inline";
-    setTimeout(() => { statusEl.style.display = "none"; }, 4000);
-  } catch (e) {
-    statusEl.textContent = "✗ 保存失败: " + e.message;
-    statusEl.style.color = "var(--danger)";
-    statusEl.style.display = "inline";
-  }
-}
-
-// ── 模拟器配置 ──────────────────────────
-
-function loadSimConfig() {
-  fetch("/api/asap/config/sim")
-    .then(r => r.json())
-    .then(data => {
-      const odEl = document.getElementById("simOpenDelayInput");
-      const cdEl = document.getElementById("simCloseDelayInput");
-      const ziEl = document.getElementById("simZoneIdInput");
-      const zbEl = document.getElementById("simZoneBusyCheck");
-      if (odEl) odEl.value = data.auto_open_delay ?? 2.0;
-      if (cdEl) cdEl.value = data.auto_close_delay ?? 2.0;
-      if (ziEl) ziEl.value = data.zone_id || "air_shower_room";
-      if (zbEl) zbEl.checked = data.zone_always_busy || false;
-    })
-    .catch(() => {});
-}
-
-async function saveSimConfig() {
-  const openDelay = parseFloat(document.getElementById("simOpenDelayInput").value) || 2.0;
-  const closeDelay = parseFloat(document.getElementById("simCloseDelayInput").value) || 2.0;
-  const zoneId = document.getElementById("simZoneIdInput").value.trim();
-  const zoneBusy = document.getElementById("simZoneBusyCheck").checked;
-  const status = document.getElementById("simSaveStatus");
-  try {
-    const resp = await fetch("/api/asap/config/sim", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        auto_open_delay: openDelay,
-        auto_close_delay: closeDelay,
-        zone_id: zoneId || undefined,
-        zone_always_busy: zoneBusy,
-      }),
-    });
-    const data = await resp.json();
-    status.textContent = "✓ 已保存 (即时生效)";
-    status.style.display = "inline";
-    status.style.color = "var(--success)";
-    setTimeout(() => { status.style.display = "none"; }, 3000);
-  } catch (e) {
-    status.textContent = "✗ 保存失败";
-    status.style.display = "inline";
-    status.style.color = "var(--danger)";
-  }
-}
-
-// ── 模拟器控制 ──────────────────────────
-async function simRefresh() {
-  try {
-    const resp = await fetch("/sim/api/sim/status");
-    const data = await resp.json();
-    simUpdateDoor("Outer", data.outer_door);
-    simUpdateDoor("Inner", data.inner_door);
-    document.getElementById("simZoneId").textContent = data.zone?.zone_id || "-";
-    const zs = document.getElementById("simZoneState");
-    const zb = document.getElementById("simZoneBy");
-    if (data.zone?.state === "occupied" || data.zone?.status === "occupied") {
-      zs.textContent = "被占用"; zs.style.color = "var(--warning)";
-      zb.textContent = data.zone?.occupied_by || "-";
-    } else {
-      zs.textContent = "空闲"; zs.style.color = "var(--success)";
-      zb.textContent = "-";
-    }
-    simRefreshLogs();
-  } catch (e) {
-  }
-}
-
-function simUpdateDoor(pos, door) {
-  const card = document.getElementById(`sim${pos}Card`);
-  const stateEl = document.getElementById(`sim${pos}State`);
-  const codeEl = document.getElementById(`sim${pos}Code`);
-  if (!card || !stateEl) return;
-  // 更新门ID显示
-  if (codeEl && door?.door_id) codeEl.textContent = door.door_id;
-  const state = door?.state || "0";
-  let label, cls;
-  if (state === "1" || state === "OPENED") { label = "打开"; cls = "open"; }
-  else if (state === "0" || state === "CLOSED") { label = "关闭"; cls = "closed"; }
-  else if (state === "2" || state === "FAULT") { label = "故障 ⚠"; cls = "fault"; }
-  else { label = "过渡中"; cls = "closed"; }
-  card.className = "door-card " + cls;
-  stateEl.textContent = label;
-  stateEl.className = "door-status-value " + cls;
-}
-
-// ── 模拟器开关 ──────────────────────────
-async function checkSimStatus() {
-  try {
-    const resp = await fetch("/api/asap/sim/status");
-    const data = await resp.json();
-    const btn = document.getElementById("simToggleBtn");
-    if (data.enabled) {
-      btn.textContent = "🔌 已启用";
-      btn.className = "btn btn-sm";
-      btn.style.background = "rgba(52,211,153,0.2)";
-      btn.style.color = "var(--success)";
-      btn.style.border = "1px solid rgba(52,211,153,0.3)";
-    } else {
-      btn.textContent = "🔌 未启用";
-      btn.className = "btn btn-sm";
-      btn.style.background = "rgba(107,114,128,0.2)";
-      btn.style.color = "var(--text-muted)";
-      btn.style.border = "1px solid var(--card-border)";
-    }
-  } catch (e) { /* ignore */ }
-}
-
-async function toggleSimMode() {
-  try {
-    const resp = await fetch("/api/asap/sim/status");
-    const data = await resp.json();
-    if (data.enabled) {
-      await fetch("/api/asap/sim/disable", { method: "POST" });
-    } else {
-      await fetch("/api/asap/sim/enable", { method: "POST" });
-    }
-    await checkSimStatus();
-    simRefresh();
-  } catch (e) { /* ignore */ }
-}
-
-async function simSetDoor(doorId, state) {
-  await fetch(`/sim/api/sim/door/set?door_id=${doorId}&state=${state}`, { method: "POST" });
-  simRefresh();
-}
-
-async function simFault(doorId) {
-  await fetch(`/sim/api/sim/door/fault?door_id=${doorId}&enable=true`, { method: "POST" });
-  setTimeout(() => fetch(`/sim/api/sim/door/fault?door_id=${doorId}&enable=false`, { method: "POST" }).then(() => simRefresh()), 2000);
-  simRefresh();
-}
-
-async function simZoneBusy(busy) {
-  await fetch(`/sim/api/sim/zone/busy?busy=${busy}&client=webui`, { method: "POST" });
-  simRefresh();
-}
-
-async function simReset() {
-  await fetch("/sim/api/sim/reset", { method: "POST" });
-  simRefresh();
-}
-
-async function simRefreshLogs() {
-  try {
-    const resp = await fetch("/sim/api/sim/logs");
-    const data = await resp.json();
-    const container = document.getElementById("simLogContainer");
-    if (!data.logs || data.logs.length === 0) {
-      container.innerHTML = '<div style="color:var(--text-muted);padding:10px;text-align:center;">暂无请求日志</div>'; return;
-    }
-    let html = "";
-    for (const entry of data.logs.slice().reverse().slice(0, 30)) {
-      const reqStr = entry.request ? JSON.stringify(entry.request, null, 2) : "";
-      const respStr = entry.response ? JSON.stringify(entry.response, null, 2) : "";
-      html += `<div style="padding:4px 6px;border-bottom:1px solid var(--card-border);cursor:pointer;" onclick="toggleDetail(this)">
-        <div style="display:flex;align-items:center;gap:4px;">
-          <span style="color:var(--text-muted);font-size:10px;">${entry.time}</span>
-          <span style="font-size:9px;font-weight:600;color:var(--accent);background:rgba(94,158,255,0.1);padding:0 4px;border-radius:3px;">${entry.category}</span>
-          <span style="color:var(--text-primary);font-size:10px;">${entry.target}</span>
-          <span style="color:var(--text-secondary);font-size:10px;margin-left:auto;">${entry.message}</span>
-        </div>
-        <div class="req-detail" style="display:none;margin-top:4px;padding:6px;background:rgba(0,0,0,0.15);border-radius:6px;font-size:10px;font-family:monospace;">
-          ${reqStr ? `<div style="color:var(--text-muted);">📤 请求体:</div><pre style="margin:0;color:var(--text-secondary);white-space:pre-wrap;">${escapeHtml(reqStr)}</pre>` : ""}
-          ${respStr ? `<div style="color:var(--text-muted);margin-top:4px;">📥 响应体:</div><pre style="margin:0;color:var(--success);white-space:pre-wrap;">${escapeHtml(respStr)}</pre>` : ""}
-        </div>
-      </div>`;
-    }
-    container.innerHTML = html;
-  } catch (e) { /* ignore */ }
-}
-
-// ── RCS 请求日志 ────────────────────────
-async function loadRcsLogs() {
-  try {
-    const resp = await fetch("/api/asap/request-log?limit=50");
-    const data = await resp.json();
-    const container = document.getElementById("rcsLogContainer");
-    const counter = document.getElementById("rcsReqCount");
-    if (counter) counter.textContent = `(共 ${data.total} 条)`;
-    if (data.logs.length === 0) {
-      container.innerHTML = '<div style="color:var(--text-muted);padding:10px;text-align:center;">等待 RCS 请求...</div>';
-      return;
-    }
-    let html = "";
-    for (const entry of data.logs.slice().reverse()) {
-      const method = entry.method || "POST";
-      const reqStr = entry.request ? JSON.stringify(entry.request, null, 2) : "";
-      const respStr = entry.response ? (typeof entry.response === 'string' ? entry.response : JSON.stringify(entry.response, null, 2)) : "";
-      const statusIcon = entry.status >= 200 && entry.status < 300 ? "✅" : "❌";
-      html += `<div style="padding:4px 6px;border-bottom:1px solid var(--card-border);cursor:pointer;" onclick="toggleDetail(this)" title="点击展开/收起报文详情">
-        <div style="display:flex;align-items:center;gap:4px;">
-          <span style="color:var(--text-muted);font-size:10px;white-space:nowrap;">${entry.time}</span>
-          <span style="font-size:9px;font-weight:600;color:var(--accent);background:rgba(94,158,255,0.1);padding:0 4px;border-radius:3px;">${method}</span>
-          <span style="color:var(--text-primary);font-size:10px;word-break:break-all;">${entry.endpoint}</span>
-          <span style="margin-left:auto;font-size:10px;">${statusIcon} ${entry.status}</span>
-        </div>
-        <div class="req-detail" style="display:none;margin-top:4px;padding:6px;background:rgba(0,0,0,0.15);border-radius:6px;font-size:10px;font-family:'SF Mono','Fira Code',monospace;">
-          <div style="color:var(--text-muted);margin-bottom:2px;">📤 请求体:</div>
-          <pre style="margin:0;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;">${escapeHtml(reqStr || "(无请求体)")}</pre>
-          <div style="color:var(--text-muted);margin:4px 0 2px;">📥 响应体 (${entry.status}):</div>
-          <pre style="margin:0;color:var(--success);white-space:pre-wrap;word-break:break-all;">${escapeHtml(respStr || "(无响应体)")}</pre>
-        </div>
-      </div>`;
-    }
-    container.innerHTML = html;
-  } catch (e) {
-    // ignore
-  }
-}
-
-function escapeHtml(str) {
-  if (!str) return "";
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-function copyText(el) {
-  const text = el.textContent;
-  navigator.clipboard.writeText(text).then(() => {
-    const orig = el.style.color;
-    el.style.color = "var(--success)";
-    el.textContent = "✓ 已复制";
-    setTimeout(() => {
-      el.style.color = orig;
-      // restore text - but we don't have original, just reload the url
-      setRcsUrls();
-    }, 1500);
-  }).catch(() => {});
-}
-
-// ── 升级管理 ────────────────────────────
-
-let upgradeSelectedFile = null;
-
-function upgradeFormatSize(bytes) {
-  if (bytes < 1024) return bytes + " B";
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
-  return (bytes / 1048576).toFixed(1) + " MB";
-}
-
-function upgradeInitUpload() {
-  const fileInput = document.getElementById("upgradeFileInput");
-  const uploadZone = document.getElementById("upgradeUploadZone");
-  const fileInfo = document.getElementById("upgradeFileInfo");
-  const fileName = document.getElementById("upgradeFileName");
-  const fileSize = document.getElementById("upgradeFileSize");
-  const btnUpload = document.getElementById("upgradeBtnUpload");
-  const btnClear = document.getElementById("upgradeBtnClearFile");
-  const progressBar = document.getElementById("upgradeProgressBar");
-  const resultBox = document.getElementById("upgradeResultBox");
-
-  if (!fileInput) return;
-
-  fileInput.addEventListener("change", function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".zip")) {
-      alert("仅支持 .zip 格式");
-      this.value = "";
-      return;
-    }
-    upgradeSelectedFile = file;
-    fileName.textContent = file.name;
-    fileSize.textContent = upgradeFormatSize(file.size);
-    fileInfo.classList.add("show");
-    btnUpload.disabled = false;
-    resultBox.classList.remove("show");
-  });
-
-  btnClear.addEventListener("click", function() {
-    upgradeSelectedFile = null;
-    fileInput.value = "";
-    fileInfo.classList.remove("show");
-    btnUpload.disabled = true;
-    resultBox.classList.remove("show");
-  });
-
-  uploadZone.addEventListener("dragover", function(e) { e.preventDefault(); this.classList.add("dragover"); });
-  uploadZone.addEventListener("dragleave", function(e) { e.preventDefault(); this.classList.remove("dragover"); });
-  uploadZone.addEventListener("drop", function(e) {
-    e.preventDefault(); this.classList.remove("dragover");
-    const file = e.dataTransfer.files[0];
-    if (file && file.name.toLowerCase().endsWith(".zip")) {
-      fileInput.files = e.dataTransfer.files;
-      fileInput.dispatchEvent(new Event("change"));
-    } else {
-      alert("仅支持 .zip 格式");
-    }
-  });
-
-  btnUpload.addEventListener("click", function() {
-    if (!upgradeSelectedFile) return;
-    const formData = new FormData();
-    formData.append("file", upgradeSelectedFile);
-    const remark = document.getElementById("upgradeRemarkInput").value.trim();
-    if (remark) formData.append("remark", remark);
-
-    btnUpload.disabled = true;
-    btnUpload.textContent = "⏳ 升级中...";
-    progressBar.classList.add("show");
-    resultBox.classList.remove("show");
-
-    fetch("/api/asap/upgrade/upload", { method: "POST", body: formData })
-      .then(async res => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "升级失败");
-        return data;
-      })
-      .then(data => {
-        progressBar.classList.remove("show");
-        resultBox.className = "result-box show success";
-        resultBox.textContent = "✅ " + data.message;
-        setTimeout(() => location.reload(), 4000);
-      })
-      .catch(err => {
-        progressBar.classList.remove("show");
-        resultBox.className = "result-box show error";
-        resultBox.textContent = "❌ " + err.message;
-        btnUpload.disabled = false;
-        btnUpload.textContent = "⬆ 开始升级";
-      });
-  });
-}
-
-async function loadUpgradeVersion() {
-  try {
-    const resp = await fetch("/api/asap/upgrade/version");
-    const data = await resp.json();
-    const el = document.getElementById("upgradeAppVersion");
-    if (!el) return;
-    if (data.success) {
-      el.textContent = data.info.app_version || "unknown";
-      const dirEl = document.getElementById("upgradeProjectDir");
-      if (dirEl && data.info.project_dir) dirEl.textContent = data.info.project_dir;
-    }
-  } catch (e) {
-    const el = document.getElementById("upgradeAppVersion");
-    if (el) el.textContent = "加载失败";
-  }
-}
-
-async function loadUpgradeRecords() {
-  try {
-    const resp = await fetch("/api/asap/upgrade/records");
-    const data = await resp.json();
-    if (!data.success) {
-      document.getElementById("upgradeRecordsContainer").innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">加载失败</div>';
-      return;
-    }
-    const records = data.records || [];
-    const excludePatterns = data.exclude_patterns || [];
-
-    // 排除标签
-    const tagsContainer = document.getElementById("upgradeExcludeTags");
-    if (tagsContainer) {
-      tagsContainer.innerHTML = '<span style="font-size:10px;color:var(--text-muted);width:100%;margin-bottom:4px;">以下保留不受升级影响：</span>';
-      excludePatterns.forEach(p => {
-        const tag = document.createElement("span");
-        tag.className = "tag";
-        tag.textContent = p;
-        tagsContainer.appendChild(tag);
-      });
-    }
-
-    // 记录表格
-    const container = document.getElementById("upgradeRecordsContainer");
-    if (!container) return;
-    if (records.length === 0) {
-      container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">📭 暂无升级记录</div>';
-      return;
-    }
-
-    let html = `<table class="record-table"><thead><tr>
-      <th>时间</th><th>版本变化</th><th>升级说明</th><th>状态</th><th>文件</th><th>操作</th>
-    </tr></thead><tbody>`;
-
-    records.forEach(r => {
-      const ts = r.timestamp || "";
-      const dateStr = ts ? `${ts.slice(0,4)}-${ts.slice(4,6)}-${ts.slice(6,8)} ${ts.slice(9,11)}:${ts.slice(11,13)}` : "-";
-      const isRollback = r.status === "rollback";
-
-      let versionHtml = isRollback
-        ? `<span class="version-tag" style="color:var(--warning);">${r.old_version || "?"} ← ${r.new_version || "?"}</span>`
-        : `<span class="version-tag">${r.old_version || "?"} → ${r.new_version || "?"}</span>`;
-
-      let statusHtml = "";
-      if (r.status === "success") statusHtml = '<span style="font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(52,211,153,0.15);color:var(--success);">成功</span>';
-      else if (r.status === "rollback") statusHtml = '<span style="font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(251,191,36,0.15);color:var(--warning);">回滚</span>';
-      else statusHtml = '<span style="font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(248,113,113,0.15);color:var(--danger);">失败</span>';
-
-      let notesHtml = "-";
-      const notes = r.release_notes || [];
-      const title = r.release_title || "";
-      if (title || notes.length > 0) {
-        notesHtml = "";
-        if (title && !title.startsWith("从 v")) notesHtml += `<div style="font-weight:600;margin-bottom:2px;">${title}</div>`;
-        notes.forEach(n => { notesHtml += `<div style="opacity:0.8;">• ${n}</div>`; });
-      }
-
-      const showRollback = r.backup_name && r.backup_name.startsWith("upgrade_");
-      const rollbackBtn = showRollback
-        ? `<button class="btn btn-warning btn-sm" onclick="upgradeRollback('${r.backup_name}')" style="margin:0;" title="回滚到此版本">↩ 回滚</button>`
-        : "";
-
-      html += `<tr>
-        <td style="white-space:nowrap;font-size:11px;">${dateStr}</td>
-        <td>${versionHtml}</td>
-        <td style="max-width:180px;font-size:11px;">${notesHtml}</td>
-        <td>${statusHtml}</td>
-        <td>${r.files_overlay || "-"}</td>
-        <td>${rollbackBtn}</td>
-      </tr>`;
-    });
-
-    html += "</tbody></table>";
-    container.innerHTML = html;
-  } catch (e) {
-    document.getElementById("upgradeRecordsContainer").innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">加载失败</div>';
-  }
-}
-
-function upgradeRollback(backupName) {
-  if (!confirm(`确认回滚到备份 "${backupName}"？\n回滚前会自动备份当前代码，完成后系统将自动重启。`)) return;
-  fetch(`/api/asap/upgrade/rollback/${encodeURIComponent(backupName)}`, { method: "POST" })
-    .then(async res => {
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "回滚失败");
-      return data;
-    })
-    .then(data => {
-      alert("✅ " + data.message);
-      setTimeout(() => location.reload(), 3000);
-    })
-    .catch(err => {
-      alert("❌ " + err.message);
-    });
-}
-
-// ── 配置管理子标签切换 ──────────────────
-function switchConfigTab(name) {
-  const tabs = ["visual", "runtime", "env"];
-  tabs.forEach(t => {
-    const el = document.getElementById("cfg-" + t);
-    if (el) el.style.display = t === name ? "" : "none";
-    const tabEl = document.getElementById("cfgTab" + t.charAt(0).toUpperCase() + t.slice(1));
-    if (tabEl) tabEl.className = "nav-tab" + (t === name ? " nav-tab-active" : "");
-  });
-  if (name === "runtime") loadRuntimeConfig();
-  else if (name === "env") loadEnvConfig();
-}
-
-// ── 通用: 配置文件加载/保存模板 ────────
-async function _loadConfigFile(editorId, statusId, url) {
-  const editor = document.getElementById(editorId);
-  const status = document.getElementById(statusId);
-  if (!editor) return;
-  editor.placeholder = "加载中...";
-  status.textContent = "正在加载...";
-  status.style.color = "var(--text-muted)";
-  try {
-    const resp = await fetch(url);
-    const data = await resp.json();
-    if (data.success) {
-      editor.value = data.content;
-      status.textContent = "✓ 已加载";
-      status.style.color = "var(--success)";
-    } else {
-      status.textContent = "✗ 加载失败";
-      status.style.color = "var(--danger)";
-    }
-  } catch (e) {
-    editor.value = "";
-    status.textContent = "✗ " + e.message;
-    status.style.color = "var(--danger)";
-  }
-}
-
-async function _saveConfigFile(editorId, statusId, url) {
-  const editor = document.getElementById(editorId);
-  const status = document.getElementById(statusId);
-  if (!editor) return;
-  status.textContent = "正在保存...";
-  status.style.color = "var(--text-muted)";
-  try {
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: editor.value }),
-    });
-    const data = await resp.json();
-    if (data.success) {
-      let msg = "✓ " + data.message;
-      if (data.hot_reloaded) msg += " 🔥";
-      status.textContent = msg;
-      status.style.color = "var(--success)";
-    } else {
-      status.textContent = "✗ " + (data.error || "保存失败");
-      status.style.color = "var(--danger)";
-    }
-  } catch (e) {
-    status.textContent = "✗ " + e.message;
-    status.style.color = "var(--danger)";
-  }
-}
-
-// ── 运行时配置（热更新） ────────────────
-function loadRuntimeConfig() { _loadConfigFile("cfgRuntimeEditor", "cfgRuntimeStatus", "/api/asap/config/runtime"); }
-function saveRuntimeConfig() { _saveConfigFile("cfgRuntimeEditor", "cfgRuntimeStatus", "/api/asap/config/runtime"); }
-
-// ── 静态配置（需重启） ──────────────────
-function loadEnvConfig() { _loadConfigFile("cfgEnvEditor", "cfgEnvStatus", "/api/asap/config/env"); }
-function saveEnvConfig() { _saveConfigFile("cfgEnvEditor", "cfgEnvStatus", "/api/asap/config/env"); }
-
-// ── 启动 ──────────────────────────────────
-init();
 </script>
 </body>
 </html>

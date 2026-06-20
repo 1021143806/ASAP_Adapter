@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>配置管理 — ASAP Adapter</title>
+<link rel="stylesheet" href="/static/common.css">
+</head>
+<body>
+  <div id="jsErrorBar" style="display:none;background:var(--danger);color:#fff;padding:8px 16px;font-size:12px;text-align:center;position:sticky;top:0;z-index:9999;" onclick="this.style.display='none'"></div>
+
+<div class="app-container">
+  <!-- ══ 导航栏 ══ -->
+  <header class="header">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <h1>⚙ ASAP Adapter</h1>
+      <nav style="display:flex;gap:4px;">
+        <a href="/" class="nav-tab">🚪 风淋门</a>
+        <a href="/zone" class="nav-tab">📡 区域管控</a>
+        <a href="/config" class="nav-tab nav-tab-active">⚙ 配置</a>
+        <a href="/upgrade" class="nav-tab">⬆ 升级</a>
+        <a href="/sim" class="nav-tab">🎮 模拟器</a>
+      </nav>
+    </div>
+    <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
+  </header>
+
+  <!-- ══ 配置视图 ══ -->
+  <div class="dashboard">
+    <!-- 统一配置 -->
+    <div class="glass log-panel-full" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:13px;font-weight:600;">📋 统一配置</span>
+        <span style="font-size:12px;color:var(--text-muted);">data/config.toml</span>
+        <span style="font-size:11px;color:var(--accent);" id="cfgVersion">版本 --</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn" onclick="loadAllConfig()">🔄 读取</button>
+        <button class="btn btn-success" onclick="saveAllConfig()">💾 保存</button>
+        <span id="cfgSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+      </div>
+    </div>
+
+    <!-- RCS 配置 -->
+    <div class="glass log-panel-full">
+      <div class="card-title">🔗 RCS 第三方对接</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+        RCS/WDCS 系统的 <code>access_config</code> 表配置以下地址：
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">控制接口</span>
+          <code class="zone-value" style="font-size:10px;word-break:break-all;" id="rcsControlUrl">POST /api/rcs/doorStatus</code>
+        </div>
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">状态查询</span>
+          <code class="zone-value" style="font-size:10px;word-break:break-all;" id="rcsStatusUrl">POST /api/rcs/doorStatus</code>
+        </div>
+      </div>
+      <div class="zone-row" style="margin-top:8px;">
+        <span class="zone-label">状态上报URL</span>
+        <input type="text" id="rcsReportUrlInput" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;margin:0 8px;">
+        <button class="btn btn-success btn-sm" onclick="saveRcsUrl()">保存</button>
+      </div>
+      <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">外门 RCS编码</span>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="text" id="rcsOuterCodeInput" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;" placeholder="1001">
+            <span style="color:var(--text-muted);">→</span>
+            <span id="rcsOuterDoorId" style="color:var(--accent);font-family:monospace;min-width:60px;">DOOR01</span>
+          </div>
+        </div>
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
+          <span class="zone-label">内门 RCS编码</span>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="text" id="rcsInnerCodeInput" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;" placeholder="1002">
+            <span style="color:var(--text-muted);">→</span>
+            <span id="rcsInnerDoorId" style="color:var(--accent);font-family:monospace;min-width:60px;">DOOR02</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Angel AB门配置 -->
+    <div class="glass">
+      <div class="card-title">🚪 Angel AB门配置</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="zone-row"><span class="zone-label">Base URL</span>
+          <input type="text" id="angelBaseUrlInput" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;margin-left:8px;">
+        </div>
+        <div class="zone-row"><span class="zone-label">外门ID</span>
+          <input type="text" id="angelOuterDoorIdInput" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;margin-left:8px;">
+        </div>
+        <div class="zone-row"><span class="zone-label">内门ID</span>
+          <input type="text" id="angelInnerDoorIdInput" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;margin-left:8px;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Zone 区域配置 -->
+    <div class="glass">
+      <div class="card-title">📡 区域管控配置</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="zone-row"><span class="zone-label">Enter URL</span>
+          <input type="text" id="cfgZoneEnterInput" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;margin-left:8px;">
+        </div>
+        <div class="zone-row"><span class="zone-label">Exit URL</span>
+          <input type="text" id="cfgZoneExitInput" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;margin-left:8px;">
+        </div>
+        <div class="zone-row"><span class="zone-label">Status URL</span>
+          <input type="text" id="cfgZoneStatusInput" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;margin-left:8px;">
+        </div>
+        <div class="zone-row"><span class="zone-label">区域门编码</span>
+          <input type="text" id="cfgZoneEntryCodeInput" value="q001" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;margin-left:8px;">
+        </div>
+      </div>
+    </div>
+
+    <!-- 运行时配置 -->
+    <div class="glass log-panel-full">
+      <div class="card-title" style="display:flex;justify-content:space-between;">
+        <span>⚡ 运行时配置 (runtime.toml)</span>
+        <button class="btn btn-success btn-sm" onclick="saveRuntimeConfig()">保存</button>
+      </div>
+      <textarea id="cfgRuntimeEditor" style="width:100%;height:200px;background:rgba(0,0,0,0.2);color:var(--text-primary);font-family:'SF Mono',monospace;font-size:12px;border:1px solid var(--card-border);border-radius:8px;padding:10px;resize:vertical;"></textarea>
+    </div>
+
+    <!-- 静态配置 -->
+    <div class="glass log-panel-full">
+      <div class="card-title" style="display:flex;justify-content:space-between;">
+        <span>🔧 静态配置 (env.toml)</span>
+        <button class="btn btn-success btn-sm" onclick="saveEnvConfig()">保存</button>
+        <span style="font-size:10px;color:var(--warning);">需重启</span>
+      </div>
+      <textarea id="cfgEnvEditor" style="width:100%;height:200px;background:rgba(0,0,0,0.2);color:var(--text-primary);font-family:'SF Mono',monospace;font-size:12px;border:1px solid var(--card-border);border-radius:8px;padding:10px;resize:vertical;"></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+window.onerror = function(msg, url, line) {
+  const bar = document.getElementById("jsErrorBar");
+  if (bar) { bar.textContent = "⚠ " + msg + " (行" + line + ")"; bar.style.display = "block"; }
+};
+
+function init() {
+  loadAllConfig();
+  loadRuntimeConfig();
+  loadEnvConfig();
+}
+
+// ══ 统一配置 ══
+async function loadAllConfig() {
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ""; };
+  try {
+    const resp = await fetch("/api/asap/config/all");
+    const data = await resp.json();
+    if (data.error) return;
+    document.getElementById("cfgVersion").textContent = "版本 " + (data.version || 0);
+    const rcs = data.rcs || {};
+    setVal("rcsReportUrlInput", rcs.change_status_url);
+    const rcsMap = rcs.door_code_mapping || {};
+    setVal("rcsOuterCodeInput", Object.values(rcsMap)[0] || "1001");
+    setVal("rcsInnerCodeInput", Object.values(rcsMap)[1] || "1002");
+    const angel = data.angel || {};
+    setVal("angelBaseUrlInput", angel.base_url);
+    setVal("angelOuterDoorIdInput", angel.outer_door_id);
+    setVal("angelInnerDoorIdInput", angel.inner_door_id);
+    const zone = data.zone || {};
+    setVal("cfgZoneEnterInput", zone.enter_url);
+    setVal("cfgZoneExitInput", zone.exit_url);
+    setVal("cfgZoneStatusInput", zone.status_url);
+    setVal("cfgZoneEntryCodeInput", zone.entry_door_code);
+  } catch (e) { console.error("加载配置失败:", e); }
+}
+
+async function saveAllConfig() {
+  const outerId = document.getElementById("angelOuterDoorIdInput").value.trim() || "DOOR01";
+  const innerId = document.getElementById("angelInnerDoorIdInput").value.trim() || "DOOR02";
+  const outerCode = document.getElementById("rcsOuterCodeInput").value.trim() || "1001";
+  const innerCode = document.getElementById("rcsInnerCodeInput").value.trim() || "1002";
+  const payload = {
+    angel: {
+      base_url: document.getElementById("angelBaseUrlInput").value.trim(),
+      outer_door_id: outerId,
+      inner_door_id: innerId,
+    },
+    zone: {
+      enter_url: document.getElementById("cfgZoneEnterInput").value.trim(),
+      exit_url: document.getElementById("cfgZoneExitInput").value.trim(),
+      status_url: document.getElementById("cfgZoneStatusInput").value.trim(),
+      entry_door_code: document.getElementById("cfgZoneEntryCodeInput").value.trim(),
+    },
+    rcs: {
+      change_status_url: document.getElementById("rcsReportUrlInput").value.trim(),
+      door_code_mapping: { [outerId]: outerCode, [innerId]: innerCode },
+    },
+  };
+  try {
+    const resp = await fetch("/api/asap/config/all", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    const el = document.getElementById("cfgSaveStatus");
+    if (data.success) { el.textContent = "✓ 已保存"; el.style.color = "var(--success)"; }
+    else { el.textContent = "✗ 失败"; el.style.color = "var(--danger)"; }
+    el.style.display = "inline";
+    setTimeout(() => { el.style.display = "none"; }, 3000);
+  } catch (e) { console.error("保存失败:", e); }
+}
+
+// ══ 运行时/静态配置 ══
+async function loadRuntimeConfig() {
+  try {
+    const r = await fetch("/api/asap/config/runtime");
+    const d = await r.json();
+    document.getElementById("cfgRuntimeEditor").value = d.content || "";
+  } catch (e) {}
+}
+async function saveRuntimeConfig() {
+  const content = document.getElementById("cfgRuntimeEditor").value;
+  await fetch("/api/asap/config/runtime", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+}
+async function loadEnvConfig() {
+  try {
+    const r = await fetch("/api/asap/config/env");
+    const d = await r.json();
+    document.getElementById("cfgEnvEditor").value = d.content || "";
+  } catch (e) {}
+}
+async function saveEnvConfig() {
+  const content = document.getElementById("cfgEnvEditor").value;
+  await fetch("/api/asap/config/env", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+}
+async function saveRcsUrl() {
+  const url = document.getElementById("rcsReportUrlInput").value.trim();
+  const outerCode = document.getElementById("rcsOuterCodeInput").value.trim();
+  const innerCode = document.getElementById("rcsInnerCodeInput").value.trim();
+  const outerId = document.getElementById("angelOuterDoorIdInput").value.trim() || "DOOR01";
+  const innerId = document.getElementById("angelInnerDoorIdInput").value.trim() || "DOOR02";
+  await fetch("/api/asap/config/rcs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      change_status_url: url,
+      door_code_mapping: { [outerId]: outerCode, [innerId]: innerCode },
+    }),
+  });
+}
+
+// ══ 主题 ══
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  document.querySelector(".theme-toggle").textContent = next === "dark" ? "🌙" : "☀️";
+}
+
+(function() {
+  const saved = localStorage.getItem("theme");
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+  document.querySelector(".theme-toggle").textContent = (saved || "dark") === "dark" ? "🌙" : "☀️";
+  init();
+})();
+</script>
+</body>
+</html>

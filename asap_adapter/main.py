@@ -161,7 +161,7 @@ def create_app(config: AppConfig) -> FastAPI:
     app = FastAPI(
         title="ASAP Adapter",
         description="风淋门-区域管控协议适配器",
-        version="3.0.0",
+        version="3.1.0",
         lifespan=lifespan,
     )
 
@@ -192,11 +192,29 @@ def create_app(config: AppConfig) -> FastAPI:
                 headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
             )
 
+        @app.get("/zone")
+        async def zone_page():
+            return FileResponse(
+                str(static_dir / "zone.html"),
+                media_type="text/html; charset=utf-8",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+            )
+
+        @app.get("/config")
+        async def config_page():
+            return FileResponse(
+                str(static_dir / "config.html"),
+                media_type="text/html; charset=utf-8",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+            )
+
         @app.get("/upgrade")
         async def upgrade_page():
-            # 升级功能已集成到主页面，/upgrade 重定向到首页
-            from fastapi.responses import RedirectResponse
-            return RedirectResponse(url="/")
+            return FileResponse(
+                str(static_dir / "upgrade.html"),
+                media_type="text/html; charset=utf-8",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+            )
 
         # 模拟器 WebUI（仅 sim_available 时挂载）
         if _sim_available:

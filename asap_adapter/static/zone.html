@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>区域管控 — ASAP Adapter</title>
+<link rel="stylesheet" href="/static/common.css">
+</head>
+<body>
+  <div id="jsErrorBar" style="display:none;background:var(--danger);color:#fff;padding:8px 16px;font-size:12px;text-align:center;position:sticky;top:0;z-index:9999;" onclick="this.style.display='none'"></div>
+
+<div class="app-container">
+  <!-- ══ 导航栏 ══ -->
+  <header class="header">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <h1>📡 ASAP Adapter</h1>
+      <nav style="display:flex;gap:4px;">
+        <a href="/" class="nav-tab">🚪 风淋门</a>
+        <a href="/zone" class="nav-tab nav-tab-active">📡 区域管控</a>
+        <a href="/config" class="nav-tab">⚙ 配置</a>
+        <a href="/upgrade" class="nav-tab">⬆ 升级</a>
+        <a href="/sim" class="nav-tab">🎮 模拟器</a>
+      </nav>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="header-badge">
+        <span class="status-dot online" id="connDot"></span>
+        <span id="connStatus">已连接</span>
+      </div>
+      <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
+    </div>
+  </header>
+
+  <!-- ══ 区域管控视图 ══ -->
+  <div class="dashboard">
+    <!-- 区域信息 -->
+    <div class="glass zone-info">
+      <div class="card-title">📡 区域状态</div>
+      <div class="zone-row">
+        <span class="zone-label">区域ID</span>
+        <span class="zone-value unknown" id="zoneId">--</span>
+      </div>
+      <div class="zone-row">
+        <span class="zone-label">占用状态</span>
+        <span class="zone-value unknown" id="zoneStatus">--</span>
+      </div>
+      <div class="zone-row">
+        <span class="zone-label">被占用者</span>
+        <span class="zone-value unknown" id="zoneOccupiedBy">--</span>
+      </div>
+      <div class="zone-row">
+        <span class="zone-label">当前AGV</span>
+        <span class="zone-value unknown" id="currentAgv">--</span>
+      </div>
+      <div class="zone-row">
+        <span class="zone-label">上次查询</span>
+        <span class="zone-value unknown" id="zoneLastCheck">等待中...</span>
+      </div>
+      <button class="btn" onclick="fetchZoneStatus()" style="margin-top:8px;">🔄 刷新</button>
+    </div>
+
+    <!-- 流程状态 + 门卡 -->
+    <div class="glass">
+      <div class="card-title">流程状态 <span id="zoneFlowState" style="font-size:12px;color:var(--text-muted);">空闲</span></div>
+      <div class="door-card" id="zoneEntryDoor">
+        <div class="door-name"><span class="door-icon">🚪</span>区域门 <span style="font-size:10px;color:var(--text-muted);" id="zoneEntryDoorId">(q001)</span></div>
+        <div class="door-status-value closed" id="zoneEntryDoorStatus">关</div>
+        <div class="door-status-text" id="zoneEntryDoorText">已关闭</div>
+        <div class="door-controls" style="margin-top:8px;">
+          <button class="btn btn-success" onclick="zoneForceDoor('q001','1')">🔓 强制开</button>
+          <button class="btn btn-danger" onclick="zoneForceDoor('q001','2')">🔒 强制关</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 步骤日志 -->
+    <div class="glass log-panel-full">
+      <div class="card-title">📦 步骤报文</div>
+      <div id="zoneStepLog" style="max-height:300px;overflow-y:auto;font-size:11px;font-family:'SF Mono','Fira Code',monospace;">
+        <div style="color:var(--text-muted);padding:10px;text-align:center;">暂无记录</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+window.onerror = function(msg, url, line) {
+  const bar = document.getElementById("jsErrorBar");
+  if (bar) { bar.textContent = "⚠ " + msg + " (行" + line + ")"; bar.style.display = "block"; }
+};
+
+// ══ 初始化 ══
+let sseConnected = false;
+
+function init() {
+  fetchZoneStatus();
+  setInterval(fetchZoneStatus, 3000);
+  connectSSE();
+}
+
+// ══ 区域状态 ══
+async function fetchZoneStatus() {
+  try {
+    const resp = await fetch("/api/asap/zone-status");
+    const data = await resp.json();
+    updateZoneDashboard(data);
+  } catch (e) { console.error("获取区域状态失败:", e); }
+}
+
+function updateZoneDashboard(data) {
+  const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  const setClass = (id, cls) => { const el = document.getElementById(id); if (el) el.className = cls; };
+
+  // 流程状态
+  setText("zoneFlowState", { idle: "空闲", entering: "进入中", inside: "区域内", exiting: "退出中", error: "异常" }[data.state] || data.state);
+
+  // 门状态
+  const isOpen = data.door_status === "1";
+  const doorCard = document.getElementById("zoneEntryDoor");
+  if (doorCard) { doorCard.className = "door-card " + (isOpen ? "open" : "closed"); }
+  setClass("zoneEntryDoorStatus", "door-status-value " + (isOpen ? "open" : "closed"));
+  setText("zoneEntryDoorStatus", isOpen ? "开" : "关");
+  setText("zoneEntryDoorText", isOpen ? "已打开" : "已关闭");
+
+  // 区域信息
+  setText("zoneId", data.zone_id || "--");
+  const s = data.zone_status || "unknown";
+  setText("zoneStatus", { occupied: "占用中", granted: "已授权", available: "可用", unknown: "未知" }[s] || s);
+  setClass("zoneStatus", "zone-value " + { occupied: "occupied", granted: "granted", available: "available" }[s] || "unknown");
+  setText("zoneOccupiedBy", data.zone_occupied_by || "--");
+  setText("currentAgv", data.current_agv || "--");
+  setText("zoneLastCheck", data.last_check ? new Date(data.last_check + "Z").toLocaleTimeString() : "等待中...");
+
+  // 步骤日志
+  const stepLog = data.step_log || [];
+  const container = document.getElementById("zoneStepLog");
+  if (container && stepLog.length > 0) {
+    container.innerHTML = stepLog.map(e =>
+      '<div style="margin:4px 0;padding:6px 8px;background:var(--card-bg);border-radius:4px;">' +
+      '<span style="font-size:10px;color:var(--text-muted);">' + (e.timestamp || "") + '</span> ' +
+      '<span style="font-size:10px;color:' + (e.direction === "send" ? "var(--warning)" : e.direction === "recv" ? "var(--success)" : "var(--accent)") + ';">' +
+      (e.direction === "send" ? "↑请求" : e.direction === "recv" ? "↓响应" : "·" + e.direction) + '</span> ' +
+      '<span style="font-size:10px;color:var(--text-muted);">' + (e.step_name || e.action || "") + '</span>' +
+      '<pre style="font-size:10px;margin-top:2px;color:var(--text-secondary);max-height:100px;overflow:auto;">' +
+      JSON.stringify(e.payload || {}, null, 2) + '</pre></div>'
+    ).join("");
+  }
+}
+
+// ══ 强制开关 ══
+async function zoneForceDoor(doorCode, status) {
+  if (!confirm("确认强制设置 " + doorCode + " 为" + (status === "1" ? "开" : "关") + "？")) return;
+  try {
+    await fetch("/api/asap/zone/force-door", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ door_code: doorCode, status: status }),
+    });
+    setTimeout(fetchZoneStatus, 500);
+  } catch (e) { console.error("强制设置失败:", e); }
+}
+
+// ══ SSE ══
+function connectSSE() {
+  if (sseConnected) return;
+  try {
+    const es = new EventSource("/api/sse/events");
+    es.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.event_type === "zone_snapshot" && msg.data) updateZoneDashboard(msg.data);
+      } catch (err) {}
+    };
+    es.onerror = () => { sseConnected = false; es.close(); };
+    es.onopen = () => { sseConnected = true; };
+  } catch (e) {
+    sseConnected = false;
+    setInterval(fetchZoneStatus, 3000);
+  }
+}
+
+// ══ 主题 ══
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute("data-theme");
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  document.querySelector(".theme-toggle").textContent = next === "dark" ? "🌙" : "☀️";
+}
+
+(function() {
+  const saved = localStorage.getItem("theme");
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+  document.querySelector(".theme-toggle").textContent = (saved || "dark") === "dark" ? "🌙" : "☀️";
+  init();
+})();
+</script>
+</body>
+</html>

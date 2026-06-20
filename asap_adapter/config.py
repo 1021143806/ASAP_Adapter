@@ -73,8 +73,6 @@ class AirShowerConfig:
 
 @dataclass
 class RcsConfig:
-    change_status_url: str = ""
-    report_interval: float = 0.5
     door_code_mapping: dict = field(default_factory=lambda: {"DOOR01": "1001", "DOOR02": "1002"})
 
 
@@ -144,54 +142,6 @@ def load_config(path: Optional[str] = None) -> AppConfig:
 
 def runtime_path() -> str:
     return os.path.join(_project_dir(), "config", "runtime.toml")
-
-
-def read_runtime() -> str:
-    """读取 runtime.toml 内容（文件编辑器用）"""
-    path = runtime_path()
-    if not os.path.exists(path):
-        return ""
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
-
-
-def save_runtime(content: str) -> dict:
-    """
-    保存 runtime.toml，验证 TOML 格式，自动备份
-    返回 {success, message, backup?}
-    """
-    path = runtime_path()
-    try:
-        tomllib.loads(content)
-    except Exception as e:
-        return {"success": False, "error": f"TOML 格式错误: {e}"}
-
-    backup = ""
-    if os.path.exists(path):
-        import shutil
-        backup = path + ".bak"
-        shutil.copy2(path, backup)
-
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(content)
-
-    return {"success": True, "message": "运行时配置已保存，即时生效", "backup": backup}
-
-
-def apply_runtime_string(config: AppConfig, content: str):
-    """
-    将 runtime.toml 内容热更新到内存中的 config 对象
-    """
-    data = tomllib.loads(content)
-    _apply_section(config, data, "angel", ("base_url", "outer_door_id", "inner_door_id"))
-    _apply_section(config, data, "zone", ("enter_url", "exit_url", "status_url", "zone_poll_interval"))
-    _apply_section(config, data, "rcs", ("change_status_url", "report_interval", "door_code_mapping"))
-    _apply_section(config, data, "air_shower",
-                   ("duration", "agv_enter_timeout", "agv_exit_timeout"))
-    _apply_section(config, data, "sim",
-                   ("auto_open_delay", "auto_close_delay",
-                    "zone_always_busy", "zone_id"))
 
 
 def env_path() -> str:
@@ -296,8 +246,6 @@ def _generate_unified_file():
         "exit_max_retries = 30\n"
         "zone_poll_interval = 300.0\n\n"
         "[rcs]\n"
-        'change_status_url = "http://rcs-host/changeDoorStatus"\n'
-        "report_interval = 0.5\n"
         'door_code_mapping = {DOOR01 = "1001", DOOR02 = "1002"}\n\n'
         "[air_shower]\n"
         "duration = 4.0\n"
@@ -345,7 +293,7 @@ def _load_unified(cfg: AppConfig):
                          "exit_retry_interval", "exit_max_retries",
                          "zone_poll_interval"))
         _apply_section(cfg, data, "rcs",
-                       ("change_status_url", "report_interval", "door_code_mapping"))
+                       ("door_code_mapping",))
         _apply_section(cfg, data, "air_shower",
                        ("duration", "agv_enter_timeout", "agv_exit_timeout"))
         _apply_section(cfg, data, "sim",
@@ -448,9 +396,6 @@ def save_unified_config(data: dict) -> dict:
         rcs = merged.get("rcs", {})
         if rcs:
             sections.append("[rcs]")
-            for k in ("change_status_url", "report_interval"):
-                if k in rcs:
-                    sections.append(_toml_kv(k, rcs[k]))
             dcm = rcs.get("door_code_mapping", {})
             if dcm:
                 sections.append("")
@@ -485,12 +430,13 @@ def save_unified_config(data: dict) -> dict:
 
         content = "\n".join(sections)
 
-        # 备份
+        # 备份（版本化: data/config.toml.v{version}，最多保留20个）
         backup = ""
         if os.path.exists(UNIFIED_CONFIG_PATH):
-            import shutil
-            backup = UNIFIED_CONFIG_PATH + ".bak"
+            backup = UNIFIED_CONFIG_PATH + f".v{old_version}"
             shutil.copy2(UNIFIED_CONFIG_PATH, backup)
+            # 清理超出20个的旧备份
+            _cleanup_versioned_backups()
 
         # 确保目录存在
         os.makedirs(os.path.dirname(UNIFIED_CONFIG_PATH), exist_ok=True)
@@ -514,6 +460,163 @@ def save_unified_config(data: dict) -> dict:
         return {"success": False, "error": str(e)}
 
 
+# ═══════════════════════════════════════════
+#  配置导出/导入/版本管理
+# ═══════════════════════════════════════════
+
+MAX_CONFIG_VERSIONS = 20
+
+
+def _cleanup_versioned_backups():
+    """清理超出 MAX_CONFIG_VERSIONS 的旧版本备份"""
+    import glob
+    import os as _os
+    pattern = UNIFIED_CONFIG_PATH + ".v*"
+    files = sorted(glob.glob(pattern))
+    while len(files) > MAX_CONFIG_VERSIONS:
+        _os.remove(files[0])
+        files.pop(0)
+
+
+def export_config() -> str:
+    """导出当前 data/config.toml 内容"""
+    if os.path.exists(UNIFIED_CONFIG_PATH):
+        with open(UNIFIED_CONFIG_PATH, "r", encoding="utf-8") as f:
+            return f.read()
+    return _generate_unified_content()
+
+
+def import_config(content: str) -> dict:
+    """
+    导入配置：验证 TOML → 备份当前 → 写入 → 返回结果
+    """
+    try:
+        tomllib.loads(content)
+    except Exception as e:
+        return {"success": False, "error": f"TOML 格式错误: {e}"}
+
+    try:
+        # 备份当前
+        import shutil
+        if os.path.exists(UNIFIED_CONFIG_PATH):
+            old_data = {}
+            try:
+                with open(UNIFIED_CONFIG_PATH, "rb") as f:
+                    old_data = tomllib.load(f)
+                old_ver = old_data.get("meta", {}).get("version", 0)
+            except Exception:
+                old_ver = 0
+            backup = UNIFIED_CONFIG_PATH + f".v{old_ver}"
+            shutil.copy2(UNIFIED_CONFIG_PATH, backup)
+            _cleanup_versioned_backups()
+
+        # 写入
+        os.makedirs(os.path.dirname(UNIFIED_CONFIG_PATH), exist_ok=True)
+        with open(UNIFIED_CONFIG_PATH, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        return {"success": True, "message": "配置已导入，即时生效"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def list_config_versions() -> list:
+    """列出所有版本备份"""
+    import glob
+    import os as _os
+    pattern = UNIFIED_CONFIG_PATH + ".v*"
+    files = sorted(glob.glob(pattern), reverse=True)
+    versions = []
+    for fp in files:
+        vnum = fp.rsplit(".v", 1)[-1]
+        try:
+            vnum = int(vnum)
+        except ValueError:
+            continue
+        mtime = datetime.fromtimestamp(_os.path.getmtime(fp)).strftime("%Y-%m-%d %H:%M:%S")
+        # 读取 meta
+        note = ""
+        try:
+            with open(fp, "rb") as f:
+                d = tomllib.load(f)
+            note = d.get("meta", {}).get("updated", "")
+        except Exception:
+            pass
+        versions.append({"version": vnum, "file": _os.path.basename(fp), "time": mtime, "note": note})
+    return versions
+
+
+def get_config_version(version: int) -> dict:
+    """获取指定版本的配置内容"""
+    fp = UNIFIED_CONFIG_PATH + f".v{version}"
+    if not os.path.exists(fp):
+        return {"error": f"版本 {version} 不存在"}
+    with open(fp, "r", encoding="utf-8") as f:
+        content = f.read()
+    data = tomllib.loads(content)
+    return {"version": version, "content": content, "data": data}
+
+
+def rollback_config(version: int) -> dict:
+    """回滚到指定版本"""
+    src = UNIFIED_CONFIG_PATH + f".v{version}"
+    if not os.path.exists(src):
+        return {"success": False, "error": f"版本 {version} 不存在"}
+    try:
+        import shutil
+        # 先备份当前
+        if os.path.exists(UNIFIED_CONFIG_PATH):
+            old_data = {}
+            try:
+                with open(UNIFIED_CONFIG_PATH, "rb") as f:
+                    old_data = tomllib.load(f)
+                old_ver = old_data.get("meta", {}).get("version", 0)
+            except Exception:
+                old_ver = 0
+            pre_rollback = UNIFIED_CONFIG_PATH + f".v{old_ver}"
+            shutil.copy2(UNIFIED_CONFIG_PATH, pre_rollback)
+
+        # 恢复
+        shutil.copy2(src, UNIFIED_CONFIG_PATH)
+        _cleanup_versioned_backups()
+        return {"success": True, "message": f"已回滚到版本 {version}", "version": version}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def _generate_unified_content() -> str:
+    """生成默认统一配置 TOML 文本"""
+    return (
+        "# ASAP Adapter 业务配置\n"
+        "# 可通过 WebUI 修改，即时生效\n\n"
+        "[angel]\n"
+        'base_url = "http://127.0.0.1:5012/sim"\n'
+        'outer_door_id = "DOOR01"\n'
+        'inner_door_id = "DOOR02"\n'
+        "poll_interval = 1.0\n"
+        "poll_timeout = 30.0\n\n"
+        "[zone]\n"
+        'enter_url = "http://127.0.0.1:5012/sim/api/zones/enter"\n'
+        'exit_url = "http://127.0.0.1:5012/sim/api/zones/exit"\n'
+        'status_url = "http://127.0.0.1:5012/sim/api/zones/status"\n'
+        'zone_id = "zone_001"\n'
+        'entry_door_code = "q001"\n'
+        "zone_poll_interval = 300.0\n\n"
+        "[rcs]\n"
+        'door_code_mapping = {DOOR01 = "1001", DOOR02 = "1002"}\n\n'
+        "[air_shower]\n"
+        "duration = 4.0\n\n"
+        "[sim]\n"
+        "auto_open_delay = 2.0\n"
+        "auto_close_delay = 2.0\n"
+        "zone_always_busy = false\n"
+        'zone_id = "zone_001"\n\n'
+        "[meta]\n"
+        "version = 0\n"
+        f'updated = "{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}"\n'
+    )
+
+
 def _generate_default_config() -> dict:
     """生成默认统一配置"""
     return {
@@ -521,8 +624,7 @@ def _generate_default_config() -> dict:
         "angel": {"base_url": "http://127.0.0.1:5012/sim", "outer_door_id": "DOOR01", "inner_door_id": "DOOR02"},
         "zone": {"enter_url": "", "exit_url": "", "status_url": "", "zone_id": "zone_001",
                  "entry_door_code": "q001", "zone_poll_interval": 300.0},
-        "rcs": {"change_status_url": "", "report_interval": 0.5,
-                "door_code_mapping": {"DOOR01": "1001", "DOOR02": "1002"}},
+        "rcs": {"door_code_mapping": {"DOOR01": "1001", "DOOR02": "1002"}},
         "air_shower": {"duration": 4.0},
         "sim": {"auto_open_delay": 2.0, "auto_close_delay": 2.0, "zone_always_busy": False, "zone_id": "zone_001"},
         "raw": "",

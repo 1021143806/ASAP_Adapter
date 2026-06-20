@@ -36,9 +36,23 @@
         <span style="font-size:11px;color:var(--accent);" id="cfgVersion">版本 --</span>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-sm" onclick="exportConfig()">📥 导出</button>
+        <label class="btn btn-sm" style="cursor:pointer;margin:0;">📤 导入<input type="file" accept=".toml" style="display:none;" onchange="importConfigFile(this)"></label>
+        <button class="btn btn-sm" onclick="toggleVersions()">📋 版本</button>
         <button class="btn" onclick="loadAllConfig()">🔄 读取</button>
         <button class="btn btn-success" onclick="saveAllConfig()">💾 保存</button>
         <span id="cfgSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
+      </div>
+    </div>
+
+    <!-- 版本历史 -->
+    <div id="versionPanel" class="glass log-panel-full" style="display:none;">
+      <div class="card-title" style="display:flex;justify-content:space-between;">
+        <span>📋 配置版本历史</span>
+        <button class="btn btn-sm" onclick="toggleVersions()">✕ 关闭</button>
+      </div>
+      <div id="versionList" style="max-height:250px;overflow-y:auto;font-size:11px;">
+        <div style="color:var(--text-muted);padding:10px;text-align:center;">加载中...</div>
       </div>
     </div>
 
@@ -57,11 +71,6 @@
           <span class="zone-label">状态查询</span>
           <code class="zone-value" style="font-size:10px;word-break:break-all;" id="rcsStatusUrl">POST /api/rcs/doorStatus</code>
         </div>
-      </div>
-      <div class="zone-row" style="margin-top:8px;">
-        <span class="zone-label">状态上报URL</span>
-        <input type="text" id="rcsReportUrlInput" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;margin:0 8px;">
-        <button class="btn btn-success btn-sm" onclick="saveRcsUrl()">保存</button>
       </div>
       <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="zone-row" style="flex-direction:column;align-items:stretch;">
@@ -150,7 +159,6 @@ async function loadAllConfig() {
     if (data.error) return;
     document.getElementById("cfgVersion").textContent = "版本 " + (data.version || 0);
     const rcs = data.rcs || {};
-    setVal("rcsReportUrlInput", rcs.change_status_url);
     const rcsMap = rcs.door_code_mapping || {};
     setVal("rcsOuterCodeInput", Object.values(rcsMap)[0] || "1001");
     setVal("rcsInnerCodeInput", Object.values(rcsMap)[1] || "1002");
@@ -186,7 +194,6 @@ async function saveAllConfig() {
       zone_id: document.getElementById("cfgZoneIdInput").value.trim(),
     },
     rcs: {
-      change_status_url: document.getElementById("rcsReportUrlInput").value.trim(),
       door_code_mapping: { [outerId]: outerCode, [innerId]: innerCode },
     },
   };
@@ -221,20 +228,78 @@ async function saveEnvConfig() {
     body: JSON.stringify({ content }),
   });
 }
-async function saveRcsUrl() {
-  const url = document.getElementById("rcsReportUrlInput").value.trim();
-  const outerCode = document.getElementById("rcsOuterCodeInput").value.trim();
-  const innerCode = document.getElementById("rcsInnerCodeInput").value.trim();
-  const outerId = document.getElementById("angelOuterDoorIdInput").value.trim() || "DOOR01";
-  const innerId = document.getElementById("angelInnerDoorIdInput").value.trim() || "DOOR02";
-  await fetch("/api/asap/config/rcs", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      change_status_url: url,
-      door_code_mapping: { [outerId]: outerCode, [innerId]: innerCode },
-    }),
-  });
+
+// ══ 导出/导入/版本 ══
+
+function exportConfig() {
+  fetch("/api/asap/config/export")
+    .then(r => r.blob())
+    .then(blob => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "config.toml";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+}
+
+function importConfigFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append("file", file);
+  fetch("/api/asap/config/import", { method: "POST", body: fd })
+    .then(r => r.json())
+    .then(d => {
+      alert(d.success ? "导入成功：" + (d.message || "已生效") : "导入失败：" + (d.error || ""));
+      if (d.success) loadAllConfig();
+    });
+  input.value = "";
+}
+
+let _versionOpen = false;
+async function toggleVersions() {
+  _versionOpen = !_versionOpen;
+  const panel = document.getElementById("versionPanel");
+  panel.style.display = _versionOpen ? "block" : "none";
+  if (_versionOpen) loadVersions();
+}
+
+async function loadVersions() {
+  const list = document.getElementById("versionList");
+  try {
+    const r = await fetch("/api/asap/config/versions");
+    const d = await r.json();
+    const versions = d.versions || [];
+    if (versions.length === 0) {
+      list.innerHTML = '<div style="color:var(--text-muted);padding:10px;text-align:center;">暂无历史版本</div>';
+      return;
+    }
+    let h = '<div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">当前版本: ' + (d.current || 0) + " | 共" + versions.length + "个备份</div>";
+    versions.forEach(v => {
+      const isCurrent = v.version === d.current;
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;margin:3px 0;background:var(--card-bg);border-radius:6px;' +
+        (isCurrent ? 'border:1px solid var(--accent);' : '') + '">' +
+        '<span>' +
+          '<span style="color:var(--accent);font-weight:600;">v' + v.version + '</span> ' +
+          '<span style="color:var(--text-muted);margin-left:8px;">' + (v.time || "") + '</span> ' +
+          (isCurrent ? '<span style="color:var(--success);font-size:9px;">◀ 当前</span>' : "") +
+        '</span>' +
+        (isCurrent ? '' : '<button class="btn btn-sm" onclick="rollbackVersion(' + v.version + ')">↩ 回滚</button>') +
+      '</div>';
+    });
+    list.innerHTML = h;
+  } catch (e) { list.innerHTML = '<div style="color:var(--danger);">加载失败</div>'; }
+}
+
+async function rollbackVersion(v) {
+  if (!confirm('确认回滚到版本 v' + v + '？当前配置将被备份。')) return;
+  try {
+    const r = await fetch("/api/asap/config/rollback/" + v, { method: "POST" });
+    const d = await r.json();
+    alert(d.message || (d.success ? "回滚成功" : "回滚失败"));
+    if (d.success) { loadAllConfig(); loadVersions(); }
+  } catch (e) { alert("回滚失败: " + e); }
 }
 
 (function() { init(); })();

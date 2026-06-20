@@ -35,6 +35,8 @@ from .config import AppConfig
 
 class RcsConfigUpdate(BaseModel):
     """RCS 配置更新请求"""
+    change_status_url: str = ""
+    report_interval: float = 0.5
     door_code_mapping: Optional[dict] = None  # {"DOOR01": "1001", "DOOR02": "1002"}
 
 
@@ -366,20 +368,39 @@ def create_router(app: FastAPI) -> APIRouter:
 
     @router.get("/api/asap/config/rcs")
     async def get_rcs_config(request: Request):
-        """获取 RCS 门编码映射"""
+        """获取 RCS 配置"""
         cfg = request.app.state.config
-        return {"door_code_mapping": cfg.rcs.door_code_mapping}
+        return {
+            "change_status_url": cfg.rcs.change_status_url,
+            "report_interval": cfg.rcs.report_interval,
+            "door_code_mapping": cfg.rcs.door_code_mapping,
+        }
 
     @router.post("/api/asap/config/rcs")
     async def update_rcs_config(request: Request, cfg: RcsConfigUpdate):
-        """更新 RCS 门编码映射（运行时生效，持久化）"""
+        """更新 RCS 配置（运行时生效，持久化到 overrides.json）"""
         config = request.app.state.config
+        config.rcs.change_status_url = cfg.change_status_url
+        if cfg.report_interval > 0:
+            config.rcs.report_interval = cfg.report_interval
+        # 门编码映射
         if cfg.door_code_mapping is not None:
             config.rcs.door_code_mapping = cfg.door_code_mapping
-            from .config import save_override
+        # 持久化到 overrides.json（重启后保留）
+        from .config import save_override
+        save_override("rcs", "change_status_url", cfg.change_status_url)
+        if cfg.report_interval > 0:
+            save_override("rcs", "report_interval", cfg.report_interval)
+        if cfg.door_code_mapping is not None:
             save_override("rcs", "door_code_mapping", cfg.door_code_mapping)
-        logger.info("RCS门编码映射已更新: %s", cfg.door_code_mapping)
-        return {"status": "ok", "door_code_mapping": config.rcs.door_code_mapping}
+        logger.info("RCS配置已更新并持久化: change_status_url=%s mapping=%s",
+                     cfg.change_status_url, cfg.door_code_mapping)
+        return {
+            "status": "ok",
+            "change_status_url": config.rcs.change_status_url,
+            "report_interval": config.rcs.report_interval,
+            "door_code_mapping": config.rcs.door_code_mapping,
+        }
 
     # ── AB 门配置管理 ───────────────────────
 
@@ -574,57 +595,6 @@ def create_router(app: FastAPI) -> APIRouter:
                 sim_ctrl.config.auto_close_delay = request.app.state.config.sim.auto_close_delay
                 sim_ctrl.config.zone_always_busy = request.app.state.config.sim.zone_always_busy
                 sim_ctrl.zone.zone_id = request.app.state.config.sim.zone_id
-        return result
-
-    # ── 配置导出/导入/版本管理 ─────────────
-
-    @router.get("/api/asap/config/export")
-    async def export_config():
-        """导出当前 data/config.toml"""
-        from .config import export_config
-        content = export_config()
-        return PlainTextResponse(content, media_type="text/plain",
-                                  headers={"Content-Disposition": "attachment; filename=config.toml"})
-
-    @router.post("/api/asap/config/import")
-    async def import_config(request: Request):
-        """导入配置（上传文件或粘贴文本）"""
-        from .config import import_config, _load_unified
-        content_type = request.headers.get("content-type", "")
-        if "multipart/form-data" in content_type:
-            form = await request.form()
-            file = form.get("file")
-            if file:
-                content = await file.read()
-                content = content.decode("utf-8")
-            else:
-                return {"success": False, "error": "未找到上传文件"}
-        else:
-            body = await request.json()
-            content = body.get("content", "")
-
-        result = import_config(content)
-        if result.get("success"):
-            _load_unified(request.app.state.config)
-            sim_ctrl = getattr(request.app.state, 'sim_controller', None)
-            if sim_ctrl:
-                sim_ctrl.zone.zone_id = request.app.state.config.sim.zone_id
-        return result
-
-    @router.get("/api/asap/config/versions")
-    async def list_versions():
-        """列出配置版本历史"""
-        from .config import list_config_versions
-        versions = list_config_versions()
-        return {"success": True, "versions": versions, "current": _get_current_version()}
-
-    @router.post("/api/asap/config/rollback/{version}")
-    async def rollback_config(version: int, request: Request):
-        """回滚到指定版本"""
-        from .config import rollback_config, _load_unified
-        result = rollback_config(version)
-        if result.get("success"):
-            _load_unified(request.app.state.config)
         return result
 
     @router.post("/api/asap/sim/enable")
@@ -848,18 +818,5 @@ def create_router(app: FastAPI) -> APIRouter:
         """[兼容] 保存静态配置"""
         from .config import save_env
         return save_env(req.content)
-
-    def _get_current_version() -> int:
-        """获取当前配置版本号"""
-        import os as _os
-        fp = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "config.toml")
-        if not _os.path.exists(fp):
-            return 0
-        try:
-            with open(fp, "rb") as f:
-                import tomllib
-                return tomllib.load(f).get("meta", {}).get("version", 0)
-        except Exception:
-            return 0
 
     return router

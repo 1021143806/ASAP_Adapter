@@ -39,3 +39,7 @@ Thumbs.db
 
 #data
 /data/*
+
+#zip 
+
+*.zip

@@ -267,8 +267,8 @@ function renderLogs(data) {
         '<span style="font-size:10px;color:var(--text-muted);">' + (hasData ? '▼' : '') + '</span>' +
       '</div>' +
       (hasData ? '<div style="display:none;margin-top:4px;font-size:10px;">' +
-        (reqJson ? '<div style="color:var(--warning);">📤 请求</div><pre style="background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;max-height:150px;overflow:auto;margin:2px 0;">' + escHtml(reqJson) + '</pre>' : '') +
-        (respJson ? '<div style="color:var(--success);">📥 响应</div><pre style="background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;max-height:150px;overflow:auto;margin:2px 0;">' + escHtml(respJson) + '</pre>' : '') +
+        (reqJson ? '<div style="color:var(--warning);">📤 请求</div><pre style="background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;max-height:150px;overflow:auto;margin:2px 0;">' + jsonHighlight(reqJson) + '</pre>' : '') +
+        (respJson ? '<div style="color:var(--success);">📥 响应</div><pre style="background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;max-height:150px;overflow:auto;margin:2px 0;">' + jsonHighlight(respJson) + '</pre>' : '') +
       '</div>' : '');
     container.appendChild(div);
   });
@@ -281,7 +281,17 @@ function scrollLogBottom() {
   if (c) c.scrollTop = c.scrollHeight;
 }
 
-function escHtml(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+function jsonHighlight(s) {
+  // HTML转义 + 语法高亮
+  let html = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return html
+    .replace(/"([^"]+)":/g, '<span style="color:var(--accent);">"$1"</span>:')
+    .replace(/: "([^"]*)"/g, ': <span style="color:var(--success);">"$1"</span>')
+    .replace(/: (\d+\.?\d*)/g, ': <span style="color:var(--warning);">$1</span>')
+    .replace(/: (true|false)/g, ': <span style="color:#f0a060;">$1</span>')
+    .replace(/: (null)/g, ': <span style="color:var(--text-muted);">$1</span>');
+}
+function escHtml(s) { const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
 
 // ── 手动控制 ──
 async function setDoor(doorId, state) {
@@ -360,9 +370,9 @@ function showLogDetail(logId) {
     document.getElementById("modalTitle").textContent = "[" + entry.category + "] " + entry.target;
     let html = "";
     html += '<div class="section-title">📤 请求</div>';
-    html += '<pre>' + (entry.request ? syntaxHighlight(entry.request) : '<span style="color:var(--text-muted);">无请求体</span>') + '</pre>';
+    html += '<pre>' + (entry.request ? jsonHighlight(JSON.stringify(entry.request, null, 2)) : '<span style="color:var(--text-muted);">无请求体</span>') + '</pre>';
     html += '<div class="section-title">📥 响应</div>';
-    html += '<pre>' + (entry.response ? syntaxHighlight(entry.response) : '<span style="color:var(--text-muted);">无响应体</span>') + '</pre>';
+    html += '<pre>' + (entry.response ? jsonHighlight(JSON.stringify(entry.response, null, 2)) : '<span style="color:var(--text-muted);">无响应体</span>') + '</pre>';
     html += '<div class="section-title">ℹ 元信息</div>';
     html += '<pre style="color:var(--text-muted);font-size:11px;">时间: ' + entry.time + '\n类别: ' + entry.category + '\n目标: ' + entry.target + '\nID: ' + entry.id + '</pre>';
     document.getElementById("modalBody").innerHTML = html;
@@ -370,13 +380,6 @@ function showLogDetail(logId) {
   }).catch(() => {});
 }
 function closeDetail() { document.getElementById("detailModal").classList.remove("open"); }
-function syntaxHighlight(obj) {
-  const json = JSON.stringify(obj, null, 2);
-  return json.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"([^"]+)":/g,'<span style="color:var(--accent);">"$1"</span>:')
-    .replace(/: "([^"]*)"/g,': <span style="color:var(--success);">"$1"</span>')
-    .replace(/: (\d+)/g,': <span style="color:var(--warning);">$1</span>');
-}
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeDetail(); });
 
 init();

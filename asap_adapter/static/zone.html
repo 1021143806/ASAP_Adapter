@@ -94,89 +94,17 @@ let sseConnected = false;
 
 function init() {
   fetchZoneStatus();
-  setInterval(fetchZoneStatus, 3000);
-  connectSSE();
+}, 500);
 }
 
-// ══ 区域状态 ══
-async function fetchZoneStatus() {
-  try {
-    const resp = await fetch("/api/asap/zone-status");
-    const data = await resp.json();
-    updateZoneDashboard(data);
-  } catch (e) { console.error("获取区域状态失败:", e); }
-}
-
-function updateZoneDashboard(data) {
-  const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  const setClass = (id, cls) => { const el = document.getElementById(id); if (el) el.className = cls; };
-
-  // 流程状态
-  setText("zoneFlowState", { idle: "空闲", entering: "进入中", inside: "区域内", exiting: "退出中", error: "异常" }[data.state] || data.state);
-
-  // 门状态
-  const isOpen = data.door_status === "1";
-  const doorCard = document.getElementById("zoneEntryDoor");
-  if (doorCard) { doorCard.className = "door-card " + (isOpen ? "open" : "closed"); }
-  setClass("zoneEntryDoorStatus", "door-status-value " + (isOpen ? "open" : "closed"));
-  setText("zoneEntryDoorStatus", isOpen ? "开" : "关");
-  setText("zoneEntryDoorText", isOpen ? "已打开" : "已关闭");
-
-  // 区域信息
-  setText("zoneId", data.zone_id || "--");
-  const s = data.zone_status || "unknown";
-  setText("zoneStatus", { occupied: "占用中", granted: "已授权", available: "可用", unknown: "未知" }[s] || s);
-  setClass("zoneStatus", "zone-value " + { occupied: "occupied", granted: "granted", available: "available" }[s] || "unknown");
-  setText("zoneOccupiedBy", data.zone_occupied_by || "--");
-  setText("currentAgv", data.current_agv || "--");
-  setText("zoneLastCheck", data.last_check ? new Date(data.last_check + "Z").toLocaleTimeString() : "等待中...");
-
-  // 步骤日志
-  const stepLog = data.step_log || [];
-  const container = document.getElementById("zoneStepLog");
-  if (container && stepLog.length > 0) {
-    container.innerHTML = stepLog.map(e =>
-      '<div style="margin:4px 0;padding:6px 8px;background:var(--card-bg);border-radius:4px;">' +
-      '<span style="font-size:10px;color:var(--text-muted);">' + (e.timestamp || "") + '</span> ' +
-      '<span style="font-size:10px;color:' + (e.direction === "send" ? "var(--warning)" : e.direction === "recv" ? "var(--success)" : "var(--accent)") + ';">' +
-      (e.direction === "send" ? "↑请求" : e.direction === "recv" ? "↓响应" : "·" + e.direction) + '</span> ' +
-      '<span style="font-size:10px;color:var(--text-muted);">' + (e.step_name || e.action || "") + '</span>' +
-      '<pre style="font-size:10px;margin-top:2px;color:var(--text-secondary);max-height:100px;overflow:auto;">' +
-      JSON.stringify(e.payload || {}, null, 2) + '</pre></div>'
-    ).join("");
-  }
-}
-
-// ══ 强制开关 ══
-async function zoneForceDoor(doorCode, status) {
-  if (!confirm("确认强制设置 " + doorCode + " 为" + (status === "1" ? "开" : "关") + "？")) return;
-  try {
-    await fetch("/api/asap/zone/force-door", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ door_code: doorCode, status: status }),
-    });
-    setTimeout(fetchZoneStatus, 500);
-  } catch (e) { console.error("强制设置失败:", e); }
-}
-
-// ══ SSE ══
-function connectSSE() {
-  if (sseConnected) return;
-  try {
-    const es = new EventSource("/api/sse/events");
-    es.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.event_type === "zone_snapshot" && msg.data) updateZoneDashboard(msg.data);
-      } catch (err) {}
-    };
-    es.onerror = () => { sseConnected = false; es.close(); };
-    es.onopen = () => { sseConnected = true; };
-  } catch (e) {
-    sseConnected = false;
-    setInterval(fetchZoneStatus, 3000);
-  }
+function jsonHighlight(s) {
+  let html = (s || "").replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return html
+    .replace(/"([^"]+)":/g, '<span style="color:var(--accent);">"$1"</span>:')
+    .replace(/: "([^"]*)"/g, ': <span style="color:var(--success);">"$1"</span>')
+    .replace(/: (\d+\.?\d*)/g, ': <span style="color:var(--warning);">$1</span>')
+    .replace(/: (true|false)/g, ': <span style="color:#f0a060;">$1</span>')
+    .replace(/: (null)/g, ': <span style="color:var(--text-muted);">$1</span>');
 }
 
 // ══ 主题 ══

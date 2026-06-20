@@ -264,11 +264,11 @@ async function loadRcsLogs() {
             '<span style="font-size:11px;">' + escHtml(JSON.stringify(l.request)) + '</span></span>' +
             '<span style="font-size:10px;color:var(--text-muted);">' + (l.status || "") + ' ▼</span>' +
           '</div>' +
-          '<div style="display:none;margin-top:4px;font-size:10px;">' +
+          '<div id="rcsLogDetail" style="display:none;margin-top:4px;font-size:10px;">' +
             '<div style="color:var(--warning);">📤 请求:</div>' +
-            '<pre style="background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;max-height:120px;overflow:auto;margin:2px 0;">' + escHtml(reqJson) + '</pre>' +
+            '<pre style="background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;max-height:120px;overflow:auto;margin:2px 0;">' + jsonHighlight(reqJson) + '</pre>' +
             '<div style="color:var(--success);">📥 响应:</div>' +
-            '<pre style="background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;max-height:120px;overflow:auto;margin:2px 0;">' + escHtml(respJson) + '</pre>' +
+            '<pre style="background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;max-height:120px;overflow:auto;margin:2px 0;">' + jsonHighlight(respJson) + '</pre>' +
           '</div>';
         container.appendChild(div);
       });
@@ -280,6 +280,15 @@ async function loadRcsLogs() {
   } catch (e) { console.error("RCS日志加载失败:", e); }
 }
 
+function jsonHighlight(s) {
+  let html = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return html
+    .replace(/"([^"]+)":/g, '<span style="color:var(--accent);">"$1"</span>:')
+    .replace(/: "([^"]*)"/g, ': <span style="color:var(--success);">"$1"</span>')
+    .replace(/: (\d+\.?\d*)/g, ': <span style="color:var(--warning);">$1</span>')
+    .replace(/: (true|false)/g, ': <span style="color:#f0a060;">$1</span>')
+    .replace(/: (null)/g, ': <span style="color:var(--text-muted);">$1</span>');
+}
 function escHtml(s) { const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
 
 // ══ SSE 事件流 ══

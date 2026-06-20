@@ -62,7 +62,6 @@ class ZoneConfigUpdate(BaseModel):
     exit_url: str = ""
     status_url: str = ""
     entry_door_code: Optional[str] = None
-    exit_door_code: Optional[str] = None
     zone_poll_interval: Optional[float] = None
 
 
@@ -182,8 +181,7 @@ def create_router(app: FastAPI) -> APIRouter:
         """
         from datetime import datetime
         entry_code = request.app.state.config.zone.entry_door_code
-        exit_code = request.app.state.config.zone.exit_door_code
-        is_zone_door = req.doorCode in (entry_code, exit_code)
+        is_zone_door = req.doorCode == entry_code
 
         sm = _get_sm(request)
         sm._status.rcs_query_count += 1
@@ -253,7 +251,6 @@ def create_router(app: FastAPI) -> APIRouter:
         """RCS 门状态查询（风淋门 + 区域管控）"""
         from datetime import datetime
         entry_code = request.app.state.config.zone.entry_door_code
-        exit_code = request.app.state.config.zone.exit_door_code
 
         sm = _get_sm(request)
         sm._status.rcs_query_count += 1
@@ -265,7 +262,7 @@ def create_router(app: FastAPI) -> APIRouter:
         req_dict = req.model_dump(exclude_none=True)
 
         # ── 区域管控门 ──
-        if req.doorCode in (entry_code, exit_code):
+        if req.doorCode == entry_code:
             zsm = request.app.state.zone_sm
             try:
                 rcs_status = zsm.door_status_by_code(req.doorCode)
@@ -316,6 +313,26 @@ def create_router(app: FastAPI) -> APIRouter:
         """获取区域管控状态"""
         zsm = request.app.state.zone_sm
         return zsm.status.dump()
+
+    @router.post("/api/asap/zone/force-door")
+    async def force_zone_door(request: Request):
+        """
+        强制设置区域管控门状态（调试/异常恢复）
+        Body: {"door_code": "q001", "status": "1"}  # 1=开, 2=关
+        """
+        data = await request.json()
+        door_code = data.get("door_code", "")
+        status = str(data.get("status", "2"))
+        if door_code not in ("q001", "q002", "", None):
+            return {"code": 2001, "msg": f"无效门编号: {door_code}"}
+        if status not in ("1", "2"):
+            return {"code": 2002, "msg": f"无效状态: {status}，需为 1(开) 或 2(关)"}
+
+        zsm = request.app.state.zone_sm
+        ok = await zsm.force_door_state(door_code, status)
+        if ok:
+            return {"code": 1000, "msg": f"已强制设置 {door_code} 为 {'开' if status == '1' else '关'}"}
+        return {"code": 2003, "msg": f"设置失败，未识别门编号: {door_code}"}
 
     @router.post("/api/asap/start")
     async def start_air_shower(request: Request, agv_id: str = ""):
@@ -474,7 +491,6 @@ def create_router(app: FastAPI) -> APIRouter:
             "exit_url": cfg.zone.exit_url,
             "status_url": cfg.zone.status_url,
             "entry_door_code": cfg.zone.entry_door_code,
-            "exit_door_code": cfg.zone.exit_door_code,
             "zone_poll_interval": cfg.zone.zone_poll_interval,
         }
 
@@ -502,10 +518,6 @@ def create_router(app: FastAPI) -> APIRouter:
             config.zone.entry_door_code = cfg.entry_door_code
             from .config import save_override
             save_override("zone", "entry_door_code", cfg.entry_door_code)
-        if cfg.exit_door_code is not None:
-            config.zone.exit_door_code = cfg.exit_door_code
-            from .config import save_override
-            save_override("zone", "exit_door_code", cfg.exit_door_code)
         logger.info("区域管控配置已更新")
         return {
             "status": "ok",
@@ -513,7 +525,6 @@ def create_router(app: FastAPI) -> APIRouter:
             "exit_url": config.zone.exit_url,
             "status_url": config.zone.status_url,
             "entry_door_code": config.zone.entry_door_code,
-            "exit_door_code": config.zone.exit_door_code,
             "zone_poll_interval": config.zone.zone_poll_interval,
         }
 

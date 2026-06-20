@@ -15,9 +15,8 @@
 # enter_url = "http://zone-server:8080/api/zones/enter"
 # exit_url = "http://zone-server:8080/api/zones/exit"
 # status_url = "http://zone-server:8080/api/zones/status"
-# RCS 门编号映射 (区域管控)
+# RCS 门编号 (区域管控)
 # entry_door_code = "q001"
-# exit_door_code = "q002"
 # 区域状态轮询间隔（秒），默认300=5分钟
 # zone_poll_interval = 300
 

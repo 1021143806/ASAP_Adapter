@@ -138,9 +138,9 @@ def create_app(config: AppConfig) -> FastAPI:
                         sm._status.zone.occupied_by = status.occupied_by
                         sm._status.zone.last_check = datetime.now().isoformat()
                         # 同步到 ZoneStateMachine
-                        zsm.status.zone_status = status.status
-                        zsm.status.zone_occupied_by = status.occupied_by
-                        zsm.status.last_check = datetime.now().isoformat()
+                        zsm._status.zone_status = status.status
+                        zsm._status.zone_occupied_by = status.occupied_by
+                        zsm._status.last_check = datetime.now().isoformat()
                         logger.debug("区域状态轮询: %s → %s (by %s)",
                                      config.zone.zone_id, status.status, status.occupied_by)
                 except Exception as e:

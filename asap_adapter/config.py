@@ -58,7 +58,6 @@ class ZoneConfig:
     zone_id: str = "air_shower_room"
     client_id: str = "asap_adapter_01"
     entry_door_code: str = "q001"   # RCS doorNum → 进入区域
-    exit_door_code: str = "q002"    # RCS doorNum → 退出区域
     retry_interval: float = 3.0
     max_retries: int = 10
     exit_retry_interval: float = 1.0
@@ -134,7 +133,7 @@ def load_config(path: Optional[str] = None) -> AppConfig:
                             "poll_interval", "poll_timeout"))
             _apply_section(cfg, data, "zone",
                            ("enter_url", "exit_url", "status_url", "zone_id",
-                            "client_id", "entry_door_code", "exit_door_code",
+                            "client_id", "entry_door_code",
                             "retry_interval", "max_retries",
                             "exit_retry_interval", "exit_max_retries",
                             "zone_poll_interval"))
@@ -169,7 +168,7 @@ def _load_runtime(cfg: AppConfig, path: str):
         _apply_section(cfg, data, "angel", ("base_url", "outer_door_id", "inner_door_id"))
         _apply_section(cfg, data, "zone",
                        ("enter_url", "exit_url", "status_url",
-                        "zone_poll_interval", "entry_door_code", "exit_door_code"))
+                        "zone_poll_interval", "entry_door_code"))
         _apply_section(cfg, data, "rcs", ("change_status_url", "report_interval", "door_code_mapping"))
         _apply_section(cfg, data, "air_shower",
                        ("duration", "agv_enter_timeout", "agv_exit_timeout"))
@@ -433,7 +432,7 @@ def save_unified_config(data: dict) -> dict:
         if zone:
             sections.append("[zone]")
             for k in ("enter_url", "exit_url", "status_url", "zone_id",
-                      "client_id", "entry_door_code", "exit_door_code",
+                      "client_id", "entry_door_code",
                       "retry_interval", "max_retries",
                       "exit_retry_interval", "exit_max_retries",
                       "zone_poll_interval"):
@@ -517,7 +516,7 @@ def _generate_default_config() -> dict:
         "version": 0,
         "angel": {"base_url": "http://localhost:8080", "outer_door_id": "DOOR01", "inner_door_id": "DOOR02"},
         "zone": {"enter_url": "", "exit_url": "", "status_url": "", "zone_id": "zone_001",
-                 "entry_door_code": "q001", "exit_door_code": "q002", "zone_poll_interval": 300.0},
+                 "entry_door_code": "q001", "zone_poll_interval": 300.0},
         "rcs": {"change_status_url": "", "report_interval": 0.5,
                 "door_code_mapping": {"DOOR01": "1001", "DOOR02": "1002"}},
         "air_shower": {"duration": 4.0},

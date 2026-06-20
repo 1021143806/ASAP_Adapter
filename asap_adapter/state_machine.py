@@ -221,11 +221,9 @@ class StateMachine:
         door_id = self.config.angel.outer_door_id
         door_code = self.config.rcs.door_code_mapping.get(door_id, door_id)
         logger.info("步骤4/13: 等待AGV进入")
-        # 上报RCS：外门已开
-        self._log_step(4, "上报外门已开", "report_open", "send",
-                       f"POST {self.config.rcs.change_status_url}",
-                       {"doorNum": door_code, "doorStatus": "1"})
-        await self.rcs.report_door_open(door_id)
+        # RCS 通过 doorStatus 轮询获取状态，不主动上报
+        self._log_step(4, "外门已开(RCS轮询获取)", "door_opened", "info", "",
+                       {"door_id": door_id, "door_code": door_code, "status": "open"})
         # 等待 AGV 进入
         await asyncio.sleep(self.config.air_shower.agv_enter_timeout)
         self._publish_event("agv_entered", {
@@ -260,10 +258,8 @@ class StateMachine:
         self._update_door_state(door_id, status.doorStatus)
         # 上报 RCS：外门已关
         door_code = self.config.rcs.door_code_mapping.get(door_id, door_id)
-        self._log_step(6, "上报外门已关", "report_closed", "send",
-                       f"POST {self.config.rcs.change_status_url}",
-                       {"doorNum": door_code, "doorStatus": "2"})
-        await self.rcs.report_door_closed(door_id)
+        self._log_step(6, "外门已关(RCS轮询获取)", "door_closed", "info", "",
+                       {"door_id": door_id, "door_code": door_code, "status": "closed"})
         self._publish_event("door_closed", {
             "door_id": door_id,
         })
@@ -322,11 +318,9 @@ class StateMachine:
         door_id = self.config.angel.inner_door_id
         door_code = self.config.rcs.door_code_mapping.get(door_id, door_id)
         logger.info("步骤10/13: 等待AGV驶离")
-        # 上报 RCS：内门已开
-        self._log_step(10, "上报内门已开", "report_open", "send",
-                       f"POST {self.config.rcs.change_status_url}",
-                       {"doorNum": door_code, "doorStatus": "1"})
-        await self.rcs.report_door_open(door_id)
+        # RCS 通过 doorStatus 轮询获取状态
+        self._log_step(10, "内门已开(RCS轮询获取)", "door_opened", "info", "",
+                       {"door_id": door_id, "door_code": door_code, "status": "open"})
         # 等待 AGV 驶离
         await asyncio.sleep(self.config.air_shower.agv_exit_timeout)
         self._publish_event("agv_exited", {
@@ -358,26 +352,10 @@ class StateMachine:
         self._update_door_state(door_id, status.doorStatus)
         # 上报 RCS：内门已关
         door_code = self.config.rcs.door_code_mapping.get(door_id, door_id)
-        self._log_step(12, "上报内门已关", "report_closed", "send",
-                       f"POST {self.config.rcs.change_status_url}",
-                       {"doorNum": door_code, "doorStatus": "2"})
-        await self.rcs.report_door_closed(door_id)
-
-    async def _step_release_zone(self):
-        """步骤13: 释放区域"""
-        self._set_state(AirShowerState.RELEASE_ZONE)
-        zone_id = self.config.zone.zone_id
-        logger.info("步骤13/13: 释放区域 [%s]", zone_id)
-        self._log_step(13, "释放区域", "release_zone", "send",
-                       f"POST {self.config.zone.exit_url}",
-                       {"zone_id": zone_id, "client_id": self._current_agv})
-        await self.zone.exit_with_retry()
-        self._log_step(13, "释放区域", "release_zone", "recv",
-                       f"POST {self.config.zone.exit_url}",
-                       {"zone_id": zone_id, "status": "released"})
-        self._status.zone.status = "released"
-        self._publish_event("zone_released", {
-            "zone_id": zone_id,
+        self._log_step(12, "内门已关(RCS轮询获取)", "door_closed", "info", "",
+                       {"door_id": door_id, "door_code": door_code, "status": "closed"})
+        self._publish_event("door_closed", {
+            "door_id": door_id,
         })
 
     async def _finish(self):
@@ -471,21 +449,19 @@ class StateMachine:
     # ── 手动控制（独立于流程） ─────────────────
 
     async def manual_open_door(self, door_id: str):
-        """手动开门"""
+        """手动开门（RCS 通过 doorStatus 轮询感知）"""
         if self.is_busy:
             raise DoorClientError("流程执行中，不允许手动操作")
         resp = await self.door.open_door(door_id)
         self._update_door_state(door_id, resp.doorStatus)
-        await self.rcs.report_door_open(door_id)
         logger.info("手动开门: %s", door_id)
 
     async def manual_close_door(self, door_id: str):
-        """手动关门"""
+        """手动关门（RCS 通过 doorStatus 轮询感知）"""
         if self.is_busy:
             raise DoorClientError("流程执行中，不允许手动操作")
         resp = await self.door.close_door(door_id)
         self._update_door_state(door_id, resp.doorStatus)
-        await self.rcs.report_door_closed(door_id)
         logger.info("手动关门: %s", door_id)
 
     async def query_door_status(self, door_id: str) -> AngelDoorStatus:

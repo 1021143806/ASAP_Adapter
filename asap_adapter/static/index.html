@@ -610,16 +610,14 @@ body {
       <div class="card-title">🚪 区域门状态 <span id="zoneFlowState" style="font-size:10px;font-weight:400;color:var(--text-muted);"></span></div>
       <div class="door-cards" id="zoneDoorCards">
         <div class="door-card" id="zoneEntryDoor">
-          <div class="door-name"><span class="door-icon">🚪</span>进入门 <span style="font-size:10px;color:var(--text-muted);font-weight:400;" id="zoneEntryDoorId">(q001)</span></div>
+          <div class="door-name"><span class="door-icon">🚪</span>q001 <span style="font-size:10px;color:var(--text-muted);font-weight:400;" id="zoneEntryDoorId">(q001)</span></div>
           <div class="door-code" id="zoneEntryDoorCode">─</div>
           <div class="door-status-value closed" id="zoneEntryDoorStatus">--</div>
           <div class="door-status-text" id="zoneEntryDoorText">未知</div>
-        </div>
-        <div class="door-card" id="zoneExitDoor">
-          <div class="door-name"><span class="door-icon">🚪</span>退出门 <span style="font-size:10px;color:var(--text-muted);font-weight:400;" id="zoneExitDoorId">(q002)</span></div>
-          <div class="door-code" id="zoneExitDoorCode">─</div>
-          <div class="door-status-value closed" id="zoneExitDoorStatus">--</div>
-          <div class="door-status-text" id="zoneExitDoorText">未知</div>
+          <div class="door-controls" style="margin-top:6px;display:flex;gap:4px;">
+            <button class="btn btn-success btn-sm" onclick="zoneForceDoor('q001','1')" title="强制开门(调试)">🔓 强制开</button>
+            <button class="btn btn-warning btn-sm" onclick="zoneForceDoor('q001','2')" title="强制关门(调试)">🔒 强制关</button>
+          </div>
         </div>
       </div>
     </div>
@@ -854,18 +852,14 @@ body {
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
         <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">进入门 RCS 编码 <span style="font-weight:400;color:var(--text-muted);">(q001)</span></span>
+          <span class="zone-label">RCS 门编码 <span style="font-weight:400;color:var(--text-muted);">(q001)</span></span>
           <input type="text" id="cfgZoneEntryCodeInput"
             style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
                    border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;font-family:inherit;outline:none;"
             placeholder="q001">
         </div>
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">退出门 RCS 编码 <span style="font-weight:400;color:var(--text-muted);">(q002)</span></span>
-          <input type="text" id="cfgZoneExitCodeInput"
-            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;font-family:inherit;outline:none;"
-            placeholder="q002">
+        <div class="zone-row" style="flex-direction:column;align-items:stretch;justify-content:flex-end;">
+          <span style="font-size:10px;color:var(--text-muted);">💡 RCS 开门=q001，ASAP 转换为区域进入/退出</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
@@ -1333,6 +1327,24 @@ async function fetchZoneStatus() {
   }
 }
 
+async function zoneForceDoor(doorCode, status) {
+  const label = status === "1" ? "开" : "关";
+  if (!confirm(`确认强制设置 ${doorCode} 为${label}？`)) return;
+  try {
+    const resp = await fetch("/api/asap/zone/force-door", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ door_code: doorCode, status: status }),
+    });
+    const data = await resp.json();
+    if (data.code === 1000) {
+      setTimeout(fetchZoneStatus, 500); // 刷新状态
+    }
+  } catch (e) {
+    console.error("强制设置门状态失败:", e);
+  }
+}
+
 async function startFlow() {
   try {
     await fetch("/api/asap/start", { method: "POST" });
@@ -1415,32 +1427,29 @@ function updateZoneDashboard(data) {
     const fsEl = document.getElementById("zoneFlowState");
     if (fsEl) {
       const s = data.state || "idle";
-      const labels = { idle: "空闲", entering: "进入中", inside: "区域内", q001_closed: "等待出口", q002_opened: "AGV在出口", exiting: "退出中", error: "异常" };
+      const labels = { idle: "空闲", entering: "进入中", inside: "区域内", exiting: "退出中", error: "异常" };
       fsEl.textContent = labels[s] || s;
     }
-    updateZoneDoorCard("zoneEntry", data.entry_door_code || "q001", data.entry_door_status || "2");
-    updateZoneDoorCard("zoneExit", data.exit_door_code || "q002", data.exit_door_status || "2");
+    updateZoneDoorCard(data.door_code || "q001", data.door_status || "2");
   } catch(e) { console.error('updateZoneDashboard:', e); }
 }
 
-function updateZoneDoorCard(prefix, doorCode, doorStatus) {
+function updateZoneDoorCard(doorCode, doorStatus) {
   try {
+    const prefix = "zoneEntry";
     const card = document.getElementById(prefix + "Door");
     const statusEl = document.getElementById(prefix + "DoorStatus");
     const textEl = document.getElementById(prefix + "DoorText");
     const idEl = document.getElementById(prefix + "DoorId");
-    const codeEl = document.getElementById(prefix + "DoorCode");
     if (!card || !statusEl) return;
     if (idEl) idEl.textContent = "(" + doorCode + ")";
-    if (codeEl) codeEl.textContent = "";
-
     card.className = "door-card";
     const isOpen = doorStatus === "1";
     card.classList.add(isOpen ? "open" : "closed");
     statusEl.className = "door-status-value " + (isOpen ? "open" : "closed");
     statusEl.textContent = isOpen ? "开" : "关";
     if (textEl) textEl.textContent = isOpen ? "已打开" : "已关闭";
-  } catch(e) { console.error('updateZoneDoorCard:'+prefix, e); }
+  } catch(e) { console.error('updateZoneDoorCard:', e); }
 }
 
 function connectSSE() {
@@ -1813,7 +1822,6 @@ async function saveZoneConfig() {
   const exit = document.getElementById("cfgZoneExitInput").value.trim();
   const status = document.getElementById("cfgZoneStatusInput").value.trim();
   const entryCode = document.getElementById("cfgZoneEntryCodeInput").value.trim();
-  const exitCode = document.getElementById("cfgZoneExitCodeInput").value.trim();
   const statusEl = document.getElementById("cfgZoneSaveStatus");
   try {
     const body = {};
@@ -1821,7 +1829,6 @@ async function saveZoneConfig() {
     if (exit) body.exit_url = exit;
     if (status) body.status_url = status;
     if (entryCode) body.entry_door_code = entryCode;
-    if (exitCode) body.exit_door_code = exitCode;
     const resp = await fetch("/api/asap/config/zone", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1889,7 +1896,6 @@ async function loadAllConfig() {
     document.getElementById("cfgZoneExitInput").value = zone.exit_url || "";
     document.getElementById("cfgZoneStatusInput").value = zone.status_url || "";
     document.getElementById("cfgZoneEntryCodeInput").value = zone.entry_door_code || "q001";
-    document.getElementById("cfgZoneExitCodeInput").value = zone.exit_door_code || "q002";
 
     // Air shower
     const ash = data.air_shower || {};
@@ -1934,7 +1940,6 @@ async function saveAllConfig() {
       exit_url: document.getElementById("cfgZoneExitInput").value.trim(),
       status_url: document.getElementById("cfgZoneStatusInput").value.trim(),
       entry_door_code: document.getElementById("cfgZoneEntryCodeInput").value.trim(),
-      exit_door_code: document.getElementById("cfgZoneExitCodeInput").value.trim(),
     },
     rcs: {
       change_status_url: document.getElementById("rcsReportUrlInput").value.trim(),

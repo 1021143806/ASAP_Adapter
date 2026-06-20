@@ -72,6 +72,13 @@ def create_app(config: AppConfig) -> FastAPI:
         app.state.sim_controller = _app_sim
         app.state.sim_enabled = False
         app.state._sim_available = _sim_available
+
+        # 保存 zone 原始配置（用于关闭模拟器时恢复）
+        app.state._orig_zone_cfg = {
+            "enter_url": config.zone.enter_url,
+            "exit_url": config.zone.exit_url,
+            "status_url": config.zone.status_url,
+        }
         app.state._orig_door_base_url = config.angel.base_url
 
         # 初始化统一请求日志（循环缓冲区，保留最近 500 条）

@@ -495,6 +495,13 @@ def create_router(app: FastAPI) -> APIRouter:
             config.zone.zone_id = cfg.zone_id
             from .config import save_override
             save_override("zone", "zone_id", cfg.zone_id)
+
+        # 同步更新 _orig_zone_cfg（避免关闭模拟器时恢复到过期值）
+        if hasattr(request.app.state, "_orig_zone_cfg"):
+            request.app.state._orig_zone_cfg["enter_url"] = config.zone.enter_url
+            request.app.state._orig_zone_cfg["exit_url"] = config.zone.exit_url
+            request.app.state._orig_zone_cfg["status_url"] = config.zone.status_url
+
         logger.info("区域管控配置已更新")
         return {
             "status": "ok",
@@ -604,13 +611,12 @@ def create_router(app: FastAPI) -> APIRouter:
         door: DoorClient = request.app.state.door
         zone: ZoneClient = request.app.state.zone
         config: AppConfig = request.app.state.config
-        # 保存原始 URL（仅首次）
-        if not hasattr(request.app.state, "_orig_zone_cfg"):
-            request.app.state._orig_zone_cfg = {
-                "enter_url": config.zone.enter_url,
-                "exit_url": config.zone.exit_url,
-                "status_url": config.zone.status_url,
-            }
+        # 保存当前 URL 作为恢复目标（每次启用时刷新，避免过期）
+        request.app.state._orig_zone_cfg = {
+            "enter_url": config.zone.enter_url,
+            "exit_url": config.zone.exit_url,
+            "status_url": config.zone.status_url,
+        }
         # 重定向 door 到本地模拟端点
         door.set_sim_mode(True)
         # 重定向 zone 到本地模拟端点

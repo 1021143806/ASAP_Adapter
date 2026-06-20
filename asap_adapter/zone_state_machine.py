@@ -10,7 +10,7 @@ import asyncio
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Callable, Awaitable
+from typing import Optional
 
 from .config import AppConfig
 from .zone_client import ZoneClient, ZoneClientError
@@ -78,8 +78,6 @@ class ZoneStateMachine:
         self._status = ZoneFlowStatus()
         self._task: Optional[asyncio.Task] = None
         self._cancel_event = asyncio.Event()
-
-        self.on_event: Optional[Callable[[], Awaitable[None]]] = None
 
         self._status.door_code = config.zone.entry_door_code
         self._status.zone_id = config.zone.zone_id
@@ -386,11 +384,5 @@ class ZoneStateMachine:
             self._status.step_log = self._status.step_log[-30:]
 
     def _publish(self):
-        if self.on_event:
-            asyncio.ensure_future(self._safe_publish())
-
-    async def _safe_publish(self):
-        try:
-            await self.on_event()
-        except Exception as e:
-            logger.warning("Zone 事件发布失败: %s", e)
+        """(已废弃) SSE 事件发布 — v3.3 改用轮询 /api/asap/logs"""
+        pass

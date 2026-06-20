@@ -4,7 +4,7 @@ HTTP API 路由
 提供：
   - RCS/WDCS 对接接口（控制/状态查询）
   - ASAP 管理接口（启动流程/手动控制）
-  - SSE 事件推送（WebUI 实时更新）
+  - 统一请求日志（GET /api/asap/logs）
   - 健康检查
 """
 
@@ -13,12 +13,12 @@ import json
 import logging
 import os
 import re
-from typing import AsyncGenerator, Optional
+from typing import Optional
 from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse, PlainTextResponse
+from fastapi.responses import PlainTextResponse
 
 from pydantic import BaseModel, Field
 
@@ -80,6 +80,7 @@ def _log_req(request: Request, category: str, endpoint: str,
     entry = {
         "id": ctr,
         "time": datetime.now().strftime("%H:%M:%S.%f")[:12],
+        "source": category,
         "category": category,
         "endpoint": endpoint,
         "method": method,
@@ -88,8 +89,8 @@ def _log_req(request: Request, category: str, endpoint: str,
         "status": resp_status,
     }
     log.append(entry)
-    # 超过 200 条时丢弃最早的
-    while len(log) > 200:
+    # 超过 500 条时丢弃最早的
+    while len(log) > 500:
         log.pop(0)
 
 
@@ -129,49 +130,6 @@ def create_router(app: FastAPI) -> APIRouter:
     async def health():
         """健康检查（返回纯文本 1000，与 RCS 协议一致）"""
         return PlainTextResponse("1000")
-
-    # ── SSE 事件流 ────────────────────────────
-
-    @router.get("/api/sse/events")
-    async def sse_events(request: Request):
-        """SSE 事件推送"""
-        sse_clients = request.app.state.sse_clients
-        queue: asyncio.Queue = asyncio.Queue(maxsize=100)
-        sse_clients.append(queue)
-
-        async def generate() -> AsyncGenerator[str, None]:
-            try:
-                # 先发送当前状态快照
-                translator = _get_translator(request)
-                status = translator.get_status()
-                snapshot = json.dumps({
-                    "timestamp": datetime.now().isoformat(),
-                    "event_type": "snapshot",
-                    "data": status.dump(),
-                }, ensure_ascii=False)
-                yield f"data: {snapshot}\n\n"
-
-                while True:
-                    if await request.is_disconnected():
-                        break
-                    try:
-                        msg = await asyncio.wait_for(queue.get(), timeout=30.0)
-                        yield msg
-                    except asyncio.TimeoutError:
-                        yield f"data: {json.dumps({'event_type': 'heartbeat'})}\n\n"
-            finally:
-                if queue in sse_clients:
-                    sse_clients.remove(queue)
-
-        return StreamingResponse(
-            generate(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
 
     # ── RCS 门控（向后兼容旧端点） ──────────────
 
@@ -275,13 +233,31 @@ def create_router(app: FastAPI) -> APIRouter:
                  req_dict, resp.model_dump(), 200)
         return resp
 
-    # ── ASAP 管理接口 ─────────────────────────
+    # ── 统一请求日志 ──────────────────────────
+
+    @router.get("/api/asap/logs")
+    async def get_unified_logs(request: Request, limit: int = 50, source: str = "all"):
+        """获取统一请求日志（RCS + Zone + 系统）
+        
+        Query params:
+          - limit: 返回条数 (默认50, 最大500)
+          - source: 过滤来源 "rcs"|"zone"|"system"|"all" (默认all)
+        """
+        limit = min(max(limit, 1), 500)
+        log = request.app.state.request_log
+        # 按 source 过滤
+        if source == "all":
+            result = log[-limit:]
+        else:
+            result = [e for e in log if e.get("source") == source][-limit:]
+        return {"total": len(result), "logs": result}
+
+    # ── 兼容旧日志端点 ───────────────────────
 
     @router.get("/api/asap/request-log")
     async def get_request_log(request: Request, limit: int = 50):
-        """获取 RCS 请求日志"""
-        log = request.app.state.request_log
-        return {"total": len(log), "logs": log[-limit:]}
+        """[兼容] 获取请求日志（已合并到 /api/asap/logs）"""
+        return await get_unified_logs(request, limit=limit)
 
     @router.get("/api/asap/status")
     async def get_asap_status(request: Request):
@@ -334,9 +310,11 @@ def create_router(app: FastAPI) -> APIRouter:
 
         zsm = request.app.state.zone_sm
         ok = await zsm.force_door_state(door_code, status)
-        if ok:
-            return {"code": 1000, "msg": f"已强制设置 {door_code} 为 {'开' if status == '1' else '关'}"}
-        return {"code": 2003, "msg": f"设置失败，未识别门编号: {door_code}"}
+        resp = {"code": 1000 if ok else 2003,
+                "msg": f"已强制设置 {door_code} 为 {'开' if status == '1' else '关'}" if ok else f"设置失败"}
+        _log_req(request, "control", "/api/asap/zone/force-door",
+                 {"door_code": door_code, "status": status}, resp, 200 if ok else 400)
+        return resp
 
     @router.post("/api/asap/refresh-doors")
     async def refresh_doors(request: Request):
@@ -361,6 +339,38 @@ def create_router(app: FastAPI) -> APIRouter:
             "door2": translator._status.door2.__dict__,
             "results": results,
         }
+
+    # ── 手动门控制（WebUI 按钮） ──────────────
+
+    @router.post("/api/asap/manual/open")
+    async def manual_open(request: Request):
+        """手动开门"""
+        door_id = request.query_params.get("door_id", "DOOR01")
+        translator = _get_translator(request)
+        try:
+            await translator.manual_open(door_id)
+            _log_req(request, "control", "/api/asap/manual/open",
+                     {"door_id": door_id}, {"code": 1000, "msg": f"{door_id} 已发送开门指令"}, 200)
+            return {"code": 1000, "msg": f"{door_id} 已发送开门指令"}
+        except Exception as e:
+            _log_req(request, "control", "/api/asap/manual/open",
+                     {"door_id": door_id}, {"code": 9999, "msg": str(e)}, 500)
+            return {"code": 9999, "msg": str(e)}
+
+    @router.post("/api/asap/manual/close")
+    async def manual_close(request: Request):
+        """手动关门"""
+        door_id = request.query_params.get("door_id", "DOOR01")
+        translator = _get_translator(request)
+        try:
+            await translator.manual_close(door_id)
+            _log_req(request, "control", "/api/asap/manual/close",
+                     {"door_id": door_id}, {"code": 1000, "msg": f"{door_id} 已发送关门指令"}, 200)
+            return {"code": 1000, "msg": f"{door_id} 已发送关门指令"}
+        except Exception as e:
+            _log_req(request, "control", "/api/asap/manual/close",
+                     {"door_id": door_id}, {"code": 9999, "msg": str(e)}, 500)
+            return {"code": 9999, "msg": str(e)}
 
     # ── RCS 配置管理 ──────────────────────────
 

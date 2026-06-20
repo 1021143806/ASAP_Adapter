@@ -2,7 +2,7 @@
 ASAP Adapter 主入口
 
 启动 FastAPI Web 服务，整合所有模块：
-  - 端口 5012（API + WebUI + SSE）
+   - 端口 5012（API + WebUI + 请求日志）
   - 健康检查 /actuator/health
   - RCS 对接接口
   - 风淋流程控制
@@ -73,46 +73,9 @@ def create_app(config: AppConfig) -> FastAPI:
         app.state._sim_available = _sim_available
         app.state._orig_door_base_url = config.angel.base_url
 
-        # 初始化 SSE 事件总线
-        sse_clients: list = []
-        app.state.sse_clients = sse_clients
-
-        # 初始化 RCS 请求日志（循环缓冲区，保留最近 200 条）
+        # 初始化统一请求日志（循环缓冲区，保留最近 500 条）
         app.state.request_log = []
         app.state.request_log_counter = 0
-
-        # ── SSE 事件回调 ──────────────────
-
-        async def _on_event(event: dict):
-            payload = json.dumps(event, ensure_ascii=False)
-            dead = []
-            for q in sse_clients:
-                try:
-                    q.put_nowait(f"data: {payload}\n\n")
-                except asyncio.QueueFull:
-                    dead.append(q)
-            for q in dead:
-                sse_clients.remove(q)
-
-        translator.on_event = _on_event
-
-        # ZoneStateMachine SSE 回调
-        async def _zone_on_event():
-            event = {
-                "timestamp": datetime.now().isoformat(),
-                "event_type": "zone_snapshot",
-                "data": zsm.status.dump(),
-            }
-            payload = json.dumps(event, ensure_ascii=False)
-            dead = []
-            for q in sse_clients:
-                try:
-                    q.put_nowait(f"data: {payload}\n\n")
-                except asyncio.QueueFull:
-                    dead.append(q)
-            for q in dead:
-                sse_clients.remove(q)
-        zsm.on_event = _zone_on_event
 
         # 存入 app.state 供路由使用
         app.state.door = door
@@ -174,7 +137,7 @@ def create_app(config: AppConfig) -> FastAPI:
     app = FastAPI(
         title="ASAP Adapter",
         description="风淋门-区域管控协议适配器",
-        version="3.1.0",
+        version="3.3.0",
         lifespan=lifespan,
     )
 

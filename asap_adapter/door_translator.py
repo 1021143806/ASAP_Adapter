@@ -11,7 +11,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Callable, Awaitable
+from typing import Optional
 
 from .config import AppConfig
 from .door_client import DoorClient, DoorClientError
@@ -103,9 +103,6 @@ class AirShowerTranslator:
 
         # 门 ↔ 编码映射
         self._refresh_mapping()
-
-        # SSE 回调
-        self.on_event: Optional[Callable[[dict], Awaitable[None]]] = None
 
     # ── 门编码映射 ──────────────────────────────
 
@@ -454,16 +451,5 @@ class AirShowerTranslator:
             self._status.step_log = self._status.step_log[-30:]
 
     def _publish(self):
-        """发布 SSE 事件"""
-        if self.on_event:
-            asyncio.ensure_future(self._safe_publish())
-
-    async def _safe_publish(self):
-        try:
-            await self.on_event({
-                "timestamp": datetime.now().isoformat(),
-                "event_type": "air_shower_snapshot",
-                "data": self._status.dump(),
-            })
-        except Exception as e:
-            logger.warning("事件发布失败: %s", e)
+        """(已废弃) SSE 事件发布 — v3.3 改用轮询 /api/asap/logs"""
+        pass

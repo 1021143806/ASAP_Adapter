@@ -6,6 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <title>模拟器 — ASAP Adapter</title>
 <link rel="stylesheet" href="/static/common.css">
+<script src="/static/common.js"></script>
 <style>
   /* 模拟器专用补充样式 */
   .state-open { color: var(--success); background: rgba(52,211,153,0.1); }
@@ -171,7 +172,7 @@ let doorIds = { outer: "DOOR01", inner: "DOOR02" };
 let simAutoScroll = true;
 let simLogEntries = [];
 
-function init() { updateStatus(); setInterval(updateStatus, 1000); }
+function init() { initTheme(); initNav("/sim"); updateStatus(); setInterval(updateStatus, 1000); }
 async function api(path, opts = {}) {
   const resp = await fetch(path, opts);
   return resp.json();
@@ -280,18 +281,6 @@ function scrollLogBottom() {
   const c = document.getElementById("logContainer");
   if (c) c.scrollTop = c.scrollHeight;
 }
-
-function jsonHighlight(s) {
-  // HTML转义 + 语法高亮
-  let html = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return html
-    .replace(/"([^"]+)":/g, '<span style="color:var(--accent);">"$1"</span>:')
-    .replace(/: "([^"]*)"/g, ': <span style="color:var(--success);">"$1"</span>')
-    .replace(/: (\d+\.?\d*)/g, ': <span style="color:var(--warning);">$1</span>')
-    .replace(/: (true|false)/g, ': <span style="color:#f0a060;">$1</span>')
-    .replace(/: (null)/g, ': <span style="color:var(--text-muted);">$1</span>');
-}
-function escHtml(s) { const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
 
 // ── 手动控制 ──
 async function setDoor(doorId, state) {

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>区域管控 — ASAP Adapter</title>
 <link rel="stylesheet" href="/static/common.css">
+<script src="/static/common.js"></script>
 </head>
 <body>
   <div id="jsErrorBar" style="display:none;background:var(--danger);color:#fff;padding:8px 16px;font-size:12px;text-align:center;position:sticky;top:0;z-index:9999;" onclick="this.style.display='none'"></div>
@@ -73,56 +74,112 @@
       </div>
     </div>
 
-    <!-- 步骤日志 -->
+    <!-- 统一请求日志 -->
     <div class="glass log-panel-full">
-      <div class="card-title">📦 步骤报文</div>
-      <div id="zoneStepLog" style="max-height:300px;overflow-y:auto;font-size:11px;font-family:'SF Mono','Fira Code',monospace;">
-        <div style="color:var(--text-muted);padding:10px;text-align:center;">暂无记录</div>
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>📋 请求日志 <span id="zoneLogCount" style="font-size:10px;color:var(--text-muted);font-weight:400;"></span></span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="font-size:10px;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;gap:4px;">
+            <input type="checkbox" id="zoneAutoScroll" checked> 自动滚动
+          </label>
+          <button class="btn btn-sm" onclick="document.getElementById('zoneLogContainer').scrollTop=document.getElementById('zoneLogContainer').scrollHeight" style="font-size:9px;padding:2px 6px;">⬇ 滚到底</button>
+        </div>
+      </div>
+      <div id="zoneLogContainer" style="max-height:300px;overflow-y:auto;font-size:11px;font-family:'SF Mono','Fira Code',monospace;line-height:1.6;">
+        <div style="color:var(--text-muted);padding:10px;text-align:center;">等待请求...</div>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-window.onerror = function(msg, url, line) {
-  const bar = document.getElementById("jsErrorBar");
-  if (bar) { bar.textContent = "⚠ " + msg + " (行" + line + ")"; bar.style.display = "block"; }
-};
-
-// ══ 初始化 ══
-let sseConnected = false;
+// ══ 区域管控页面 — v3.3 重建 ══
+let _pollLogsTimer = null;
+let _pollStatusTimer = null;
 
 function init() {
+  initTheme();
+  initNav("/zone");
   fetchZoneStatus();
-}, 500);
+  _pollStatusTimer = setInterval(fetchZoneStatus, 3000);
+  _pollLogsTimer = pollLogs("zoneLogContainer", "zoneLogCount", "zoneAutoScroll", { limit: 50 });
 }
 
-function jsonHighlight(s) {
-  let html = (s || "").replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return html
-    .replace(/"([^"]+)":/g, '<span style="color:var(--accent);">"$1"</span>:')
-    .replace(/: "([^"]*)"/g, ': <span style="color:var(--success);">"$1"</span>')
-    .replace(/: (\d+\.?\d*)/g, ': <span style="color:var(--warning);">$1</span>')
-    .replace(/: (true|false)/g, ': <span style="color:#f0a060;">$1</span>')
-    .replace(/: (null)/g, ': <span style="color:var(--text-muted);">$1</span>');
+async function fetchZoneStatus() {
+  try {
+    const resp = await fetch("/api/asap/zone-status");
+    const data = await resp.json();
+    updateZoneDashboard(data);
+  } catch (e) { console.error("获取区域状态失败:", e); }
 }
 
-// ══ 主题 ══
-function toggleTheme() {
-  const html = document.documentElement;
-  const current = html.getAttribute("data-theme");
-  const next = current === "dark" ? "light" : "dark";
-  html.setAttribute("data-theme", next);
-  localStorage.setItem("theme", next);
-  document.querySelector(".theme-toggle").textContent = next === "dark" ? "🌙" : "☀️";
+function updateZoneDashboard(data) {
+  setText("zoneId", data.zone_id || "--");
+  setText("currentAgv", data.current_agv || "--");
+
+  // 区域占用状态
+  const statusEl = document.getElementById("zoneStatus");
+  const occupiedByEl = document.getElementById("zoneOccupiedBy");
+  const zoneStatus = data.zone_status || "unknown";
+
+  if (statusEl) {
+    if (zoneStatus === "occupied" || zoneStatus === "granted") {
+      statusEl.textContent = "已占用";
+      statusEl.className = "zone-value occupied";
+    } else if (zoneStatus === "available") {
+      statusEl.textContent = "空闲";
+      statusEl.className = "zone-value available";
+    } else {
+      statusEl.textContent = zoneStatus || "未知";
+      statusEl.className = "zone-value unknown";
+    }
+  }
+  if (occupiedByEl) {
+    occupiedByEl.textContent = data.zone_occupied_by || (zoneStatus === "occupied" ? "(占用)" : "--");
+    occupiedByEl.className = data.zone_occupied_by ? "zone-value occupied" : "zone-value unknown";
+  }
+
+  // 门状态
+  const doorStatus = data.door_status || "2";
+  const doorStatusEl = document.getElementById("zoneEntryDoorStatus");
+  const doorTextEl = document.getElementById("zoneEntryDoorText");
+  const doorCard = document.getElementById("zoneEntryDoor");
+  if (doorStatusEl) {
+    if (doorStatus === "1") { doorStatusEl.textContent = "开"; doorStatusEl.className = "door-status-value open"; }
+    else { doorStatusEl.textContent = "关"; doorStatusEl.className = "door-status-value closed"; }
+  }
+  if (doorTextEl) {
+    doorTextEl.textContent = doorStatus === "1" ? "已打开" : "已关闭";
+  }
+  if (doorCard) {
+    doorCard.className = "door-card " + (doorStatus === "1" ? "tag-open" : "tag-closed");
+  }
+
+  // 流程状态
+  setText("zoneFlowState", (data.state || "空闲").toUpperCase());
+  setText("zoneLastCheck", data.last_check ? data.last_check.slice(0, 19) : "从未");
 }
 
-(function() {
-  const saved = localStorage.getItem("theme");
-  if (saved) document.documentElement.setAttribute("data-theme", saved);
-  document.querySelector(".theme-toggle").textContent = (saved || "dark") === "dark" ? "🌙" : "☀️";
-  init();
-})();
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value || "--";
+}
+
+async function zoneForceDoor(doorCode, status) {
+  try {
+    const resp = await fetch("/api/asap/zone/force-door", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ door_code: doorCode, status: status }),
+    });
+    const data = await resp.json();
+    console.log("force-door:", data);
+    setTimeout(fetchZoneStatus, 500);
+  } catch (e) { console.error("强制门操作失败:", e); }
+}
+
+// ══ 启动 ══
+(function() { init(); })();
 </script>
 </body>
 </html>

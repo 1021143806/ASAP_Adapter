@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>升级管理 — ASAP Adapter</title>
 <link rel="stylesheet" href="/static/common.css">
+<script src="/static/common.js"></script>
 </head>
 <body>
   <div id="jsErrorBar" style="display:none;background:var(--danger);color:#fff;padding:8px 16px;font-size:12px;text-align:center;position:sticky;top:0;z-index:9999;" onclick="this.style.display='none'"></div>
@@ -72,12 +73,9 @@
 </div>
 
 <script>
-window.onerror = function(msg, url, line) {
-  const bar = document.getElementById("jsErrorBar");
-  if (bar) { bar.textContent = "⚠ " + msg + " (行" + line + ")"; bar.style.display = "block"; }
-};
-
 function init() {
+  initTheme();
+  initNav("/upgrade");
   loadUpgradeVersion();
   loadUpgradeRecords();
   upgradeInitUpload();
@@ -187,21 +185,7 @@ function upgradeInitUpload() {
   });
 }
 
-// ══ 主题 ══
-function toggleTheme() {
-  const html = document.documentElement;
-  const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
-  html.setAttribute("data-theme", next);
-  localStorage.setItem("theme", next);
-  document.querySelector(".theme-toggle").textContent = next === "dark" ? "🌙" : "☀️";
-}
-
-(function() {
-  const saved = localStorage.getItem("theme");
-  if (saved) document.documentElement.setAttribute("data-theme", saved);
-  document.querySelector(".theme-toggle").textContent = (saved || "dark") === "dark" ? "🌙" : "☀️";
-  init();
-})();
+(function() { init(); })();
 </script>
 </body>
 </html>

@@ -281,7 +281,7 @@ class SimController:
         inner_id = self.inner_door.door_id
         self.outer_door = SimDoor(door_id=outer_id)
         self.inner_door = SimDoor(door_id=inner_id)
-        self.zone = SimZone(zone_id="air_shower_room")
+        self.zone = SimZone(zone_id=self.zone.zone_id)  # 保留原 zone_id，不硬编码
         self.config = SimConfig()
         self.request_log.clear()
         self._log("system", "", "全部重置")

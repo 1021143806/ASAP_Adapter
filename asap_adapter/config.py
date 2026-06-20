@@ -60,6 +60,7 @@ class ZoneConfig:
     entry_door_code: str = "q001"   # RCS doorNum → 进入区域
     retry_interval: float = 3.0
     max_retries: int = 10
+    enter_retry_max: int = 30        # 进入区域最大重试次数（每次间隔1s）
     exit_retry_interval: float = 1.0
     exit_max_retries: int = 30
     zone_poll_interval: float = 300.0  # 区域状态定时轮询间隔(秒)，默认5分钟
@@ -132,11 +133,12 @@ def load_config(path: Optional[str] = None) -> AppConfig:
                            ("base_url", "outer_door_id", "inner_door_id",
                             "poll_interval", "poll_timeout"))
             _apply_section(cfg, data, "zone",
-                           ("enter_url", "exit_url", "status_url", "zone_id",
-                            "client_id", "entry_door_code",
-                            "retry_interval", "max_retries",
-                            "exit_retry_interval", "exit_max_retries",
-                            "zone_poll_interval"))
+                            ("enter_url", "exit_url", "status_url", "zone_id",
+                             "client_id", "entry_door_code",
+                             "retry_interval", "max_retries",
+                             "enter_retry_max",
+                             "exit_retry_interval", "exit_max_retries",
+                             "zone_poll_interval"))
             _apply_section(cfg, data, "air_shower",
                            ("duration", "agv_enter_timeout", "agv_exit_timeout"))
             _apply_section(cfg, data, "rcs",
@@ -335,11 +337,12 @@ def _load_unified(cfg: AppConfig):
                        ("base_url", "outer_door_id", "inner_door_id",
                         "poll_interval", "poll_timeout"))
         _apply_section(cfg, data, "zone",
-                       ("enter_url", "exit_url", "status_url", "zone_id",
-                        "client_id", "entry_door_code", "exit_door_code",
-                        "retry_interval", "max_retries",
-                        "exit_retry_interval", "exit_max_retries",
-                        "zone_poll_interval"))
+                        ("enter_url", "exit_url", "status_url", "zone_id",
+                         "client_id", "entry_door_code", "exit_door_code",
+                         "retry_interval", "max_retries",
+                         "enter_retry_max",
+                         "exit_retry_interval", "exit_max_retries",
+                         "zone_poll_interval"))
         _apply_section(cfg, data, "rcs",
                        ("change_status_url", "report_interval", "door_code_mapping"))
         _apply_section(cfg, data, "air_shower",
@@ -434,6 +437,7 @@ def save_unified_config(data: dict) -> dict:
             for k in ("enter_url", "exit_url", "status_url", "zone_id",
                       "client_id", "entry_door_code",
                       "retry_interval", "max_retries",
+                      "enter_retry_max",
                       "exit_retry_interval", "exit_max_retries",
                       "zone_poll_interval"):
                 if k in zone:

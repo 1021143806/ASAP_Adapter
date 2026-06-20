@@ -149,7 +149,7 @@ def create_router(sim: SimController) -> APIRouter:
             pass
         busy = body.get("busy", True) if "busy" in body else request.query_params.get("busy", "true") != "false"
         client = body.get("client") or request.query_params.get("client", "")
-        sim._log("manual", sim.config.zone_id, f"设置区域: busy={busy} client={client}", req_body=body if body else {"busy": busy, "client": client},
+        sim._log("manual", sim.zone.zone_id, f"设置区域: busy={busy} client={client}", req_body=body if body else {"busy": busy, "client": client},
                  method="POST", path="/api/sim/zone/busy")
         sim.manual_set_zone_busy(busy, client)
         return {"status": "ok", "busy": busy}

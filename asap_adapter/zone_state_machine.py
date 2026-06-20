@@ -111,23 +111,29 @@ class ZoneStateMachine:
     # ── RCS 控制接口 ──────────────────────────
 
     async def handle_open(self, door_code: str, agv_id: str = "") -> (bool, str):
-        """RCS doorStatus=1 — 开门"""
+        """RCS doorStatus=1 — 开门
+        非阻塞：收到请求立即返回 1000，后台异步重试进入区域。
+        RCS 通过门状态查询（door_status_by_code）获知实际开闭状态：
+          - 区域未进入 → status=2 (关门)
+          - 区域进入成功 → status=1 (开门)
+        """
         entry = self.config.zone.entry_door_code
 
-        if door_code == entry:
-            if self.is_busy:
-                return False, f"区域流程忙碌中: {self._state.value}"
-            self._cancel_event.clear()
-            self._status = ZoneFlowStatus()
-            self._status.door_code = entry
-            self._status.zone_id = self.config.zone.zone_id
-            self._status.current_agv = agv_id
-            self._status.started_at = datetime.now().isoformat()
-            self._task = asyncio.create_task(self._enter_flow())
-            self._publish()
-            return True, "进入区域流程已启动"
+        if door_code != entry:
+            return False, f"未知门编号: {door_code}"
 
-        return False, f"未知门编号: {door_code}"
+        if self.is_busy:
+            return False, f"区域流程忙碌中: {self._state.value}"
+
+        self._cancel_event.clear()
+        self._status = ZoneFlowStatus()
+        self._status.door_code = entry
+        self._status.zone_id = self.config.zone.zone_id
+        self._status.current_agv = agv_id
+        self._status.started_at = datetime.now().isoformat()
+        self._task = asyncio.create_task(self._enter_flow())
+        self._publish()
+        return True, "进入区域流程已启动"
 
     async def handle_close(self, door_code: str) -> (bool, str):
         """RCS doorStatus=2 — 关门"""
@@ -149,10 +155,14 @@ class ZoneStateMachine:
 
         return False, f"未知门编号: {door_code}"
 
-    # ── 进入区域流程 ──────────────────────────
+    # ── 进入区域流程（异步）────────────────────
 
     async def _enter_flow(self):
-        """进入区域：POST enter, 间隔1s重试直到 granted"""
+        """
+        进入区域：POST enter, 间隔1s重试直到 granted 且 zone_id 匹配
+        - 被占用或 zone_id 不匹配 → 继续重试，门保持关闭 (status=2)
+        - 成功 → 门状态变为打开 (status=1)
+        """
         try:
             self._set_state(ZoneFlowState.ENTERING)
             self._status.current_step = 1
@@ -169,17 +179,31 @@ class ZoneStateMachine:
                                    f"POST {enter_url}",
                                    {"zone_id": zone_id, "client_id": self.config.zone.client_id})
                     result = await self.zone.enter()
-                    self._log_step(1, "进入区域成功", "enter_zone", "recv",
+                    resp_zone_id = result.zone_id if hasattr(result, 'zone_id') else getattr(result, 'zone_id', '')
+
+                    # 校验返回的 zone_id 是否匹配配置
+                    if resp_zone_id and resp_zone_id != zone_id:
+                        logger.warning("Zone 返回 zone_id 不匹配: got=%s expected=%s, 重试...",
+                                       resp_zone_id, zone_id)
+                        self._status.zone_occupied_by = f"zone mismatch: {resp_zone_id}"
+                        self._publish()
+                        await asyncio.sleep(1)
+                        continue
+
+                    self._log_step(1, f"进入区域成功(zone={resp_zone_id})", "enter_zone", "recv",
                                    f"POST {enter_url}",
                                    {"permission_id": result.permission_id,
-                                    "zone_id": zone_id, "status": "granted"})
+                                    "zone_id": resp_zone_id, "status": "granted"})
                     break
+
                 except ZoneClientError as e:
-                    if "被占用" in str(e):
+                    err_str = str(e)
+                    if "占用" in err_str or "occupied" in err_str.lower() or "409" in err_str:
                         self._status.zone_status = "occupied"
-                        self._status.zone_occupied_by = str(e).split(":")[-1].strip() if ":" in str(e) else ""
+                        self._status.zone_occupied_by = err_str.split(":")[-1].strip() if ":" in err_str else err_str
                         self._publish()
-                        logger.info("Zone 被占用, 1s后重试 (第%d次)", attempt)
+                        logger.info("Zone 被占用(%s), 1s后重试 (第%d次)",
+                                     self._status.zone_occupied_by, attempt)
                         await asyncio.sleep(1)
                         continue
                     raise
@@ -192,6 +216,7 @@ class ZoneStateMachine:
             self._status.door_status = "1"
             self._status.current_step = 2
             self._status.zone_status = "granted"
+            self._status.zone_occupied_by = ""
             self._log_step(2, "q001 已开(区域已进入)", "q001_open", "info", "",
                            {"door": self._status.door_code, "status": "open"})
             self._publish()
@@ -282,11 +307,17 @@ class ZoneStateMachine:
         self._set_state(ZoneFlowState.IDLE)
 
     async def force_door_state(self, door_code: str, status: str) -> bool:
-        """强制设置门状态（调试/异常恢复用）"""
+        """强制设置门状态（调试/异常恢复用），同时重置状态机"""
         if door_code == self._status.door_code:
             old = self._status.door_status
             self._status.door_status = status
-            logger.info("Zone 强制设置 %s: %s → %s", door_code, old, status)
+            # 如果强制关门，重置状态机
+            if status == "2" and self._state != ZoneFlowState.IDLE:
+                if self._task and not self._task.done():
+                    self._cancel_event.set()
+                    self._task.cancel()
+                self._set_state(ZoneFlowState.IDLE)
+            logger.info("Zone 强制设置 %s: %s → %s (state→%s)", door_code, old, status, self._state.value)
             self._log_step(0, f"强制设置 q001={'开' if status=='1' else '关'}", "force_door",
                            "info", "", {"door": door_code, "old": old, "new": status})
             self._publish()

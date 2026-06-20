@@ -169,6 +169,16 @@ def create_router(app: FastAPI) -> APIRouter:
             },
         )
 
+    # ── RCS 门控（向后兼容旧端点） ──────────────
+
+    @router.post("/api/rcs/controlDoor")
+    async def rcs_control_door_legacy(request: Request):
+        """
+        [兼容] RCS 门禁控制（v2.x 旧端点）
+        直接委托到合并端点 /api/rcs/doorStatus
+        """
+        return await rcs_door_status(request)
+
     # ── RCS 门状态查询 + 控制（合并端点）─────────
 
     @router.post("/api/rcs/doorStatus")

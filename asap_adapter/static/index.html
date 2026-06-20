@@ -81,6 +81,12 @@
       <div id="rcsLogContainer" style="max-height:300px;overflow-y:auto;font-size:11px;font-family:'SF Mono','Fira Code',monospace;line-height:1.6;">
         <div style="color:var(--text-muted);padding:10px;text-align:center;">等待 RCS 请求...</div>
       </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px;">
+        <label style="font-size:10px;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" id="rcsAutoScroll" checked onchange="rcsAutoScroll=this.checked"> 自动滚动
+        </label>
+        <button class="btn btn-sm" onclick="document.getElementById('rcsLogContainer').scrollTop=document.getElementById('rcsLogContainer').scrollHeight" style="font-size:9px;padding:2px 6px;">⬇ 滚到底</button>
+      </div>
     </div>
   </div>
 
@@ -111,6 +117,8 @@ window.addEventListener('unhandledrejection', function(e) {
 let sseConnected = false;
 let doorIds = { door1: "DOOR01", door2: "DOOR02" };
 let simEnabled = false;
+let rcsAutoScroll = true;
+let rcsLogEntries = [];
 
 // ══ 初始化 ══
 function init() {
@@ -232,19 +240,46 @@ async function loadRcsLogs() {
     if (count) count.textContent = "(共" + data.total + "条)";
     if (!data.logs || data.logs.length === 0) {
       container.innerHTML = '<div style="color:var(--text-muted);padding:10px;text-align:center;">无请求记录</div>';
+      rcsLogEntries = [];
       return;
     }
-    container.innerHTML = data.logs.reverse().map(l => {
-      const catColor = l.category === "control" ? "var(--warning)" : "var(--accent)";
-      return '<div style="margin:4px 0;padding:4px 8px;background:var(--card-bg);border-radius:4px;">' +
-        '<span style="font-size:10px;color:var(--text-muted);margin-right:8px;">' + (l.time || "") + '</span>' +
-        '<span style="font-size:10px;color:' + catColor + ';margin-right:8px;">' + (l.category || "") + '</span>' +
-        '<span style="font-size:11px;">' + JSON.stringify(l.request) + '</span>' +
-        '<span style="font-size:10px;color:var(--text-muted);margin-left:8px;">→ ' + (l.status || "") + '</span>' +
-        '</div>';
-    }).join("");
+    // 判断是否有新条目
+    const oldLen = rcsLogEntries.length;
+    if (data.logs.length > oldLen) {
+      const newEntries = data.logs.slice(oldLen);
+      rcsLogEntries = data.logs;
+      newEntries.reverse().forEach(l => {
+        const div = document.createElement("div");
+        div.style.cssText = "margin:4px 0;padding:6px 8px;background:var(--card-bg);border-radius:6px;border-left:3px solid " +
+          (l.category === "control" ? "var(--warning)" : "var(--accent)");
+        const time = l.time || "";
+        const reqJson = JSON.stringify(l.request || {}, null, 2);
+        const respJson = typeof l.response === "string" ? l.response : JSON.stringify(l.response || {}, null, 2);
+        div.innerHTML =
+          '<div style="display:flex;justify-content:space-between;cursor:pointer;" onclick="var d=this.nextElementSibling;d.style.display=d.style.display===\'none\'?\'block\':\'none\'">' +
+            '<span><span style="font-size:10px;color:var(--text-muted);">' + time + '</span> ' +
+            '<span style="font-size:10px;color:' + (l.category === "control" ? "var(--warning)" : "var(--accent)") + ';">' +
+            (l.category || "") + '</span> ' +
+            '<span style="font-size:11px;">' + escHtml(JSON.stringify(l.request)) + '</span></span>' +
+            '<span style="font-size:10px;color:var(--text-muted);">' + (l.status || "") + ' ▼</span>' +
+          '</div>' +
+          '<div style="display:none;margin-top:4px;font-size:10px;">' +
+            '<div style="color:var(--warning);">📤 请求:</div>' +
+            '<pre style="background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;max-height:120px;overflow:auto;margin:2px 0;">' + escHtml(reqJson) + '</pre>' +
+            '<div style="color:var(--success);">📥 响应:</div>' +
+            '<pre style="background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;max-height:120px;overflow:auto;margin:2px 0;">' + escHtml(respJson) + '</pre>' +
+          '</div>';
+        container.appendChild(div);
+      });
+      // 自动滚动
+      if (rcsAutoScroll) container.scrollTop = container.scrollHeight;
+      // 限制最多200条DOM
+      while (container.children.length > 200) container.removeChild(container.firstChild);
+    }
   } catch (e) { console.error("RCS日志加载失败:", e); }
 }
+
+function escHtml(s) { const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
 
 // ══ SSE 事件流 ══
 function connectSSE() {

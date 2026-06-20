@@ -98,6 +98,9 @@ class ZoneConfigUpdate(BaseModel):
     enter_url: str = ""
     exit_url: str = ""
     status_url: str = ""
+    zone_id: Optional[str] = None
+    entry_door_code: Optional[str] = None
+    zone_poll_interval: Optional[float] = None
 
 logger = logging.getLogger(__name__)
 

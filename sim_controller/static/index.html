@@ -4,378 +4,167 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
-<title>模拟器 — ASAP Adapter 内置</title>
+<title>模拟器 — ASAP Adapter</title>
+<link rel="stylesheet" href="/static/common.css">
 <style>
-:root {
-  --bg: #0d1117;
-  --card: #161b22;
-  --card-border: #30363d;
-  --text: #e6edf3;
-  --text-muted: #8b949e;
-  --accent: #58a6ff;
-  --success: #3fb950;
-  --warning: #d29922;
-  --danger: #f85149;
-  --door-closed: #8b949e;
-  --door-open: #3fb950;
-  --door-fault: #f85149;
-  --door-transition: #d29922;
-  --radius: 10px;
-  --shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
-
-* { margin:0; padding:0; box-sizing:border-box; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-  padding: 16px;
-}
-
-.header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 20px; padding: 12px 20px;
-  background: var(--card); border: 1px solid var(--card-border);
-  border-radius: var(--radius); box-shadow: var(--shadow);
-}
-.header h1 { font-size: 18px; font-weight: 600; }
-.header-badge { font-size: 12px; color: var(--text-muted); }
-.badge-dot { display:inline-block; width:8px; height:8px; border-radius:50%;
-             background:var(--success); margin-right:6px; }
-
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-.full { grid-column: 1 / -1; }
-
-.card {
-  background: var(--card); border: 1px solid var(--card-border);
-  border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);
-}
-.card-title {
-  font-size: 11px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 12px;
-}
-
-/* 门卡片 */
-.door-row { display: flex; gap: 12px; }
-.door-card {
-  flex: 1; padding: 14px; border-radius: 8px;
-  background: rgba(255,255,255,0.03); border: 1px solid var(--card-border);
-  text-align: center; transition: all 0.3s;
-}
-.door-card .icon { font-size: 32px; margin-bottom: 6px; }
-.door-card .name { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
-.door-card .state {
-  font-size: 15px; font-weight: 700;
-  padding: 4px 12px; border-radius: 6px;
-  display: inline-block; margin-bottom: 8px;
-}
-.door-card .actions { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; }
-
-.state-closed { color: var(--door-closed); background: rgba(139,148,158,0.1); }
-.state-open { color: var(--door-open); background: rgba(63,185,80,0.1); }
-.state-fault { color: var(--door-fault); background: rgba(248,81,73,0.1); }
-.state-opening, .state-closing { color: var(--warning); background: rgba(210,153,34,0.1);
-  animation: pulse 1s infinite; }
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
-.tag-closed { border-left: 3px solid var(--door-closed); }
-.tag-open { border-left: 3px solid var(--door-open); }
-.tag-fault { border-left: 3px solid var(--door-fault); }
-.tag-opening, .tag-closing { border-left: 3px solid var(--warning); }
-
-/* 按钮 */
-.btn {
-  padding: 5px 10px; border-radius: 6px; border: 1px solid var(--card-border);
-  background: transparent; color: var(--text); font-size: 11px;
-  cursor: pointer; transition: all 0.15s; font-family: inherit;
-}
-.btn:hover { background: rgba(255,255,255,0.06); }
-.btn:active { transform: scale(0.95); }
-.btn-primary { border-color: var(--accent); color: var(--accent); }
-.btn-primary:hover { background: var(--accent); color: #fff; }
-.btn-success { border-color: var(--success); color: var(--success); }
-.btn-success:hover { background: var(--success); color: #fff; }
-.btn-danger { border-color: var(--danger); color: var(--danger); }
-.btn-danger:hover { background: var(--danger); color: #fff; }
-.btn-warning { border-color: var(--warning); color: var(--warning); }
-.btn-warning:hover { background: var(--warning); color: #000; }
-.btn-sm { padding: 3px 7px; font-size: 10px; }
-
-/* 区域 */
-.zone-info { display: flex; flex-direction: column; gap: 8px; }
-.zone-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 8px 10px; background: rgba(255,255,255,0.02);
-  border-radius: 6px; border: 1px solid var(--card-border);
-}
-.zone-row .label { font-size: 12px; color: var(--text-muted); }
-.zone-row .value { font-size: 13px; font-weight: 600; }
-
-/* 配置面板 */
-.config-row {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
-  flex-wrap: wrap;
-}
-.config-row label { font-size: 12px; color: var(--text-muted); min-width: 80px; }
-.config-row input {
-  background: rgba(255,255,255,0.05); border: 1px solid var(--card-border);
-  border-radius: 4px; padding: 4px 8px; color: var(--text);
-  font-size: 12px; width: 60px;
-}
-.config-row input:focus { outline: none; border-color: var(--accent); }
-
-/* 日志 */
-.log-container {
-  height: 200px; overflow-y: auto; font-family: "SF Mono", "Menlo", monospace;
-  font-size: 11px; line-height: 1.6;
-  background: rgba(0,0,0,0.3); border-radius: 6px;
-  padding: 8px; border: 1px solid var(--card-border);
-}
-.log-entry {
-  display: flex; align-items: center; gap: 4px;
-  padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.02);
-  color: var(--text-muted);
-}
-.log-entry .t { color: rgba(255,255,255,0.25); margin-right: 4px; flex-shrink: 0; }
-.log-entry .cat { display: inline-block; width: 42px; font-weight: 600; flex-shrink: 0; }
-.log-entry .cat.control { color: var(--accent); }
-.log-entry .cat.query { color: var(--text-muted); }
-.log-entry .cat.transition { color: var(--success); }
-.log-entry .cat.zone { color: var(--warning); }
-.log-entry .cat.fault { color: var(--danger); }
-.log-entry .cat.manual { color: #d2a8ff; }
-.log-entry .cat.config { color: var(--text-muted); }
-.log-entry .cat.system { color: var(--warning); }
-.log-entry .msg {
-  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.log-entry .detail-btn {
-  flex-shrink: 0; background: none; border: 1px solid var(--card-border);
-  border-radius: 4px; color: var(--text-muted); font-size: 9px;
-  padding: 1px 6px; cursor: pointer; transition: all 0.15s;
-  font-family: inherit; line-height: 1.5; opacity: 0.5;
-}
-.log-entry:hover .detail-btn { opacity: 1; }
-.log-entry .detail-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
-.log-entry .detail-btn.no-data { opacity: 0.2; cursor: default; }
-
-/* 报文详情弹窗 */
-.modal-overlay {
-  display: none; position: fixed; z-index: 1000;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
-  align-items: center; justify-content: center;
-}
-.modal-overlay.open { display: flex; }
-.modal {
-  background: var(--card); border: 1px solid var(--card-border);
-  border-radius: 12px; max-width: 700px; width: 90%;
-  max-height: 80vh; display: flex; flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-}
-.modal-header {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 14px 18px; border-bottom: 1px solid var(--card-border);
-}
-.modal-header h3 { font-size: 14px; font-weight: 600; }
-.modal-close {
-  background: none; border: none; color: var(--text-muted);
-  font-size: 18px; cursor: pointer; padding: 4px; line-height: 1;
-}
-.modal-close:hover { color: var(--text); }
-.modal-body {
-  padding: 14px 18px; overflow-y: auto; flex: 1;
-  font-family: "SF Mono", "Menlo", monospace; font-size: 12px;
-  line-height: 1.5;
-}
-.modal-body .section-title {
-  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
-  color: var(--text-muted); margin: 10px 0 4px; font-weight: 600;
-}
-.modal-body .section-title:first-child { margin-top: 0; }
-.modal-body pre {
-  background: rgba(0,0,0,0.3); border: 1px solid var(--card-border);
-  border-radius: 6px; padding: 10px; overflow-x: auto; margin: 0;
-  white-space: pre-wrap; word-break: break-all;
-  color: var(--text);
-}
-.modal-body .label {
-  display: inline-block; background: rgba(88,166,255,0.1);
-  color: var(--accent); font-size: 10px; padding: 1px 6px;
-  border-radius: 4px; margin-bottom: 4px;
-}
-
-/* Checkbox switch */
-.switch { position: relative; display: inline-block; width: 36px; height: 20px; }
-.switch input { opacity: 0; width: 0; height: 0; }
-.slider {
-  position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-  background: #30363d; transition: 0.2s; border-radius: 20px;
-}
-.slider:before {
-  content: ""; position: absolute; height: 14px; width: 14px;
-  left: 3px; bottom: 3px; background: #fff; transition: 0.2s; border-radius: 50%;
-}
-input:checked + .slider { background: var(--accent); }
-input:checked + .slider:before { transform: translateX(16px); }
-
-@media (max-width: 700px) {
-  .grid { grid-template-columns: 1fr; }
-  .door-row { flex-direction: column; }
-}
+  /* 模拟器专用补充样式 */
+  .state-open { color: var(--success); background: rgba(52,211,153,0.1); }
+  .state-closed { color: var(--text-secondary); background: rgba(255,255,255,0.04); }
+  .state-fault { color: var(--danger); background: rgba(248,113,113,0.1); }
+  .state-opening, .state-closing { color: var(--warning); background: rgba(251,191,36,0.1); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+  .state-text { display:inline-block; padding:4px 12px; border-radius:6px; font-size:14px; font-weight:700; }
+  .config-row { display:flex; align-items:center; gap:8px; padding:6px 0; }
+  .config-row label { font-size:12px; color:var(--text-secondary); min-width:70px; }
+  .config-row input { background:rgba(0,0,0,0.2); border:1px solid var(--card-border); border-radius:6px; padding:4px 8px; color:var(--text-primary); font-size:12px; width:70px; }
+  .switch { position:relative; display:inline-block; width:36px; height:20px; }
+  .switch input { opacity:0; width:0; height:0; }
+  .slider { position:absolute; cursor:pointer; inset:0; background:var(--card-border); border-radius:20px; transition:.3s; }
+  .slider::before { content:""; position:absolute; height:14px; width:14px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s; }
+  input:checked+.slider { background:var(--accent); }
+  input:checked+.slider::before { transform:translateX(16px); }
+  .log-entry { padding:3px 0; border-bottom:1px solid rgba(255,255,255,0.03); font-size:11px; font-family:'SF Mono',monospace; }
+  .log-entry .t { color:var(--text-muted); margin-right:8px; }
+  .log-entry .cat { font-weight:600; margin-right:8px; font-size:10px; }
+  .log-entry .cat.control { color:var(--warning); }
+  .log-entry .cat.query { color:var(--accent); }
+  .log-entry .cat.zone { color:var(--success); }
+  .log-entry .cat.config { color:var(--text-muted); }
+  .detail-btn { background:none; border:1px solid var(--card-border); border-radius:4px; color:var(--text-muted); cursor:pointer; font-size:10px; padding:1px 4px; margin-left:8px; }
+  .detail-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .detail-btn.no-data { opacity:.3; cursor:default; }
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:999; align-items:center; justify-content:center; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--card-bg); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); border:1px solid var(--card-border); border-radius:16px; padding:20px; max-width:600px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:var(--card-shadow); }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .modal-header h3 { font-size:14px; }
+  .modal-close { background:none; border:none; color:var(--text-muted); font-size:20px; cursor:pointer; }
+  .modal-body pre { background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; overflow-x:auto; font-size:11px; font-family:'SF Mono',monospace; color:var(--text-secondary); white-space:pre-wrap; }
+  .section-title { font-size:11px; color:var(--accent); margin:10px 0 4px; font-weight:600; }
+  .log-container { height:250px; overflow-y:auto; padding:10px; background:rgba(0,0,0,0.2); border-radius:10px; border:1px solid var(--card-border); }
 </style>
 </head>
 <body>
+  <div id="jsErrorBar" style="display:none;background:var(--danger);color:#fff;padding:8px 16px;font-size:12px;text-align:center;position:sticky;top:0;z-index:9999;" onclick="this.style.display='none'"></div>
 
-<div class="header">
-  <div>
-    <h1>SimController</h1>
-    <div class="header-badge"><span class="badge-dot"></span>集成 · 风淋门+区域管控模拟器</div>
+<div class="app-container">
+  <!-- ══ 导航栏 ══ -->
+  <header class="header">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <h1>🎮 ASAP Adapter</h1>
+      <nav style="display:flex;gap:4px;">
+        <a href="/" class="nav-tab">🚪 风淋门</a>
+        <a href="/zone" class="nav-tab">📡 区域管控</a>
+        <a href="/config" class="nav-tab">⚙ 配置</a>
+        <a href="/upgrade" class="nav-tab">⬆ 升级</a>
+        <a href="/sim" class="nav-tab nav-tab-active">🎮 模拟器</a>
+      </nav>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="header-badge">
+        <span class="status-dot online" id="connDot"></span>
+        <span id="serverStatus" style="font-size:11px;">运行中</span>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="resetSim()">重置</button>
+    </div>
+  </header>
+
+  <!-- ══ 门状态 + 区域管控 ══ -->
+  <div class="dashboard">
+    <!-- 门状态 -->
+    <div class="glass">
+      <div class="card-title">🚪 门状态</div>
+      <div style="display:flex;gap:12px;">
+        <div class="door-card tag-closed" id="outerCard">
+          <div class="door-name"><span class="door-icon">🚪</span>外门 <span style="font-size:10px;color:var(--text-muted);" id="outerDoorId">(DOOR_OUTER)</span></div>
+          <div class="state-text state-closed" id="outerStateText">关闭</div>
+          <div style="font-size:10px;color:var(--text-muted);margin:4px 0;">
+            AGV: <span id="outerAgv">-</span> | 指令: <span id="outerCmd">0</span>
+          </div>
+          <div class="door-controls">
+            <button class="btn btn-success btn-sm" onclick="setDoor('DOOR_OUTER','1')">开门</button>
+            <button class="btn btn-warning btn-sm" onclick="setDoor('DOOR_OUTER','0')">关门</button>
+            <button class="btn btn-danger btn-sm" onclick="injectFault('DOOR_OUTER')">故障</button>
+          </div>
+        </div>
+        <div class="door-card tag-closed" id="innerCard">
+          <div class="door-name"><span class="door-icon">🚪</span>内门 <span style="font-size:10px;color:var(--text-muted);" id="innerDoorId">(DOOR_INNER)</span></div>
+          <div class="state-text state-closed" id="innerStateText">关闭</div>
+          <div style="font-size:10px;color:var(--text-muted);margin:4px 0;">
+            AGV: <span id="innerAgv">-</span> | 指令: <span id="innerCmd">0</span>
+          </div>
+          <div class="door-controls">
+            <button class="btn btn-success btn-sm" onclick="setDoor('DOOR_INNER','1')">开门</button>
+            <button class="btn btn-warning btn-sm" onclick="setDoor('DOOR_INNER','0')">关门</button>
+            <button class="btn btn-danger btn-sm" onclick="injectFault('DOOR_INNER')">故障</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 区域管控 -->
+    <div class="glass">
+      <div class="card-title">📍 区域管控</div>
+      <div class="zone-info">
+        <div class="zone-row"><span class="zone-label">区域ID</span><span class="zone-value" id="zoneId">-</span></div>
+        <div class="zone-row"><span class="zone-label">占用状态</span><span class="zone-value available" id="zoneState">空闲</span></div>
+        <div class="zone-row"><span class="zone-label">占用者</span><span class="zone-value" id="zoneOccupiedBy">-</span></div>
+        <div class="zone-row"><span class="zone-label">权限ID</span><span class="zone-value" id="zonePerm" style="font-size:11px;color:var(--text-muted);">-</span></div>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-danger btn-sm" onclick="setZoneBusy(true)">强制占用</button>
+          <button class="btn btn-success btn-sm" onclick="setZoneBusy(false)">释放区域</button>
+          <label class="switch"><input type="checkbox" id="alwaysBusyToggle" onchange="toggleAlwaysBusy()"><span class="slider"></span></label>
+          <span style="font-size:10px;color:var(--text-muted);">始终繁忙</span>
+        </div>
+      </div>
+    </div>
   </div>
-  <div style="display:flex;gap:8px;align-items:center;">
-    <span id="serverStatus" style="font-size:11px;color:var(--success);">运行中</span>
-    <button class="btn btn-danger btn-sm" onclick="resetSim()">重置</button>
+
+  <!-- ══ 配置 + 快速测试 ══ -->
+  <div class="dashboard">
+    <div class="glass">
+      <div class="card-title">⚙ 模拟配置</div>
+      <div class="config-row"><label>开门延时</label><input type="number" id="openDelay" value="2" min="0" step="0.5"><span style="font-size:11px;color:var(--text-muted);">秒</span><button class="btn btn-sm" onclick="applyDelays()" style="margin-left:8px;">应用</button></div>
+      <div class="config-row"><label>关门延时</label><input type="number" id="closeDelay" value="2" min="0" step="0.5"><span style="font-size:11px;color:var(--text-muted);">秒</span></div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">💡 模拟器集成于ASAP主端口，WebUI中点击「启用模拟」即可重定向</div>
+    </div>
+
+    <div class="glass">
+      <div class="card-title">🧪 快速操作</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        <button class="btn btn-success" onclick="quickTest()">▶ 模拟风淋流程</button>
+        <button class="btn btn-warning" onclick="quickTestWithConflict()">⚠ 模拟区域冲突</button>
+        <button class="btn btn-danger" onclick="quickTestFault()">🔥 模拟门故障</button>
+      </div>
+      <div id="quickTestResult" style="margin-top:8px;font-size:11px;color:var(--text-muted);"></div>
+    </div>
+  </div>
+
+  <!-- ══ 请求日志 ══ -->
+  <div class="glass log-panel-full">
+    <div class="card-title" style="display:flex;justify-content:space-between;">
+      <span>📋 请求日志</span>
+      <button class="btn btn-sm" onclick="document.getElementById('logContainer').innerHTML=''">清除</button>
+    </div>
+    <div class="log-container" id="logContainer"></div>
   </div>
 </div>
 
-<div class="grid">
-  <!-- 门状态 -->
-  <div class="card">
-    <div class="card-title">🚪 门状态</div>
-    <div class="door-row">
-      <div class="door-card tag-closed" id="outerCard">
-        <div class="icon">🚪</div>
-        <div class="name">外门 DOOR_OUTER</div>
-        <div class="state state-closed" id="outerStateText">关闭</div>
-        <div style="font-size:10px;color:var(--text-muted);">
-          AGV: <span id="outerAgv">-</span>
-          &nbsp;|&nbsp; 指令: <span id="outerCmd">0</span>
-        </div>
-        <div class="actions" style="margin-top:8px;">
-          <button class="btn btn-success btn-sm" onclick="setDoor('DOOR_OUTER','1')">开门</button>
-          <button class="btn btn-warning btn-sm" onclick="setDoor('DOOR_OUTER','0')">关门</button>
-          <button class="btn btn-danger btn-sm" onclick="injectFault('DOOR_OUTER')">故障</button>
-        </div>
-      </div>
-      <div class="door-card tag-closed" id="innerCard">
-        <div class="icon">🚪</div>
-        <div class="name">内门 DOOR_INNER</div>
-        <div class="state state-closed" id="innerStateText">关闭</div>
-        <div style="font-size:10px;color:var(--text-muted);">
-          AGV: <span id="innerAgv">-</span>
-          &nbsp;|&nbsp; 指令: <span id="innerCmd">0</span>
-        </div>
-        <div class="actions" style="margin-top:8px;">
-          <button class="btn btn-success btn-sm" onclick="setDoor('DOOR_INNER','1')">开门</button>
-          <button class="btn btn-warning btn-sm" onclick="setDoor('DOOR_INNER','0')">关门</button>
-          <button class="btn btn-danger btn-sm" onclick="injectFault('DOOR_INNER')">故障</button>
-        </div>
-      </div>
-    </div>
+<!-- 报文详情弹窗 -->
+<div class="modal-overlay" id="detailModal" onclick="if(event.target===this)closeDetail()">
+  <div class="modal">
+    <div class="modal-header"><h3 id="modalTitle">报文详情</h3><button class="modal-close" onclick="closeDetail()">&times;</button></div>
+    <div class="modal-body" id="modalBody"></div>
   </div>
-
-  <!-- 区域管控 -->
-  <div class="card">
-    <div class="card-title">📍 区域管控</div>
-    <div class="zone-info">
-      <div class="zone-row">
-        <span class="label">区域ID</span>
-        <span class="value" id="zoneId">-</span>
-      </div>
-      <div class="zone-row">
-        <span class="label">占用状态</span>
-        <span class="value" id="zoneState" style="color:var(--success);">空闲</span>
-      </div>
-      <div class="zone-row">
-        <span class="label">占用者</span>
-        <span class="value" id="zoneOccupiedBy" style="font-size:12px;">-</span>
-      </div>
-      <div class="zone-row">
-        <span class="label">Permission ID</span>
-        <span class="value" id="zonePerm" style="font-size:11px;color:var(--text-muted);">-</span>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
-        <button class="btn btn-danger btn-sm" onclick="setZoneBusy(true)">强制占用</button>
-        <button class="btn btn-success btn-sm" onclick="setZoneBusy(false)">释放区域</button>
-        <label class="switch" title="始终返回繁忙">
-          <input type="checkbox" id="alwaysBusyToggle" onchange="toggleAlwaysBusy()">
-          <span class="slider"></span>
-        </label>
-        <span style="font-size:10px;color:var(--text-muted);">始终繁忙</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="grid">
-  <!-- 配置面板 -->
-  <div class="card">
-    <div class="card-title">⚙ 模拟配置</div>
-    <div class="config-row">
-      <label>开门延时</label>
-      <input type="number" id="openDelay" value="2" min="0" step="0.5">
-      <span style="font-size:11px;color:var(--text-muted);">秒</span>
-      <button class="btn btn-sm" onclick="applyDelays()" style="margin-left:8px;">应用</button>
-    </div>
-    <div class="config-row">
-      <label>关门延时</label>
-      <input type="number" id="closeDelay" value="2" min="0" step="0.5">
-      <span style="font-size:11px;color:var(--text-muted);">秒</span>
-    </div>
-    <div class="config-row">
-      <label>ASAP 地址</label>
-      <input type="text" id="asapUrl" value="http://localhost:5012" style="width:200px;">
-      <span style="font-size:11px;color:var(--text-muted);">(指向 ASAP 供测试)</span>
-    </div>
-    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
-      💡 模拟器已集成到 ASAP 主端口，在 WebUI 中点击「启用模拟」即可自动重定向</code>
-    </div>
-  </div>
-
-  <!-- 快速测试 -->
-  <div class="card">
-    <div class="card-title">🧪 快速操作</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;">
-      <button class="btn btn-primary" onclick="quickTest()">▶ 模拟风淋流程</button>
-      <button class="btn btn-warning" onclick="quickTestWithConflict()">⚠ 模拟区域冲突</button>
-      <button class="btn btn-danger" onclick="quickTestFault()">🔥 模拟门故障</button>
-    </div>
-    <div id="quickTestResult" style="margin-top:8px;font-size:11px;color:var(--text-muted);"></div>
-  </div>
-</div>
-
-<!-- 日志 -->
-<div class="card full">
-  <div class="card-title" style="display:flex;justify-content:space-between;">
-    <span>📋 请求日志</span>
-    <button class="btn btn-sm" onclick="document.getElementById('logContainer').innerHTML=''">清除</button>
-  </div>
-  <div class="log-container" id="logContainer"></div>
 </div>
 
 <script>
 // ═══════════════════════════════════════
-//  SimController WebUI Logic
+//  SimController WebUI — 统一风格版
 // ═══════════════════════════════════════
 
-function init() {
-  updateStatus();
-  setInterval(updateStatus, 1000);
-}
-
-async function api(path, opts = {}) {
-  const resp = await fetch(path, opts);
-  return resp.json();
-}
-
-// ── 状态更新 ──────────────────────────
+function init() { updateStatus(); setInterval(updateStatus, 1000); }
+async function api(path, opts = {}) { return (await fetch(path, opts)).json(); }
 
 async function updateStatus() {
   try {
@@ -392,45 +181,27 @@ async function updateStatus() {
   }
 }
 
-function renderDoors(data) {
-  renderDoor("outer", data.outer_door);
-  renderDoor("inner", data.inner_door);
-}
+function renderDoors(data) { renderDoor("outer", data.outer_door); renderDoor("inner", data.inner_door); }
 
 function renderDoor(pos, door) {
   const state = door.state;
-  const card = document.getElementById(`${pos}Card`);
-  const stateText = document.getElementById(`${pos}StateText`);
-  const agv = document.getElementById(`${pos}Agv`);
-  const cmd = document.getElementById(`${pos}Cmd`);
+  const card = document.getElementById(pos + "Card");
+  const stateText = document.getElementById(pos + "StateText");
+  const agv = document.getElementById(pos + "Agv");
+  const cmd = document.getElementById(pos + "Cmd");
 
   card.className = "door-card";
-  stateText.className = "state";
-
-  let label, cls, icon;
+  let label, cls;
   switch (state) {
-    case "1": case "OPENED":
-      label = "已打开"; cls = "state-open"; icon = "tag-open";
-      break;
-    case "0": case "CLOSED":
-      label = "已关闭"; cls = "state-closed"; icon = "tag-closed";
-      break;
-    case "2": case "FAULT":
-      label = "故 障"; cls = "state-fault"; icon = "tag-fault";
-      break;
-    case "opening":
-      label = "打开中"; cls = "state-opening"; icon = "tag-opening";
-      break;
-    case "closing":
-      label = "关闭中"; cls = "state-closing"; icon = "tag-closing";
-      break;
-    default:
-      label = state; cls = "state-closed"; icon = "tag-closed";
+    case "1": case "OPENED": label = "已打开"; cls = "state-open"; break;
+    case "0": case "CLOSED": label = "已关闭"; cls = "state-closed"; break;
+    case "2": case "FAULT": label = "故 障"; cls = "state-fault"; break;
+    case "opening": label = "打开中"; cls = "state-opening"; break;
+    case "closing": label = "关闭中"; cls = "state-closing"; break;
+    default: label = state; cls = "state-closed";
   }
-
-  card.classList.add(icon);
   stateText.textContent = label;
-  stateText.className = "state " + cls;
+  stateText.className = "state-text " + cls;
   agv.textContent = door.robot_name || "-";
   cmd.textContent = door.command || "0";
 }
@@ -439,208 +210,103 @@ function renderZone(data) {
   const z = data.zone;
   document.getElementById("zoneId").textContent = z.zone_id || "-";
   const zs = document.getElementById("zoneState");
-  if (z.state === "occupied") {
-    zs.textContent = "已占用";
-    zs.style.color = "var(--warning)";
-  } else {
-    zs.textContent = "空闲";
-    zs.style.color = "var(--success)";
-  }
+  if (z.state === "occupied") { zs.textContent = "已占用"; zs.className = "zone-value occupied"; }
+  else { zs.textContent = "空闲"; zs.className = "zone-value available"; }
   document.getElementById("zoneOccupiedBy").textContent = z.occupied_by || "-";
   document.getElementById("zonePerm").textContent = z.permission_id || "-";
 }
 
 function renderConfig(data) {
-  const cfg = data.config;
-  document.getElementById("openDelay").value = cfg.auto_open_delay || 2;
-  document.getElementById("closeDelay").value = cfg.auto_close_delay || 2;
-  document.getElementById("alwaysBusyToggle").checked = cfg.zone_always_busy || false;
-  document.getElementById("simSelfUrl").textContent =
-    `${window.location.protocol}//${window.location.host}`;
+  document.getElementById("openDelay").value = data.config.auto_open_delay || 2;
+  document.getElementById("closeDelay").value = data.config.auto_close_delay || 2;
+  document.getElementById("alwaysBusyToggle").checked = data.config.zone_always_busy || false;
 }
 
 function renderLogs(data) {
   const logs = data.request_log || [];
   const container = document.getElementById("logContainer");
-  if (logs.length === 0) return;
-
-  // Only append new logs
   const existing = container.children.length;
   for (let i = existing; i < logs.length; i++) {
-    const entry = logs[i];
-    const hasPayload = entry.request || entry.response;
-    const div = document.createElement("div");
-    div.className = "log-entry";
-    div.innerHTML = `
-      <span class="t">${entry.time}</span>
-      <span class="cat ${entry.category}">${entry.category}</span>
-      <span class="msg"><span style="color:var(--accent);margin-right:4px;">${entry.target}</span>${escHtml(entry.message)}</span>
-      <button class="detail-btn ${hasPayload ? '' : 'no-data'}"
-        onclick="${hasPayload ? `showLogDetail(${entry.id})` : ''}"
-        title="${hasPayload ? '查看完整报文' : '无报文数据'}">📄</button>
-    `;
-    container.appendChild(div);
+    const e = logs[i];
+    const d = document.createElement("div");
+    d.className = "log-entry";
+    d.innerHTML = '<span class="t">' + e.time + '</span>' +
+      '<span class="cat ' + e.category + '">' + e.category + '</span>' +
+      '<span style="color:var(--accent);margin-right:4px;">' + e.target + '</span>' +
+      escHtml(e.message) +
+      '<button class="detail-btn ' + (e.request || e.response ? '' : 'no-data') + '"' +
+      'onclick="' + (e.request || e.response ? 'showLogDetail(' + e.id + ')' : '') + '">📄</button>';
+    container.appendChild(d);
   }
   container.scrollTop = container.scrollHeight;
 }
 
-function escHtml(s) {
-  const d = document.createElement("div");
-  d.textContent = s;
-  return d.innerHTML;
+function escHtml(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+// ── 手动控制 ──
+async function setDoor(doorId, state) { await api("/sim/api/sim/door/set?door_id=" + doorId + "&state=" + state, {method:"POST"}); }
+async function injectFault(doorId) { await api("/sim/api/sim/door/fault?door_id=" + doorId + "&enable=true", {method:"POST"}); }
+async function setZoneBusy(busy) { await api("/sim/api/sim/zone/busy?busy=" + busy, {method:"POST"}); }
+async function toggleAlwaysBusy() { await api("/sim/api/sim/config/zone-always-busy?enable=" + document.getElementById("alwaysBusyToggle").checked, {method:"POST"}); }
+async function applyDelays() {
+  await api("/sim/api/sim/config/delays?open_delay=" + document.getElementById("openDelay").value + "&close_delay=" + document.getElementById("closeDelay").value, {method:"POST"});
 }
+async function resetSim() { await api("/sim/api/sim/reset", {method:"POST"}); }
 
-// ── 手动控制 ──────────────────────────
-
-async function setDoor(doorId, state) {
-  await api(`/sim/api/sim/door/set?door_id=${doorId}&state=${state}`, { method: "POST" });
-
-  await api(`/sim/api/sim/door/fault?door_id=${doorId}&enable=true`, { method: "POST" });
-
-    await api(`/sim/api/sim/door/fault?door_id=${doorId}&enable=false`, { method: "POST" });
-
-  await api(`/sim/api/sim/zone/busy?busy=${busy}&client=webui_trigger`, { method: "POST" });
-
-  await api(`/sim/api/sim/zone/busy?busy=${busy}`, { method: "POST" });
-
-  await api(`/sim/api/sim/config/delays?open_delay=${openD}&close_delay=${closeD}`, { method: "POST" });
-
-  await api("/sim/api/sim/reset", { method: "POST" });
-  await updateStatus();
-  addLog("system", "全部", "模拟器已重置");
-}
-
-// ── 快速测试 ──────────────────────────
-
+// ── 快速测试 ──
 async function quickTest() {
-  const result = document.getElementById("quickTestResult");
-  result.innerHTML = "▶ 执行风淋流程模拟...";
+  const r = document.getElementById("quickTestResult");
+  r.innerHTML = "▶ 执行风淋流程模拟...";
   const steps = [
-    ["申请区域", "/api/zones/enter", { zone_id: "air_shower_room", client_id: "AGV001" }],
-    ["开外门", "/acs/door/DOOR_OUTER", { doorSerial: "DOOR_OUTER", command: "1", Direction: "1", RobotName: "AGV001" }],
+    ["申请区域", "/api/zones/enter", {zone_id:"air_shower_room",client_id:"AGV001"}],
+    ["开外门", "/acs/door/DOOR_OUTER", {doorSerial:"DOOR_OUTER",command:"1",Direction:"1",RobotName:"AGV001"}],
   ];
-
   for (const [name, path, body] of steps) {
-    const url = `${document.getElementById("asapUrl").value}${path}`;
     try {
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await resp.json();
-      result.innerHTML += `<br>${name}: ${JSON.stringify(data).slice(0,80)}...`;
-    } catch (e) {
-      result.innerHTML += `<br>${name}: ❌ ${e.message}`;
-    }
+      const resp = await fetch("http://127.0.0.1:5012" + path, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const d = await resp.json();
+      r.innerHTML += "<br>" + name + ": " + JSON.stringify(d).slice(0,80) + "...";
+    } catch(e) { r.innerHTML += "<br>" + name + ": ❌ " + e.message; }
   }
 }
-
 async function quickTestWithConflict() {
   await setZoneBusy(true);
-  document.getElementById("quickTestResult").innerHTML =
-    "⚠ 区域已强制占用，ASAP 请求区域应返回 409";
-  setTimeout(() => {
-    setZoneBusy(false);
-    document.getElementById("quickTestResult").innerHTML += "<br>↻ 区域已释放";
-  }, 5000);
+  document.getElementById("quickTestResult").innerHTML = "⚠ 区域已强制占用，3s后释放...";
+  setTimeout(async () => { await setZoneBusy(false); document.getElementById("quickTestResult").innerHTML += "<br>↻ 已释放"; }, 3000);
 }
-
 async function quickTestFault() {
-  document.getElementById("quickTestResult").innerHTML = "🔥 注入外门故障 (3秒后自动恢复)...";
+  document.getElementById("quickTestResult").innerHTML = "🔥 注入外门故障 (3s后恢复)...";
   await injectFault("DOOR_OUTER");
 }
 
-function addLog(cat, target, msg) {
-  const container = document.getElementById("logContainer");
-  const time = new Date().toLocaleTimeString();
-  const div = document.createElement("div");
-  div.className = "log-entry";
-  div.innerHTML = `<span class="t">${time}</span><span class="cat ${cat}">${cat}</span><span style="color:var(--accent);margin-right:6px;">${target}</span>${msg}`;
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+// ── 报文详情弹窗 ──
+function showLogDetail(logId) {
+  fetch("/sim/api/sim/status").then(r => r.json()).then(data => {
+    const entry = (data.request_log||[]).find(e => e.id === logId);
+    if (!entry) return;
+    document.getElementById("modalTitle").textContent = "[" + entry.category + "] " + entry.target;
+    let html = "";
+    html += '<div class="section-title">📤 请求</div>';
+    html += '<pre>' + (entry.request ? syntaxHighlight(entry.request) : '<span style="color:var(--text-muted);">无请求体</span>') + '</pre>';
+    html += '<div class="section-title">📥 响应</div>';
+    html += '<pre>' + (entry.response ? syntaxHighlight(entry.response) : '<span style="color:var(--text-muted);">无响应体</span>') + '</pre>';
+    html += '<div class="section-title">ℹ 元信息</div>';
+    html += '<pre style="color:var(--text-muted);font-size:11px;">时间: ' + entry.time + '\n类别: ' + entry.category + '\n目标: ' + entry.target + '\nID: ' + entry.id + '</pre>';
+    document.getElementById("modalBody").innerHTML = html;
+    document.getElementById("detailModal").classList.add("open");
+  }).catch(() => {});
 }
+function closeDetail() { document.getElementById("detailModal").classList.remove("open"); }
+function syntaxHighlight(obj) {
+  const json = JSON.stringify(obj, null, 2);
+  return json.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"([^"]+)":/g,'<span style="color:var(--accent);">"$1"</span>:')
+    .replace(/: "([^"]*)"/g,': <span style="color:var(--success);">"$1"</span>')
+    .replace(/: (\d+)/g,': <span style="color:var(--warning);">$1</span>');
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDetail(); });
 
 init();
 </script>
-<!-- 报文详情弹窗 -->
-<div class="modal-overlay" id="detailModal" onclick="if(event.target===this)closeDetail()">
-  <div class="modal">
-    <div class="modal-header">
-      <h3 id="modalTitle">报文详情</h3>
-      <button class="modal-close" onclick="closeDetail()">&times;</button>
-    </div>
-    <div class="modal-body" id="modalBody"></div>
-  </div>
-</div>
-
-<script>
-// 报文详情弹窗
-function showLogDetail(logId) {
-  // 从页面上取日志条目数据 — 必须从最新状态快照取
-  fetch("/sim/api/sim/status")
-    .then(r => r.json())
-    .then(data => {
-      const logs = data.request_log || [];
-      const entry = logs.find(e => e.id === logId);
-      if (!entry) return;
-
-      const title = `[${entry.category}] ${entry.target}`;
-      document.getElementById("modalTitle").textContent = title;
-
-      let html = "";
-
-      // 请求体
-      if (entry.request) {
-        html += `<div class="section-title">📤 请求 (${entry.category})</div>`;
-        html += `<pre>${syntaxHighlight(entry.request)}</pre>`;
-      } else {
-        html += `<div class="section-title">📤 请求</div>`;
-        html += `<pre style="color:var(--text-muted);">无请求体</pre>`;
-      }
-
-      // 响应体
-      if (entry.response) {
-        html += `<div class="section-title">📥 响应</div>`;
-        html += `<pre>${syntaxHighlight(entry.response)}</pre>`;
-      } else {
-        html += `<div class="section-title">📥 响应</div>`;
-        html += `<pre style="color:var(--text-muted);">无响应体</pre>`;
-      }
-
-      // 元信息
-      html += `<div class="section-title">ℹ 元信息</div>`;
-      html += `<pre style="color:var(--text-muted); font-size:11px;">`;
-      html += `时间: ${entry.time}\n`;
-      html += `类别: ${entry.category}\n`;
-      html += `目标: ${entry.target}\n`;
-      html += `日志ID: ${entry.id}`;
-      html += `</pre>`;
-
-      document.getElementById("modalBody").innerHTML = html;
-      document.getElementById("detailModal").classList.add("open");
-    })
-    .catch(() => {});
-}
-
-function closeDetail() {
-  document.getElementById("detailModal").classList.remove("open");
-}
-
-function syntaxHighlight(obj) {
-  const json = JSON.stringify(obj, null, 2);
-  // 简单着色：将 JSON key 染成蓝色，string 值染绿，数字染黄
-  return json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"([^"]+)":/g, '<span style="color:var(--accent);">"$1"</span>:')
-    .replace(/: "([^"]+)"/g, ': <span style="color:var(--success);">"$1"</span>')
-    .replace(/: (\d+)/g, ': <span style="color:var(--warning);">$1</span>');
-}
-
-// 点击 ESC 关闭弹窗
-document.addEventListener("keydown", function(e) {
-  if (e.key === "Escape") closeDetail();
-});
-</script>
-
 </body>
 </html>

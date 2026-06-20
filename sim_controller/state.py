@@ -64,7 +64,8 @@ class SimController:
 
         # 故障注入
         if self.config.inject_fault and self.config.fault_door_id == door_id:
-            self._log("control", door_id, f"故障模式拒绝指令: command={command}")
+            self._log("control", door_id, f"故障模式拒绝指令: command={command}",
+                      method="POST", path=f"/acs/door/{door_id}")
             return {"doorSerial": door_id, "doorStatus": "2",
                     "command": command, "code": self.config.fault_code}
 
@@ -74,24 +75,29 @@ class SimController:
 
         if command == "1":  # 开门
             if door.state == DoorSimState.OPENED:
-                self._log("control", door_id, "开门指令: 已处于打开状态")
+                self._log("control", door_id, "开门指令: 已处于打开状态",
+                          method="POST", path=f"/acs/door/{door_id}")
             else:
                 door.state = DoorSimState.OPENING
                 door.command = "1"
-                self._log("control", door_id, f"开始开门 (delay={door.open_delay}s)")
+                self._log("control", door_id, f"开始开门 (delay={door.open_delay}s)",
+                          method="POST", path=f"/acs/door/{door_id}")
                 self._schedule_transition(door_id, DoorSimState.OPENED, door.open_delay)
 
         elif command == "2":  # 关门
             if door.state == DoorSimState.CLOSED:
-                self._log("control", door_id, "关门指令: 已处于关闭状态")
+                self._log("control", door_id, "关门指令: 已处于关闭状态",
+                          method="POST", path=f"/acs/door/{door_id}")
             else:
                 door.state = DoorSimState.CLOSING
                 door.command = "2"
-                self._log("control", door_id, f"开始关门 (delay={door.close_delay}s)")
+                self._log("control", door_id, f"开始关门 (delay={door.close_delay}s)",
+                          method="POST", path=f"/acs/door/{door_id}")
                 self._schedule_transition(door_id, DoorSimState.CLOSED, door.close_delay)
 
         else:
-            self._log("control", door_id, f"无动作指令: command={command}")
+            self._log("control", door_id, f"无动作指令: command={command}",
+                      method="POST", path=f"/acs/door/{door_id}")
 
         return self._build_angel_response(door, command)
 
@@ -102,7 +108,8 @@ class SimController:
             return {"doorSerial": door_id, "doorStatus": "-1",
                     "command": "0", "code": "500"}
 
-        self._log("query", door_id, f"状态查询: {door.state.value}")
+        self._log("query", door_id, f"状态查询: {door.state.value}",
+                  method="GET", path=f"/acs/door/{door_id}")
         return self._build_angel_response(door, door.command)
 
     def _get_door(self, door_id: str) -> Optional[SimDoor]:
@@ -284,7 +291,8 @@ class SimController:
     _log_counter = 0
 
     def _log(self, category: str, target: str, message: str,
-             req_body: dict = None, resp_body: dict = None):
+             req_body: dict = None, resp_body: dict = None,
+             method: str = "", path: str = ""):
         """记录请求日志，含完整报文"""
         self._log_counter += 1
         entry = {
@@ -295,6 +303,8 @@ class SimController:
             "message": message,
             "request": req_body,
             "response": resp_body,
+            "method": method,
+            "path": path,
         }
         self.request_log.append(entry)
         logger.debug("[%s] %s %s: %s", category, target, message)

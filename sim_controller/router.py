@@ -41,7 +41,8 @@ def create_router(sim: SimController) -> APIRouter:
                                   req.Direction or "", req.RobotName or "")
         sim._log("control", door_id,
                  f"指令={req.command} dir={req.Direction or '-'} agv={req.RobotName or '-'}",
-                 req_body=req_dict, resp_body=result)
+                 req_body=req_dict, resp_body=result,
+                 method="POST", path=f"/acs/door/{door_id}")
         return result
 
     @router.get("/acs/door/{door_id}")
@@ -50,7 +51,8 @@ def create_router(sim: SimController) -> APIRouter:
         result = sim.query_door(door_id)
         sim._log("query", door_id,
                  f"状态={result.get('doorStatus','?')}",
-                 req_body={"door_id": door_id}, resp_body=result)
+                 req_body={"door_id": door_id}, resp_body=result,
+                 method="GET", path=f"/acs/door/{door_id}")
         return result
 
     # ═══════════════════════════════════════════
@@ -65,7 +67,8 @@ def create_router(sim: SimController) -> APIRouter:
         resp_dict = body if status_code == 409 else body
         sim._log("zone", req.zone_id,
                  f"进入 client={req.client_id} → {status_code}",
-                 req_body=req_dict, resp_body=resp_dict)
+                 req_body=req_dict, resp_body=resp_dict,
+                 method="POST", path="/api/zones/enter")
         if status_code == 409:
             return ZoneEnterConflict(**body)
         return body
@@ -77,7 +80,8 @@ def create_router(sim: SimController) -> APIRouter:
         body, _ = sim.zone_exit(req.zone_id, req.client_id)
         sim._log("zone", req.zone_id,
                  f"退出 client={req.client_id}",
-                 req_body=req_dict, resp_body=body)
+                 req_body=req_dict, resp_body=body,
+                 method="POST", path="/api/zones/exit")
         return body
 
     @router.get("/api/zones/status")
@@ -85,7 +89,8 @@ def create_router(sim: SimController) -> APIRouter:
         """查询区域状态"""
         result = sim.zone_status(zone_id)
         sim._log("zone", zone_id, f"查询",
-                 req_body={"zone_id": zone_id}, resp_body=result)
+                 req_body={"zone_id": zone_id}, resp_body=result,
+                 method="GET", path="/api/zones/status")
         return result
 
     # ═══════════════════════════════════════════
@@ -110,7 +115,8 @@ def create_router(sim: SimController) -> APIRouter:
         door_id = body.get("door_id") or request.query_params.get("door_id", "")
         state = body.get("state") or request.query_params.get("state", "0")
         sim._log("manual", door_id, f"设置门状态: {state}", req_body=body if body else {"door_id": door_id, "state": state},
-                 resp_body={"status": "ok", "door_id": door_id, "state": state})
+                 resp_body={"status": "ok", "door_id": door_id, "state": state},
+                 method="POST", path="/api/sim/door/set")
         ok = sim.manual_set_door_state(door_id, state)
         if not ok:
             raise HTTPException(400, f"未知门ID: {door_id}")
@@ -127,7 +133,8 @@ def create_router(sim: SimController) -> APIRouter:
             pass
         door_id = body.get("door_id") or request.query_params.get("door_id", "")
         enable = body.get("enable", True) if "enable" in body else request.query_params.get("enable", "true") != "false"
-        sim._log("manual", door_id, f"注入故障: enable={enable}", req_body=body if body else {"door_id": door_id, "enable": enable})
+        sim._log("manual", door_id, f"注入故障: enable={enable}", req_body=body if body else {"door_id": door_id, "enable": enable},
+                 method="POST", path="/api/sim/door/fault")
         sim.manual_inject_fault(door_id, enable)
         return {"status": "ok", "door_id": door_id, "fault": enable}
 
@@ -142,7 +149,8 @@ def create_router(sim: SimController) -> APIRouter:
             pass
         busy = body.get("busy", True) if "busy" in body else request.query_params.get("busy", "true") != "false"
         client = body.get("client") or request.query_params.get("client", "")
-        sim._log("manual", sim.config.zone_id, f"设置区域: busy={busy} client={client}", req_body=body if body else {"busy": busy, "client": client})
+        sim._log("manual", sim.config.zone_id, f"设置区域: busy={busy} client={client}", req_body=body if body else {"busy": busy, "client": client},
+                 method="POST", path="/api/sim/zone/busy")
         sim.manual_set_zone_busy(busy, client)
         return {"status": "ok", "busy": busy}
 
@@ -157,7 +165,8 @@ def create_router(sim: SimController) -> APIRouter:
             pass
         open_delay = float(body.get("open_delay", "2.0") if "open_delay" in body else request.query_params.get("open_delay", "2.0"))
         close_delay = float(body.get("close_delay", "2.0") if "close_delay" in body else request.query_params.get("close_delay", "2.0"))
-        sim._log("config", "delays", f"设置延时 open={open_delay}s close={close_delay}s", req_body=body if body else {"open_delay": open_delay, "close_delay": close_delay})
+        sim._log("config", "delays", f"设置延时 open={open_delay}s close={close_delay}s", req_body=body if body else {"open_delay": open_delay, "close_delay": close_delay},
+                 method="POST", path="/api/sim/config/delays")
         sim.manual_set_delays(open_delay, close_delay)
         return {"status": "ok", "open_delay": open_delay, "close_delay": close_delay}
 

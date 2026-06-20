@@ -255,11 +255,12 @@ async function loadRcsLogs() {
         const time = l.time || "";
         const reqJson = JSON.stringify(l.request || {}, null, 2);
         const respJson = typeof l.response === "string" ? l.response : JSON.stringify(l.response || {}, null, 2);
+        const methodPath = (l.method && l.endpoint) ? ' <span style="font-size:9px;color:var(--text-muted);font-family:monospace;">' + escHtml(l.method) + ' ' + escHtml(l.endpoint) + '</span>' : '';
         div.innerHTML =
           '<div style="display:flex;justify-content:space-between;cursor:pointer;" onclick="var d=this.nextElementSibling;d.style.display=d.style.display===\'none\'?\'block\':\'none\'">' +
             '<span><span style="font-size:10px;color:var(--text-muted);">' + time + '</span> ' +
             '<span style="font-size:10px;color:' + (l.category === "control" ? "var(--warning)" : "var(--accent)") + ';">' +
-            (l.category || "") + '</span> ' +
+            (l.category || "") + '</span>' + methodPath + ' ' +
             '<span style="font-size:11px;">' + escHtml(JSON.stringify(l.request)) + '</span></span>' +
             '<span style="font-size:10px;color:var(--text-muted);">' + (l.status || "") + ' ▼</span>' +
           '</div>' +

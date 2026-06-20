@@ -253,6 +253,7 @@ function renderLogs(data) {
     const reqJson = e.request ? JSON.stringify(e.request, null, 2) : "";
     const respJson = e.response ? JSON.stringify(e.response, null, 2) : "";
     const hasData = reqJson || respJson;
+    const methodPath = (e.method && e.path) ? ' <span style="font-size:9px;color:var(--text-muted);font-family:monospace;">' + escHtml(e.method) + ' ' + escHtml(e.path) + '</span>' : '';
     div.innerHTML =
       '<div style="display:flex;justify-content:space-between;cursor:pointer;' + (hasData ? '' : 'opacity:0.5;') + '"' +
         'onclick="' + (hasData ? 'var d=this.nextElementSibling;d.style.display=d.style.display===&quot;none&quot;?&quot;block&quot;:&quot;none&quot;' : '') + '">' +
@@ -260,6 +261,7 @@ function renderLogs(data) {
           '<span style="font-size:10px;color:var(--text-muted);margin-right:8px;">' + e.time + '</span>' +
           '<span style="font-size:10px;color:' + (e.category === "control" ? "var(--warning)" : e.category === "zone" ? "var(--success)" : "var(--accent)") + ';margin-right:8px;">' + e.category + '</span>' +
           '<span style="color:var(--accent);margin-right:4px;">' + escHtml(e.target) + '</span>' +
+          methodPath +
           '<span style="font-size:11px;">' + escHtml(e.message) + '</span>' +
         '</span>' +
         '<span style="font-size:10px;color:var(--text-muted);">' + (hasData ? '▼' : '') + '</span>' +

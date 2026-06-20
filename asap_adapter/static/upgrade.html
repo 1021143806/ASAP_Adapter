@@ -109,8 +109,16 @@ async function loadUpgradeRecords() {
       container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">暂无升级记录</div>';
       return;
     }
-    container.innerHTML = '<table class="record-table"><thead><tr><th>时间</th><th>版本</th><th>说明</th><th>备份</th></tr></thead><tbody>' +
-      records.map(r => '<tr><td>' + (r.time || "") + '</td><td><span class="version-tag">' + (r.title || r.version || "-") + '</span></td><td>' + (r.changes || []).join(", ") + '</td><td>' + (r.backup || "-") + '</td></tr>').join("") + '</tbody></table>';
+    container.innerHTML = '<table class="record-table"><thead><tr><th>时间</th><th>版本</th><th>说明</th><th>备份</th><th>操作</th></tr></thead><tbody>' +
+      records.map(r => {
+        const t = (r.timestamp || "").replace(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/, '$1-$2-$3 $4:$5:$6');
+        const notes = (r.release_notes || []).join(", ");
+        const title = r.release_title || r.description || (r.old_version + " → " + r.new_version);
+        const status = r.status === "rollback" ? " ↩ 回滚" : "";
+        return '<tr><td style="white-space:nowrap;">' + t + '</td><td>' + title + status + '</td><td>' + notes + '</td><td style="font-size:10px;">' + (r.backup_name || "-") + '</td><td>' +
+          (r.status === "success" ? '<button class="btn btn-sm btn-warning" onclick="rollbackUpgrade(\'' + r.backup_name + '\')">↩ 回滚</button>' : "") +
+        '</td></tr>';
+      }).join("") + '</tbody></table>';
   } catch (e) { console.error(e); }
 }
 
@@ -183,6 +191,16 @@ function upgradeInitUpload() {
       resultBox.textContent = "请求失败: " + e.message;
     }
   });
+}
+
+async function rollbackUpgrade(backupName) {
+  if (!confirm('确认回滚到 ' + backupName + '？')) return;
+  try {
+    const resp = await fetch("/api/asap/upgrade/rollback/" + backupName, { method: "POST" });
+    const data = await resp.json();
+    alert(data.message || (data.success ? "回滚成功" : "回滚失败"));
+    if (data.success) setTimeout(() => location.reload(), 5000);
+  } catch (e) { alert("回滚失败: " + e); }
 }
 
 (function() { init(); })();

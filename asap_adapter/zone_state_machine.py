@@ -14,7 +14,6 @@ from typing import Optional, Callable, Awaitable
 
 from .config import AppConfig
 from .zone_client import ZoneClient, ZoneClientError
-from .rcs_reporter import RcsReporter
 
 logger = logging.getLogger(__name__)
 
@@ -70,11 +69,10 @@ class ZoneStateMachine:
         self,
         config: AppConfig,
         zone_client: ZoneClient,
-        rcs_reporter: RcsReporter,
+        rcs_reporter=None,  # 已废弃，保留兼容
     ):
         self.config = config
         self.zone = zone_client
-        self.rcs = rcs_reporter
 
         self._state = ZoneFlowState.IDLE
         self._status = ZoneFlowStatus()

@@ -516,63 +516,42 @@ body {
   <!-- ════════════════════════════════════
        风淋门视图
        ════════════════════════════════════ -->
-  <div id="view-door">
-  <div class="dashboard">
+   <div id="view-door">
+   <div class="dashboard">
 
-    <!-- 状态机进度 -->
+    <!-- 方向状态 -->
     <div class="glass state-machine">
-      <div class="card-title">风淋流程状态 <span id="flowStepCount" style="font-size:10px;color:var(--text-muted);font-weight:400;"></span></div>
-      <div class="steps-row" id="stepsRow">
-        <span style="font-size:11px;color:var(--text-muted);">等待流程启动...</span>
-      </div>
-      <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <span style="font-size:13px;font-weight:600;" id="stateLabel">空闲</span>
-          <span style="font-size:11px;color:var(--text-muted);margin-left:8px;" id="agvLabel"></span>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-success" onclick="startFlow()" id="btnStart">▶ 启动流程</button>
-          <button class="btn btn-danger" onclick="cancelFlow()" id="btnCancel" disabled>⏹ 取消</button>
-        </div>
+      <div class="card-title">📐 通行方向 <span id="directionLabel" style="font-size:11px;color:var(--text-muted);">未判定</span></div>
+      <div style="margin-top:6px;font-size:13px;color:var(--text-muted);">
+        规则: 1001先开=出, 1002先开=进 · 两门全关后重置
       </div>
     </div>
 
-    <!-- 步骤报文详情 -->
-    <div class="glass log-panel-full" id="stepDetailPanel" style="display:none;">
-      <div class="card-title" style="display:flex;justify-content:space-between;">
-        <span>📦 步骤报文 <span id="stepDetailTitle" style="font-size:10px;color:var(--text-muted);font-weight:400;"></span></span>
-        <button class="btn" onclick="closeStepDetail()" style="font-size:10px;padding:3px 8px;">✕ 关闭</button>
-      </div>
-      <div id="stepDetailContent" style="max-height:400px;overflow-y:auto;"></div>
-    </div>
-
-    <!-- 门状态 -->
+    <!-- 门状态（双门独立） -->
     <div class="glass door-panel">
       <div class="card-title">🚪 门状态 <span id="doorCodeMapping" style="font-size:10px;font-weight:400;color:var(--text-muted);"></span></div>
       <div class="door-cards" id="doorCards">
-        <div class="door-card" id="outerDoor">
-          <div class="door-name"><span class="door-icon">🚪</span>外门 <span style="font-size:10px;color:var(--text-muted);font-weight:400;" id="outerDoorId">(DOOR_OUTER)</span></div>
-          <div class="door-code" id="outerDoorCode">─</div>
-          <div class="door-rcs-status" id="outerRcsStatus"></div>
-          <div class="door-status-value closed" id="outerDoorStatus">--</div>
-          <div class="door-status-text" id="outerDoorText">未知</div>
+        <div class="door-card" id="door1Card">
+          <div class="door-name"><span class="door-icon">🚪</span>门1 <span style="font-size:10px;color:var(--text-muted);font-weight:400;" id="door1Id">(DOOR01)</span></div>
+          <div class="door-code" id="door1Code">1001</div>
+          <div class="door-rcs-status" id="door1RcsStatus"></div>
+          <div class="door-status-value closed" id="door1DoorStatus">--</div>
+          <div class="door-status-text" id="door1DoorText">未知</div>
           <div class="door-controls">
-            <button class="btn btn-success" onclick="manualOpen(doorIds.outer)" disabled>开门</button>
-            <button class="btn btn-warning" onclick="manualClose(doorIds.outer)" disabled>关门</button>
+            <button class="btn btn-success" onclick="manualOpen(doorIds.door1)" disabled>开门</button>
+            <button class="btn btn-warning" onclick="manualClose(doorIds.door1)" disabled>关门</button>
           </div>
-          <div id="outerDebugStatus" style="font-size:9px;color:var(--text-muted);margin-top:4px;font-family:monospace;"></div>
         </div>
-        <div class="door-card" id="innerDoor">
-          <div class="door-name"><span class="door-icon">🚪</span>内门 <span style="font-size:10px;color:var(--text-muted);font-weight:400;" id="innerDoorId">(DOOR_INNER)</span></div>
-          <div class="door-code" id="innerDoorCode">─</div>
-          <div class="door-rcs-status" id="innerRcsStatus"></div>
-          <div class="door-status-value closed" id="innerDoorStatus">--</div>
-          <div class="door-status-text" id="innerDoorText">未知</div>
+        <div class="door-card" id="door2Card">
+          <div class="door-name"><span class="door-icon">🚪</span>门2 <span style="font-size:10px;color:var(--text-muted);font-weight:400;" id="door2Id">(DOOR02)</span></div>
+          <div class="door-code" id="door2Code">1002</div>
+          <div class="door-rcs-status" id="door2RcsStatus"></div>
+          <div class="door-status-value closed" id="door2DoorStatus">--</div>
+          <div class="door-status-text" id="door2DoorText">未知</div>
           <div class="door-controls">
-            <button class="btn btn-success" onclick="manualOpen(doorIds.inner)" disabled>开门</button>
-            <button class="btn btn-warning" onclick="manualClose(doorIds.inner)" disabled>关门</button>
+            <button class="btn btn-success" onclick="manualOpen(doorIds.door2)" disabled>开门</button>
+            <button class="btn btn-warning" onclick="manualClose(doorIds.door2)" disabled>关门</button>
           </div>
-          <div id="innerDebugStatus" style="font-size:9px;color:var(--text-muted);margin-top:4px;font-family:monospace;"></div>
         </div>
       </div>
     </div>
@@ -770,292 +749,8 @@ body {
             <span style="color:var(--text-muted);font-size:12px;">→</span>
             <span id="rcsInnerDoorId" style="color:var(--accent);font-size:12px;font-family:monospace;min-width:60px;">DOOR02</span>
           </div>
-        </div>
-      </div>
-      <div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text-muted);">
-        <span>🔑 <code>control_way = 4</code> (第三方系统)</span>
-        <span>🚪 <code>door_type = 2</code> (风淋门)</span>
-        <span>🩺 <code>/actuator/health</code> → <code>1000</code></span>
-        <span>💡 模拟器: <a href="/sim" style="color:var(--accent);">/sim</a>（需先启用）</span>
-      </div>
     </div>
-
-    <!-- AB 自动门配置 -->
-    <div class="glass log-panel-full">
-      <div class="card-title">🚪 AB 自动门对接配置</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
-        ASAP 通过以下 base URL + <code>/acs/door/{doorId}</code> 控制 AB 自动门
-      </div>
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;">
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">base URL <span style="font-weight:400;color:var(--text-muted);">(POST/GET /acs/door/{doorId})</span></span>
-          <input type="text" id="angelBaseUrlInput" title="AB 自动门 base URL"
-            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
-                   font-family:inherit;outline:none;"
-            placeholder="http://172.31.43.181:8080">
-        </div>
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">外门ID</span>
-          <input type="text" id="angelOuterDoorIdInput" title="外门 ID"
-            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
-                   font-family:inherit;outline:none;" placeholder="DOOR_OUTER">
-        </div>
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">内门ID</span>
-          <input type="text" id="angelInnerDoorIdInput" title="内门 ID"
-            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;
-                   font-family:inherit;outline:none;" placeholder="DOOR_INNER">
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
-        <button class="btn btn-success btn-sm" onclick="saveAngelUrl()">💾 保存</button>
-        <span id="angelSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
-      </div>
-      <div style="margin-top:8px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
-        <span><code>POST /acs/door/{doorId}</code> 控制门</span>
-        <span><code>GET /acs/door/{doorId}</code> 查询门状态</span>
-        <span>💡 门ID修改后需重新加载页面生效</span>
-      </div>
-    </div>
-
-    <!-- 区域管控对接配置 -->
-    <div class="glass log-panel-full">
-      <div class="card-title">📡 区域管控对接配置</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
-        ASAP 通过以下三个接口实现区域独占访问。区域门编码在下方配置。
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">进入区域 <code>POST</code></span>
-          <input type="text" id="cfgZoneEnterInput" title="进入区域接口"
-            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;font-family:inherit;outline:none;margin-top:4px;"
-            placeholder="http://zone-server:8080/api/zones/enter">
-        </div>
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">退出区域 <code>POST</code></span>
-          <input type="text" id="cfgZoneExitInput" title="退出区域接口"
-            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;font-family:inherit;outline:none;margin-top:4px;"
-            placeholder="http://zone-server:8080/api/zones/exit">
-        </div>
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">状态查询 <code>GET</code></span>
-          <input type="text" id="cfgZoneStatusInput" title="区域状态查询接口"
-            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:11px;font-family:inherit;outline:none;margin-top:4px;"
-            placeholder="http://zone-server:8080/api/zones/status">
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-          <span class="zone-label">RCS 门编码 <span style="font-weight:400;color:var(--text-muted);">(q001)</span></span>
-          <input type="text" id="cfgZoneEntryCodeInput"
-            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                   border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;font-family:inherit;outline:none;"
-            placeholder="q001">
-        </div>
-        <div class="zone-row" style="flex-direction:column;align-items:stretch;justify-content:flex-end;">
-          <span style="font-size:10px;color:var(--text-muted);">💡 RCS 开门=q001，ASAP 转换为区域进入/退出</span>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
-        <button class="btn btn-success btn-sm" onclick="saveZoneConfig()">💾 保存</button>
-        <span id="cfgZoneSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
-      </div>
-      <div style="margin-top:6px;font-size:10px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
-        <span>区域被占用返回 <code>409</code>，ASAP 自动重试</span>
-        <span>进入成功获得 <code>permission_id</code></span>
-        <span>退出失败自动重试直到释放</span>
-      </div>
-    </div>
-  </div>
-  </div> <!-- /cfg-visual -->
-
-  <!-- ── 运行时配置（热更新） ── -->
-  <div id="cfg-runtime" style="display:none;">
-    <div class="glass">
-      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-        <span>⚡ 运行时配置 (config/runtime.toml)</span>
-        <div style="display:flex;gap:8px;">
-          <button class="btn" onclick="loadRuntimeConfig()">🔄 重新加载</button>
-          <button class="btn btn-success" onclick="saveRuntimeConfig()">💾 保存并热更新</button>
-        </div>
-      </div>
-      <textarea id="cfgRuntimeEditor" title="运行时配置编辑器 - config/runtime.toml" spellcheck="false"
-        style="width:100%;min-height:500px;background:rgba(0,0,0,0.25);border:1px solid var(--card-border);
-               border-radius:10px;padding:14px;color:var(--text-primary);font-size:13px;
-               font-family:'SF Mono','Fira Code','Consolas',monospace;line-height:1.6;
-               outline:none;resize:vertical;tab-size:2;"
-        placeholder="加载中..."></textarea>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
-        <span id="cfgRuntimeStatus" style="font-size:12px;color:var(--text-muted);"></span>
-        <span style="font-size:11px;color:var(--success);">✅ 保存后即时生效，无需重启。含地址/URL/映射等运行时配置。</span>
-      </div>
-    </div>
-  </div> <!-- /cfg-runtime -->
-
-  <!-- ── 静态配置（需重启） ── -->
-  <div id="cfg-env" style="display:none;">
-    <div class="glass">
-      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-        <span>🔧 静态配置 (config/env.toml)</span>
-        <div style="display:flex;gap:8px;">
-          <button class="btn" onclick="loadEnvConfig()">🔄 重新加载</button>
-          <button class="btn btn-success" onclick="saveEnvConfig()">💾 保存</button>
-        </div>
-      </div>
-      <textarea id="cfgEnvEditor" title="静态配置编辑器 - config/env.toml" spellcheck="false"
-        style="width:100%;min-height:500px;background:rgba(0,0,0,0.25);border:1px solid var(--card-border);
-               border-radius:10px;padding:14px;color:var(--text-primary);font-size:13px;
-               font-family:'SF Mono','Fira Code','Consolas',monospace;line-height:1.6;
-               outline:none;resize:vertical;tab-size:2;"
-        placeholder="加载中..."></textarea>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
-        <span id="cfgEnvStatus" style="font-size:12px;color:var(--text-muted);"></span>
-        <span style="font-size:11px;color:var(--warning);">⚠ 修改后需重启服务才能生效。含 server/log/duration 等静态配置。</span>
-      </div>
-    </div>
-  </div> <!-- /cfg-env -->
-
-  <!-- 模拟器配置 -->
-  <div class="glass log-panel-full" style="margin-top:12px;">
-    <div class="card-title">🎮 模拟器参数配置</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label">开门过渡时间 (秒)</span>
-        <input type="number" id="simOpenDelayInput" step="0.1" min="0.5" max="30"
-          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;font-family:inherit;outline:none;">
-      </div>
-      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label">关门过渡时间 (秒)</span>
-        <input type="number" id="simCloseDelayInput" step="0.1" min="0.5" max="30"
-          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;font-family:inherit;outline:none;">
-      </div>
-      <div class="zone-row" style="flex-direction:column;align-items:stretch;">
-        <span class="zone-label">区域ID</span>
-        <input type="text" id="simZoneIdInput"
-          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);
-                 border-radius:6px;padding:5px 8px;color:var(--text-primary);font-size:12px;font-family:inherit;outline:none;"
-          placeholder="air_shower_room">
-      </div>
-    </div>
-    <div style="display:flex;gap:12px;align-items:center;margin-top:8px;flex-wrap:wrap;">
-      <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-primary);cursor:pointer;">
-        <input type="checkbox" id="simZoneBusyCheck" onchange="this.style.accentColor='var(--danger)'">
-        区域始终占用 (测试用)
-      </label>
-      <button class="btn btn-success btn-sm" onclick="saveSimConfig()">💾 保存</button>
-      <span id="simSaveStatus" style="font-size:10px;color:var(--success);display:none;"></span>
-    </div>
-    <div style="margin-top:6px;font-size:10px;color:var(--text-muted);">
-      💡 模拟器启用后，此配置立即生效。修改后点保存即可，无需重启。
-    </div>
-  </div>
-
-</div>    <!-- view-config -->
-
-<!-- ════════════════════════════════════
-     升级管理视图
-     ════════════════════════════════════ -->
-<div id="view-upgrade" style="display:none;">
-  <div class="upgrade-grid">
-
-    <!-- 当前版本 -->
-    <div class="glass">
-      <div class="card-title">当前版本</div>
-      <div style="display:flex;gap:24px;flex-wrap:wrap;">
-        <div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">应用版本</div>
-          <div style="font-size:18px;font-weight:600;font-family:monospace;" id="upgradeAppVersion">加载中...</div>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">项目路径</div>
-          <div style="font-size:13px;font-family:monospace;" id="upgradeProjectDir">加载中...</div>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Supervisor 进程</div>
-          <div style="font-size:13px;font-family:monospace;">asap_adapter</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 上传升级 -->
-    <div class="glass">
-      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-        <span>📦 上传升级包</span>
-      </div>
-      <div class="upload-zone" id="upgradeUploadZone">
-        <div class="upload-icon">📦</div>
-        <div><strong>点击选择或拖拽 .zip 文件到此处</strong></div>
-        <div class="hint">仅支持 .zip 格式</div>
-        <input type="file" id="upgradeFileInput" accept=".zip" title="选择升级包文件(.zip)">
-      </div>
-      <div class="file-info" id="upgradeFileInfo">
-        <span>📦</span>
-        <span class="name" id="upgradeFileName"></span>
-        <span class="size" id="upgradeFileSize"></span>
-        <button class="btn btn-sm" id="upgradeBtnClearFile" style="margin-top:0;" title="清除选择">✕</button>
-      </div>
-      <textarea class="remark-input" id="upgradeRemarkInput" title="升级说明（可选）"
-        style="width:100%;margin-top:10px;padding:8px 12px;background:var(--card-bg);border:1px solid var(--card-border);
-               border-radius:6px;color:var(--text-primary);font-size:12px;font-family:inherit;
-               resize:vertical;min-height:50px;outline:none;"
-        placeholder="升级说明（可选）&#10;例如：修复了xxx问题，新增了xxx功能"></textarea>
-      <button class="btn btn-success" id="upgradeBtnUpload" disabled style="margin-top:10px;">⬆ 开始升级</button>
-      <div class="progress-bar" id="upgradeProgressBar"><div class="bar"></div></div>
-      <div class="result-box" id="upgradeResultBox"></div>
-      <div class="exclude-tags" id="upgradeExcludeTags">
-        <span style="font-size:10px;color:var(--text-muted);width:100%;margin-bottom:4px;">以下文件/目录将保留，不受升级影响：</span>
-      </div>
-    </div>
-
-    <!-- API 调用说明 -->
-    <div class="glass">
-      <details style="cursor:pointer;">
-        <summary style="font-size:12px;color:var(--accent);">📋 API 调用方式（点击展开）</summary>
-        <pre style="background:rgba(0,0,0,0.2);border:1px solid var(--card-border);border-radius:6px;padding:12px;margin-top:8px;overflow-x:auto;font-size:11px;line-height:1.5;color:var(--text-muted);">
-<span style="color:var(--accent);"># 通过 curl 升级</span>
-curl -X POST http://HOST:5012/api/asap/upgrade/upload \
-  -F "file=@upgrade_v1.1.0.zip" \
-  -F "remark=修复了xxx问题，新增了xxx功能"
-
-<span style="color:var(--accent);"># 升级包内放入 version.json 可自动读取版本信息</span>
-# version.json 格式：
-# { "title": "v1.1.0 安全更新", "changes": ["修复: xxx", "新增: xxx"] }
-
-<span style="color:var(--accent);"># 查看升级记录</span>
-curl http://HOST:5012/api/asap/upgrade/records
-
-<span style="color:var(--accent);"># 回滚到指定备份</span>
-curl -X POST http://HOST:5012/api/asap/upgrade/rollback/upgrade_20260101_120000
-
-<span style="color:var(--accent);"># 查看当前版本</span>
-curl http://HOST:5012/api/asap/upgrade/version
-        </pre>
-      </details>
-    </div>
-
-    <!-- 升级记录 -->
-    <div class="glass">
-      <div class="card-title">📋 升级记录</div>
-      <div id="upgradeRecordsContainer"><div style="padding:20px;text-align:center;color:var(--text-muted);">加载中...</div></div>
-    </div>
-  </div>
-</div>    <!-- view-upgrade -->
-
-<!-- ════════════════════════════════════
-     模拟器视图
-     ════════════════════════════════════ -->
-<div id="view-simulator" style="display:none;">
-  <div class="sim-dashboard">
-    <div style="display:flex;gap:12px;margin-bottom:12px;">
-      <div class="glass" style="flex:1;min-width:300px;">
+    <div class="glass" style="flex:1;min-width:300px;">
         <div class="card-title">🚪 模拟器门控制</div>
         <div id="simDoorArea" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <div class="door-card" id="simOuterCard">
@@ -1063,9 +758,9 @@ curl http://HOST:5012/api/asap/upgrade/version
             <div class="door-code" id="simOuterCode">DOOR_OUTER</div>
             <div class="door-status-value closed" id="simOuterState">关闭</div>
             <div class="door-controls" style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">
-              <button class="btn btn-success btn-sm" onclick="simSetDoor(doorIds.outer,'1')">开门</button>
-              <button class="btn btn-warning btn-sm" onclick="simSetDoor(doorIds.outer,'0')">关门</button>
-              <button class="btn btn-danger btn-sm" onclick="simFault(doorIds.outer)">故障</button>
+              <button class="btn btn-success btn-sm" onclick="simSetDoor(doorIds.door1,'1')">开门</button>
+              <button class="btn btn-warning btn-sm" onclick="simSetDoor(doorIds.door1,'0')">关门</button>
+              <button class="btn btn-danger btn-sm" onclick="simFault(doorIds.door1)">故障</button>
             </div>
           </div>
           <div class="door-card" id="simInnerCard">
@@ -1073,9 +768,9 @@ curl http://HOST:5012/api/asap/upgrade/version
             <div class="door-code" id="simInnerCode">DOOR_INNER</div>
             <div class="door-status-value closed" id="simInnerState">关闭</div>
             <div class="door-controls" style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">
-              <button class="btn btn-success btn-sm" onclick="simSetDoor(doorIds.inner,'1')">开门</button>
-              <button class="btn btn-warning btn-sm" onclick="simSetDoor(doorIds.inner,'0')">关门</button>
-              <button class="btn btn-danger btn-sm" onclick="simFault(doorIds.inner)">故障</button>
+              <button class="btn btn-success btn-sm" onclick="simSetDoor(doorIds.door2,'1')">开门</button>
+              <button class="btn btn-warning btn-sm" onclick="simSetDoor(doorIds.door2,'0')">关门</button>
+              <button class="btn btn-danger btn-sm" onclick="simFault(doorIds.door2)">故障</button>
             </div>
           </div>
         </div>
@@ -1132,28 +827,9 @@ window.addEventListener('unhandledrejection', function(e) {
 //  WebUI 主逻辑
 // ═══════════════════════════════════════
 
-const STEPS = [
-  "空闲", "申请区域", "开外门", "等外门开",
-  "AGV进入", "关外门", "等外门关", "风淋中",
-  "开内门", "等内门开", "AGV驶离", "关内门",
-  "等内门关", "释放区域",
-];
-
-const stateStepMap = {
-  IDLE: 0, REQUEST_ZONE: 1, OPEN_OUTER_DOOR: 2, WAIT_OUTER_DOOR_OPEN: 3,
-  AGV_ENTERING: 4, CLOSE_OUTER_DOOR: 5, WAIT_OUTER_DOOR_CLOSE: 6,
-  SHOWERING: 7, OPEN_INNER_DOOR: 8, WAIT_INNER_DOOR_OPEN: 9,
-  AGV_EXITING: 10, CLOSE_INNER_DOOR: 11, WAIT_INNER_DOOR_CLOSE: 12,
-  RELEASE_ZONE: 13, ERROR: -1,
-};
-
 let currentState = "IDLE";
-let currentStep = 0;
-let currentShowerDuration = 4.0;
-let currentElapsed = 0;
-let showerTimerInterval = null;
 let sseConnected = false;
-let doorIds = { outer: "DOOR_OUTER", inner: "DOOR_INNER" };
+let doorIds = { door1: "DOOR01", door2: "DOOR02" };
 
 // ── 初始化 ──────────────────────────────
 
@@ -1171,13 +847,7 @@ function init() {
   safe(checkSimStatus, 'checkSimStatus');
   setInterval(checkSimStatus, 5000);
   safe(upgradeInitUpload, 'upgradeInitUpload');
-  safe(renderStepNodes, 'renderStepNodes');
   safe(connectSSE, 'connectSSE');
-  // 风淋倒计时轮询 (0.5秒一次，仅步骤7时显示)
-  setInterval(() => {
-    if (currentStep === 7) currentElapsed += 0.5;
-    updateShowerTimer();
-  }, 500);
 }
 
 // ── 视图切换 ──────────────────────────
@@ -1210,28 +880,16 @@ async function refreshDoorStatus() {
   try {
     const resp = await fetch("/api/asap/refresh-doors", { method: "POST" });
     const data = await resp.json();
-    console.log("[DoorStatus] API响应:", JSON.stringify(data));
-    // 更新门ID（来自API）
-    if (data.outer_door?.door_id) doorIds.outer = data.outer_door.door_id;
-    if (data.inner_door?.door_id) doorIds.inner = data.inner_door.door_id;
-    // 更新门卡 + 显示调试信息
-    if (data.outer_door) {
-      updateDoorCard("outer", data.outer_door);
-      const dbg = document.getElementById("outerDebugStatus");
-      if (dbg) dbg.textContent = "raw: " + (data.outer_door.door_status ?? "?");
+    if (data.door1) {
+      doorIds.door1 = data.door1.door_id || "DOOR01";
+      updateDoorCard("door1", data.door1);
     }
-    if (data.inner_door) {
-      updateDoorCard("inner", data.inner_door);
-      const dbg = document.getElementById("innerDebugStatus");
-      if (dbg) dbg.textContent = "raw: " + (data.inner_door.door_status ?? "?");
+    if (data.door2) {
+      doorIds.door2 = data.door2.door_id || "DOOR02";
+      updateDoorCard("door2", data.door2);
     }
   } catch (e) {
     console.error("[DoorStatus] 请求失败:", e);
-    // 在门卡显示错误
-    ["outer","inner"].forEach(pos => {
-      const dbg = document.getElementById(pos + "DebugStatus");
-      if (dbg) dbg.textContent = "❌ " + e.message;
-    });
   }
 }
 
@@ -1244,65 +902,58 @@ function toggleDetail(el) {
 // ── 门编码映射提示 ──────────────────────
 function updateDoorMapping() {
   const el = document.getElementById("doorCodeMapping");
-  const outerCode = document.getElementById("outerDoorCode");
-  const innerCode = document.getElementById("innerDoorCode");
-  const oCode = outerCode ? outerCode.textContent.replace("#", "") : "?";
-  const iCode = innerCode ? innerCode.textContent.replace("#", "") : "?";
-  if (oCode && iCode && oCode !== "─" && iCode !== "─") {
-    el.textContent = `外门:${oCode} | 内门:${iCode}`;
+  const d1Code = document.getElementById("door1Code");
+  const d2Code = document.getElementById("door2Code");
+  const c1 = d1Code ? d1Code.textContent : "?";
+  const c2 = d2Code ? d2Code.textContent : "?";
+  if (c1 && c2 && c1 !== "─" && c2 !== "─") {
+    el.textContent = `门1:${c1} | 门2:${c2}`;
   } else {
     el.textContent = "";
   }
 }
 
 function updateDoorCard(pos, door) {
-  const status = door.door_status || "UNKNOWN";
-  console.log(`[DoorCard] ${pos}: door_status=${JSON.stringify(door.door_status)}, status=${status}, full=`, door);
-  const card = document.getElementById(`${pos}Door`);
+  // 适配新旧格式：acs_status (新) 或 door_status (旧)
+  const acsStatus = door.acs_status || door.door_status || "?";
+  const rcsStatus = door.rcs_status;  // 新格式直接有翻译值
+  const card = document.getElementById(`${pos}Card`);
   const statusEl = document.getElementById(`${pos}DoorStatus`);
   const textEl = document.getElementById(`${pos}DoorText`);
-  const codeEl = document.getElementById(`${pos}DoorCode`);
+  const codeEl = document.getElementById(`${pos}Code`);
   const rcsEl = document.getElementById(`${pos}RcsStatus`);
 
   // 门编码（RCS doorCode）
-  if (codeEl) codeEl.textContent = door.door_code ? `#${door.door_code}` : "─";
+  if (codeEl) codeEl.textContent = door.door_code || (pos === "door1" ? "1001" : "1002");
   // 门 ID
-  const idEl = document.getElementById(`${pos}DoorId`);
+  const idEl = document.getElementById(`${pos}Id`);
   if (idEl) idEl.textContent = `(${door.door_id || pos.toUpperCase()})`;
-  // RCS 状态（0=离线, 1=开, 2=关）
+  // RCS 状态
   if (rcsEl) {
-    let rcsStatus = "?";
-    if (status === "OPENED" || status === "1") rcsStatus = "status: 1 (开)";
-    else if (status === "CLOSED" || status === "0") rcsStatus = "status: 2 (关)";
-    else if (status === "FAULT" || status === "2") rcsStatus = "status: 0 (离线/故障)";
-    else rcsStatus = "status: 0 (未知)";
-    rcsEl.textContent = rcsStatus;
+    const r = rcsStatus !== undefined ? rcsStatus : (acsStatus === "1" ? 1 : acsStatus === "0" ? 2 : 0);
+    const labels = { 0: "离线/故障", 1: "开", 2: "关" };
+    rcsEl.textContent = `status: ${r} (${labels[r] || "?"})`;
   }
 
   // 更新映射提示
   updateDoorMapping();
 
-  card.className = "door-card";
+  if (card) card.className = "door-card";
 
   let statusText, valueText, cls;
-  switch (status) {
-    case "OPENED":
-    case "1":
-      cls = "open"; statusText = "已打开"; valueText = "开"; break;
-    case "CLOSED":
-    case "0":
-      cls = "closed"; statusText = "已关闭"; valueText = "关"; break;
-    case "FAULT":
-    case "2":
-      cls = "fault"; statusText = "故障"; valueText = "故"; break;
-    default:
-      cls = ""; statusText = "未知"; valueText = "?";
+  if (acsStatus === "1") {
+    cls = "open"; statusText = "已打开"; valueText = "开";
+  } else if (acsStatus === "0") {
+    cls = "closed"; statusText = "已关闭"; valueText = "关";
+  } else if (acsStatus === "2") {
+    cls = "fault"; statusText = "故障"; valueText = "故";
+  } else {
+    cls = ""; statusText = "未知"; valueText = "?";
   }
 
-  card.classList.add(cls);
-  statusEl.textContent = valueText;
-  statusEl.className = "door-status-value " + cls;
-  textEl.textContent = statusText;
+  if (card) card.classList.add(cls);
+  if (statusEl) { statusEl.textContent = valueText; statusEl.className = "door-status-value " + cls; }
+  if (textEl) textEl.textContent = statusText;
 }
 
 // ── HTTP 请求 ───────────────────────────
@@ -1345,14 +996,19 @@ async function zoneForceDoor(doorCode, status) {
   }
 }
 
-async function startFlow() {
-  try {
-    await fetch("/api/asap/start", { method: "POST" });
-    addLog({ event_type: "command", data: { msg: "手动启动风淋流程" } });
-    await fetchStatus();
-  } catch (e) {
-    console.error("启动失败:", e);
+// ── SSE 事件流 + 状态更新 ────────────────
+
+function updateDashboard(data) {
+  // 更新门状态（新格式：door1/door2）
+  if (data.door1) updateDoorCard("door1", data.door1);
+  if (data.door2) updateDoorCard("door2", data.door2);
+  // 更新方向
+  const dirEl = document.getElementById("directionLabel");
+  if (dirEl && data.direction_label) {
+    dirEl.textContent = data.direction_label || "未判定";
+    dirEl.style.color = data.direction ? "var(--accent)" : "var(--text-muted)";
   }
+}
 }
 
 async function cancelFlow() {
@@ -1479,14 +1135,14 @@ function connectSSE() {
       try {
         const msg = JSON.parse(e.data);
         if (msg.event_type === "snapshot" && msg.data) {
+          // 初始快照（可能来自旧格式，向下兼容）
+          if (msg.data.door1 || msg.data.door2) updateDashboard(msg.data);
+        } else if (msg.event_type === "air_shower_snapshot" && msg.data) {
           updateDashboard(msg.data);
-          updateStepNodes(msg.data);
         } else if (msg.event_type === "zone_snapshot" && msg.data) {
           updateZoneDashboard(msg.data);
         } else if (msg.event_type !== "heartbeat") {
           addLog(msg);
-          // 非快照事件后刷新状态获取最新 step_log
-          setTimeout(fetchStatus, 500);
         }
       } catch (err) { /* ignore parse errors */ }
     };
@@ -1499,117 +1155,6 @@ function connectSSE() {
     fetchStatus();
     setInterval(fetchStatus, 3000);
   }
-}
-
-function renderStepNodes() {
-  const row = document.getElementById("stepsRow");
-  if (!row) return;
-  row.innerHTML = stepNames.slice(1).map((name, i) => {
-    const stepNum = i + 1;
-    return `<div class="step-item" id="stepItem${stepNum}" onclick="showStepDetail(${stepNum})"
-             title="${name} — 点击查看报文" style="cursor:pointer;">
-      ${stepNum < 14 ? `<div class="step-line" id="stepLine${stepNum}"></div>` : ""}
-      <div class="step-dot" id="stepDot${stepNum}">${stepNum}</div>
-      <div class="step-label" id="stepLabel${stepNum}">${name}</div>
-    </div>`;
-  }).join("");
-}
-
-function updateStepNodes(data) {
-  const step = data.current_step || 0;
-  const state = data.state || "IDLE";
-  const stepLog = data.step_log || [];
-
-  // 更新步骤计数器
-  const countEl = document.getElementById("flowStepCount");
-  if (countEl) countEl.textContent = step > 0 ? `(步骤 ${step}/13)` : "";
-
-  // 更新标题
-  document.getElementById("stateLabel").textContent = step >= 1 && step <= 13 ? stepNames[step] : "空闲";
-  document.getElementById("agvLabel").textContent = data.current_agv ? `AGV: ${data.current_agv}` : "";
-
-  // 按钮状态
-  const busy = step >= 1 && step <= 13;
-  document.getElementById("btnStart").disabled = busy;
-  document.getElementById("btnCancel").disabled = !busy;
-
-  // 步骤节点状态
-  for (let i = 1; i <= 13; i++) {
-    const dot = document.getElementById("stepDot" + i);
-    const label = document.getElementById("stepLabel" + i);
-    const line = document.getElementById("stepLine" + i);
-    const item = document.getElementById("stepItem" + i);
-    if (!dot) continue;
-
-    dot.className = "step-dot";
-    if (i < step) dot.classList.add("done");
-    else if (i === step) dot.classList.add("active");
-    if (state === "ERROR" && i === step) dot.classList.add("error");
-
-    if (line) {
-      line.className = "step-line";
-      if (i < step) line.classList.add("done");
-      else if (i === step) line.classList.add("running");
-    }
-
-    // 显示该步是否有报文日志（小圆点标记）
-    const hasLog = stepLog.some(l => l.step === i);
-    if (hasLog && item) item.setAttribute("data-has-log", "1");
-    else if (item) item.removeAttribute("data-has-log");
-  }
-
-  // 更新已打开详情面板的数据
-  if (document.getElementById("stepDetailPanel").style.display !== "none") {
-    const activeStep = document.getElementById("stepDetailPanel").getAttribute("data-step");
-    if (activeStep) showStepDetail(parseInt(activeStep), stepLog);
-  }
-}
-
-// 获取 step_log（从缓存或最新状态）
-async function getStepLog() {
-  try {
-    const resp = await fetch("/api/asap/status");
-    const data = await resp.json();
-    return data.step_log || [];
-  } catch (e) { return []; }
-}
-
-async function showStepDetail(stepNum, cachedLog) {
-  const panel = document.getElementById("stepDetailPanel");
-  const title = document.getElementById("stepDetailTitle");
-  const content = document.getElementById("stepDetailContent");
-  if (!panel || !content) return;
-
-  panel.setAttribute("data-step", stepNum);
-  title.textContent = `步骤 ${stepNum}: ${stepNames[stepNum] || ""}`;
-
-  const stepLog = cachedLog || await getStepLog();
-  const entries = stepLog.filter(l => l.step === stepNum);
-
-  if (entries.length === 0) {
-    content.innerHTML = `<div style="padding:16px;color:var(--text-muted);text-align:center;">该步骤暂无报文记录</div>`;
-  } else {
-    content.innerHTML = entries.map(e => `
-      <div style="margin-bottom:8px;border:1px solid var(--card-border);border-radius:6px;overflow:hidden;">
-        <div style="display:flex;gap:8px;padding:6px 10px;background:rgba(255,255,255,0.03);align-items:center;">
-          <span style="font-size:10px;color:var(--text-muted);">${e.timestamp || ""}</span>
-          <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${e.direction==='send'?'rgba(59,130,246,0.2)':'rgba(34,197,94,0.2)'};color:${e.direction==='send'?'var(--info)':'var(--success)'};">
-            ${e.direction === 'send' ? '↑ 请求' : e.direction === 'recv' ? '↓ 响应' : '· ' + e.direction}
-          </span>
-          <span style="font-size:10px;color:var(--text-muted);font-family:monospace;">${e.url || e.action || ""}</span>
-          ${e.success === false ? '<span style="font-size:10px;color:var(--danger);">✗ 失败</span>' : ''}
-        </div>
-        <div style="padding:6px 10px;font-family:monospace;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;">
-          ${JSON.stringify(e.payload || {}, null, 2)}
-        </div>
-      </div>
-    `).join("");
-  }
-  panel.style.display = "block";
-}
-
-function closeStepDetail() {
-  document.getElementById("stepDetailPanel").style.display = "none";
 }
 
 async function manualOpen(doorId) {
@@ -1732,8 +1277,8 @@ function setRcsUrls() {
       }
       // 加载门编码映射
       const mapping = cfg.door_code_mapping || {};
-      const outerId = doorIds.outer || "DOOR_OUTER";
-      const innerId = doorIds.inner || "DOOR_INNER";
+      const outerId = doorIds.door1 || "DOOR01";
+      const innerId = doorIds.door2 || "DOOR02";
       const outerInput = document.getElementById("rcsOuterCodeInput");
       const innerInput = document.getElementById("rcsInnerCodeInput");
       if (outerInput) outerInput.value = mapping[outerId] || Object.values(mapping)[0] || "1001";
@@ -1762,8 +1307,8 @@ async function saveRcsUrl() {
     const body = { change_status_url: url, report_interval: 0.5 };
     // 构建门编码映射
     if (outerCode || innerCode) {
-      const outerId = doorIds.outer || "DOOR_OUTER";
-      const innerId = doorIds.inner || "DOOR_INNER";
+      const outerId = doorIds.door1 || "DOOR01";
+      const innerId = doorIds.door2 || "DOOR02";
       body.door_code_mapping = {};
       if (outerCode) body.door_code_mapping[outerId] = outerCode;
       if (innerCode) body.door_code_mapping[innerId] = innerCode;
@@ -1810,8 +1355,8 @@ async function saveAngelUrl() {
     status.style.display = "inline";
     status.style.color = "var(--success)";
     // 同步更新门ID变量
-    if (data.outer_door_id) doorIds.outer = data.outer_door_id;
-    if (data.inner_door_id) doorIds.inner = data.inner_door_id;
+    if (data.outer_door_id) doorIds.door1 = data.outer_door_id;
+    if (data.inner_door_id) doorIds.door2 = data.inner_door_id;
     setTimeout(() => { status.style.display = "none"; }, 3000);
   } catch (e) {
     status.textContent = "✗ 保存失败";
@@ -1829,8 +1374,8 @@ function loadAngelConfig() {
       const innerEl = document.getElementById("angelInnerDoorIdInput");
       if (outerEl) outerEl.value = data.outer_door_id || "DOOR_OUTER";
       if (innerEl) innerEl.value = data.inner_door_id || "DOOR_INNER";
-      if (data.outer_door_id) doorIds.outer = data.outer_door_id;
-      if (data.inner_door_id) doorIds.inner = data.inner_door_id;
+      if (data.outer_door_id) doorIds.door1 = data.outer_door_id;
+      if (data.inner_door_id) doorIds.door2 = data.inner_door_id;
     })
     .catch(() => {});
 }
@@ -1895,13 +1440,13 @@ async function loadAllConfig() {
     document.getElementById("rcsReportUrlInput").value = rcs.change_status_url || "";
     const rcsMap = rcs.door_code_mapping || {};
     const outerRcsId = document.getElementById("rcsOuterDoorId");
-    const outerCode = rcsMap[doorIds.outer || "DOOR_OUTER"] || Object.values(rcsMap)[0] || "1001";
-    const innerCode = rcsMap[doorIds.inner || "DOOR_INNER"] || Object.values(rcsMap)[1] || "1002";
+    const outerCode = rcsMap[doorIds.door1 || "DOOR01"] || Object.values(rcsMap)[0] || "1001";
+    const innerCode = rcsMap[doorIds.door2 || "DOOR02"] || Object.values(rcsMap)[1] || "1002";
     document.getElementById("rcsOuterCodeInput").value = outerCode;
-    if (outerRcsId) outerRcsId.textContent = doorIds.outer || "DOOR_OUTER";
+    if (outerRcsId) outerRcsId.textContent = doorIds.door1 || "DOOR01";
     document.getElementById("rcsInnerCodeInput").value = innerCode;
     const innerRcsEl = document.getElementById("rcsInnerDoorId");
-    if (innerRcsEl) innerRcsEl.textContent = doorIds.inner || "DOOR_INNER";
+    if (innerRcsEl) innerRcsEl.textContent = doorIds.door2 || "DOOR02";
 
     // Angel
     const angel = data.angel || {};
@@ -1943,8 +1488,8 @@ async function saveAllConfig() {
   const rcsMap = {};
   const outerRcsCode = document.getElementById("rcsOuterCodeInput").value.trim();
   const innerRcsCode = document.getElementById("rcsInnerCodeInput").value.trim();
-  const outerId = doorIds.outer || "DOOR_OUTER";
-  const innerId = doorIds.inner || "DOOR_INNER";
+  const outerId = doorIds.door1 || "DOOR01";
+  const innerId = doorIds.door2 || "DOOR02";
   if (outerRcsCode) rcsMap[outerId] = outerRcsCode;
   if (innerRcsCode) rcsMap[innerId] = innerRcsCode;
 

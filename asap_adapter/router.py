@@ -27,9 +27,9 @@ from .models import (
     RcsDoorControlRequest, RcsDoorControlResponse,
     RcsStatusQueryRequest, RcsStatusQueryResponse, RcsStatusData,
 )
-from .state_machine import StateMachine, DoorClientError, ZoneClientError
-from .door_client import DoorClient
-from .zone_client import ZoneClient
+from .door_translator import AirShowerTranslator
+from .door_client import DoorClient, DoorClientError
+from .zone_client import ZoneClient, ZoneClientError
 from .config import AppConfig
 
 
@@ -101,18 +101,18 @@ class ZoneConfigUpdate(BaseModel):
 logger = logging.getLogger(__name__)
 
 
-def _get_sm(request: Request) -> StateMachine:
-    return request.app.state.sm
+def _get_translator(request: Request) -> AirShowerTranslator:
+    return request.app.state.translator
 
 
-def _door_code_to_id(door_code: str, sm: StateMachine) -> str:
-    """将 RCS doorCode 映射为 ASAP door_id"""
-    mapping = sm.config.rcs.door_code_mapping
-    for door_id, code in mapping.items():
-        if code == door_code:
-            return door_id
-    logger.warning("未找到doorCode[%s]的映射，默认使用外门", door_code)
-    return sm.config.angel.outer_door_id
+def _door_code_to_id(door_code: str, request: Request) -> str:
+    """将 RCS doorCode 映射为 ACS door_id"""
+    translator = _get_translator(request)
+    door_id = translator._door_id_by_code(door_code)
+    if door_id is None:
+        logger.warning("未找到doorCode[%s]的映射", door_code)
+        return request.app.state.config.angel.outer_door_id
+    return door_id
 
 
 def create_router(app: FastAPI) -> APIRouter:
@@ -138,12 +138,12 @@ def create_router(app: FastAPI) -> APIRouter:
         async def generate() -> AsyncGenerator[str, None]:
             try:
                 # 先发送当前状态快照
-                sm = _get_sm(request)
-                status = sm.status
+                translator = _get_translator(request)
+                status = translator.get_status()
                 snapshot = json.dumps({
                     "timestamp": datetime.now().isoformat(),
                     "event_type": "snapshot",
-                    "data": status.model_dump(),
+                    "data": status.dump(),
                 }, ensure_ascii=False)
                 yield f"data: {snapshot}\n\n"
 
@@ -169,103 +169,78 @@ def create_router(app: FastAPI) -> APIRouter:
             },
         )
 
-    # ── RCS 门禁控制 ──────────────────────────
-
-    @router.post("/api/rcs/controlDoor")
-    async def rcs_control_door(req: RcsDoorControlRequest, request: Request):
-        """
-        RCS 门禁控制入口
-        根据 doorCode 分流：
-          - 风淋门门码 (1001/1002) → AirShowerStateMachine
-          - 区域管控门码 (q001/q002) → ZoneStateMachine
-        """
-        from datetime import datetime
-        entry_code = request.app.state.config.zone.entry_door_code
-        is_zone_door = req.doorCode == entry_code
-
-        sm = _get_sm(request)
-        sm._status.rcs_query_count += 1
-        action = "开门" if req.status == 1 else "关门" if req.status == 2 else f"status={req.status}"
-        sm._status.rcs_last_query = (
-            f"{datetime.now().strftime('%H:%M:%S')} "
-            f"控制 doorCode={req.doorCode} {action}"
-        )
-        logger.info("RCS控制请求: door=%s status=%d agv=%s zone=%s",
-                    req.doorCode, req.status, req.deviceCode, is_zone_door)
-
-        req_dict = req.model_dump(exclude_none=True)
-
-        # ── 区域管控门 (q001/q002) ──
-        if is_zone_door:
-            zsm = request.app.state.zone_sm
-            if req.status == 1:
-                ok, msg = await zsm.handle_open(req.doorCode, req.deviceCode)
-                code = 1000 if ok else 2001
-                resp = RcsDoorControlResponse(code=code, msg=msg)
-            elif req.status == 2:
-                ok, msg = await zsm.handle_close(req.doorCode)
-                code = 1000 if ok else 2002
-                resp = RcsDoorControlResponse(code=code, msg=msg)
-            else:
-                resp = RcsDoorControlResponse(code=2003, msg=f"未知状态: {req.status}")
-            _log_req(request, "control", "/api/rcs/controlDoor",
-                     req_dict, resp.model_dump(), 200)
-            return resp
-
-        # ── 风淋门 (1001/1002) 原有逻辑 ──
-        if req.status == 1:
-            success = await sm.start(agv_id=req.deviceCode)
-            if not success:
-                resp = RcsDoorControlResponse(
-                    code=2001,
-                    msg=f"风淋流程忙碌中，当前状态: {sm.state.value}",
-                )
-                _log_req(request, "control", "/api/rcs/controlDoor",
-                         req_dict, resp.model_dump(), 200)
-                return resp
-            resp = RcsDoorControlResponse(msg="风淋流程已启动")
-            _log_req(request, "control", "/api/rcs/controlDoor",
-                     req_dict, resp.model_dump(), 200)
-            return resp
-
-        elif req.status == 2:
-            try:
-                door_id = _door_code_to_id(req.doorCode, sm)
-                await sm.manual_close_door(door_id)
-                resp = RcsDoorControlResponse(msg=f"门[{door_id}]已关闭")
-            except (DoorClientError, ZoneClientError) as e:
-                resp = RcsDoorControlResponse(code=2002, msg=f"关门失败: {e}")
-            _log_req(request, "control", "/api/rcs/controlDoor",
-                     req_dict, resp.model_dump(), 200)
-            return resp
-
-        resp = RcsDoorControlResponse(code=2003, msg=f"未知状态: {req.status}")
-        _log_req(request, "control", "/api/rcs/controlDoor",
-                 req_dict, resp.model_dump(), 200)
-        return resp
-
-    # ── RCS 门状态查询 ────────────────────────
+    # ── RCS 门状态查询 + 控制（合并端点）─────────
 
     @router.post("/api/rcs/doorStatus")
-    async def rcs_door_status(req: RcsStatusQueryRequest, request: Request):
-        """RCS 门状态查询（风淋门 + 区域管控）"""
+    async def rcs_door_status(request: Request):
+        """
+        RCS 门状态查询 + 门禁控制（单一入口）
+        根据请求体中是否含 status 字段区分：
+          - 含 status(1/2): 控制请求 → 阻塞式
+          - 仅 doorCode:    查询请求 → 即时返回
+        """
         from datetime import datetime
         entry_code = request.app.state.config.zone.entry_door_code
 
-        sm = _get_sm(request)
-        sm._status.rcs_query_count += 1
-        sm._status.rcs_last_query = (
-            f"{datetime.now().strftime('%H:%M:%S')} "
-            f"doorCode={req.doorCode}"
-        )
+        # 解析请求体
+        data = await request.json()
+        door_code = data.get("doorCode", "")
+        control_status = data.get("status", 0)  # 0=查询, 1=开门, 2=关门
 
-        req_dict = req.model_dump(exclude_none=True)
+        req_dict = dict(data)
 
-        # ── 区域管控门 ──
-        if req.doorCode == entry_code:
+        # ── 控制请求（含 status=1/2） ──
+        if control_status in (1, 2):
+            action_label = "开门" if control_status == 1 else "关门"
+            logger.info("RCS控制请求: door=%s status=%d", door_code, control_status)
+
+            # 区域管控门 (q001)
+            if door_code == entry_code:
+                zsm = request.app.state.zone_sm
+                if control_status == 1:
+                    ok, msg = await zsm.handle_open(door_code,
+                        data.get("deviceCode", ""))
+                    code = 1000 if ok else 2001
+                else:
+                    ok, msg = await zsm.handle_close(door_code)
+                    code = 1000 if ok else 2002
+                resp = RcsDoorControlResponse(code=code, msg=msg)
+                _log_req(request, "control", "/api/rcs/doorStatus",
+                         req_dict, resp.model_dump(), 200)
+                return resp
+
+            # 风淋门 (1001/1002) — 协议翻译
+            translator = _get_translator(request)
+            translator._status.rcs_query_count += 1
+            translator._status.rcs_last_query = (
+                f"{datetime.now().strftime('%H:%M:%S')} "
+                f"控制 doorCode={door_code} {action_label}"
+            )
+            code, msg = await translator.handle_control(
+                door_code, control_status,
+                data.get("deviceCode", ""))
+            resp = RcsDoorControlResponse(code=code, msg=msg)
+            _log_req(request, "control", "/api/rcs/doorStatus",
+                     req_dict, resp.model_dump(), 200)
+            return resp
+
+        # ── 查询请求（仅 doorCode） ──
+        query_req = RcsStatusQueryRequest(doorCode=door_code)
+        sm_ref = getattr(request.app.state, 'translator', None)
+        if sm_ref:
+            sm_ref._status.rcs_query_count += 1
+            sm_ref._status.rcs_last_query = (
+                f"{datetime.now().strftime('%H:%M:%S')} "
+                f"doorCode={door_code}"
+            )
+
+        logger.info("RCS状态查询: door=%s", door_code)
+
+        # 区域管控门
+        if door_code == entry_code:
             zsm = request.app.state.zone_sm
             try:
-                rcs_status = zsm.door_status_by_code(req.doorCode)
+                rcs_status = zsm.door_status_by_code(door_code)
                 resp = RcsStatusQueryResponse(data=RcsStatusData(status=rcs_status))
             except Exception as e:
                 resp = RcsStatusQueryResponse(code=9999, msg=str(e))
@@ -273,26 +248,18 @@ def create_router(app: FastAPI) -> APIRouter:
                      req_dict, resp.model_dump(), 200)
             return resp
 
-        # ── 风淋门原有逻辑 ──
-        try:
-            door_id = _door_code_to_id(req.doorCode, sm)
-            status = await sm.query_door_status(door_id)
-
-            rcs_status = 0
-            if status == AngelDoorStatus.OPENED:
-                rcs_status = 1
-            elif status == AngelDoorStatus.CLOSED:
-                rcs_status = 2
-
-            resp = RcsStatusQueryResponse(data=RcsStatusData(status=rcs_status))
-            _log_req(request, "query", "/api/rcs/doorStatus",
-                     req_dict, resp.model_dump(), 200)
-            return resp
-        except (DoorClientError, ZoneClientError) as e:
-            resp = RcsStatusQueryResponse(code=9999, msg=str(e))
-            _log_req(request, "query", "/api/rcs/doorStatus",
-                     req_dict, resp.model_dump(), 200)
-            return resp
+        # 风淋门 — 协议翻译
+        translator = _get_translator(request)
+        code, msg, data_dict = await translator.handle_query(door_code)
+        if code == 1000 and data_dict:
+            resp = RcsStatusQueryResponse(
+                code=code, msg=msg,
+                data=RcsStatusData(status=data_dict["status"]))
+        else:
+            resp = RcsStatusQueryResponse(code=code, msg=msg)
+        _log_req(request, "query", "/api/rcs/doorStatus",
+                 req_dict, resp.model_dump(), 200)
+        return resp
 
     # ── ASAP 管理接口 ─────────────────────────
 
@@ -305,8 +272,8 @@ def create_router(app: FastAPI) -> APIRouter:
     @router.get("/api/asap/status")
     async def get_asap_status(request: Request):
         """获取风淋系统整体状态"""
-        sm = _get_sm(request)
-        return sm.status.model_dump()
+        translator = _get_translator(request)
+        return translator.get_status().dump()
 
     @router.get("/api/asap/zone-status")
     async def get_zone_status(request: Request):
@@ -334,62 +301,28 @@ def create_router(app: FastAPI) -> APIRouter:
             return {"code": 1000, "msg": f"已强制设置 {door_code} 为 {'开' if status == '1' else '关'}"}
         return {"code": 2003, "msg": f"设置失败，未识别门编号: {door_code}"}
 
-    @router.post("/api/asap/start")
-    async def start_air_shower(request: Request, agv_id: str = ""):
-        """启动风淋流程"""
-        sm = _get_sm(request)
-        success = await sm.start(agv_id=agv_id)
-        if not success:
-            raise HTTPException(
-                status_code=409,
-                detail=f"风淋流程忙碌中，当前状态: {sm.state.value}",
-            )
-        return {"message": "风淋流程已启动", "state": sm.state.value}
-
-    @router.post("/api/asap/cancel")
-    async def cancel_air_shower(request: Request):
-        """取消风淋流程"""
-        sm = _get_sm(request)
-        await sm.cancel()
-        return {"message": "风淋流程已取消", "state": sm.state.value}
-
-    @router.post("/api/asap/manual/open")
-    async def manual_open(request: Request, door_id: str):
-        """手动开门"""
-        sm = _get_sm(request)
-        try:
-            await sm.manual_open_door(door_id)
-            return {"message": f"门[{door_id}]已打开"}
-        except (DoorClientError, ZoneClientError) as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
-    @router.post("/api/asap/manual/close")
-    async def manual_close(request: Request, door_id: str):
-        """手动关门"""
-        sm = _get_sm(request)
-        try:
-            await sm.manual_close_door(door_id)
-            return {"message": f"门[{door_id}]已关闭"}
-        except (DoorClientError, ZoneClientError) as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
     @router.post("/api/asap/refresh-doors")
     async def refresh_doors(request: Request):
         """主动刷新门状态（向真实设备/模拟器查询当前状态，更新缓存）"""
-        sm = _get_sm(request)
-        outer_id = sm.config.angel.outer_door_id
-        inner_id = sm.config.angel.inner_door_id
-        try:
-            outer_status = await sm.query_door_status(outer_id)
-        except Exception:
-            outer_status = None
-        try:
-            inner_status = await sm.query_door_status(inner_id)
-        except Exception:
-            inner_status = None
+        translator = _get_translator(request)
+        door_ids = [
+            translator._status.door1.door_id,
+            translator._status.door2.door_id,
+        ]
+        results = {}
+        for door_id in door_ids:
+            if door_id:
+                try:
+                    _, _, data = await translator.handle_query(
+                        translator._door_code_by_id(door_id))
+                    if data:
+                        results[door_id] = data
+                except Exception:
+                    results[door_id] = {"error": "query failed"}
         return {
-            "outer_door": sm._status.outer_door.model_dump(),
-            "inner_door": sm._status.inner_door.model_dump(),
+            "door1": translator._status.door1.__dict__,
+            "door2": translator._status.door2.__dict__,
+            "results": results,
         }
 
     # ── RCS 配置管理 ──────────────────────────

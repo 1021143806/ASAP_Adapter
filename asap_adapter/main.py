@@ -26,8 +26,7 @@ from fastapi.responses import FileResponse
 from .config import load_config, AppConfig
 from .door_client import DoorClient
 from .zone_client import ZoneClient
-from .rcs_reporter import RcsReporter
-from .state_machine import StateMachine
+from .door_translator import AirShowerTranslator
 from .zone_state_machine import ZoneStateMachine
 from .router import create_router
 from .logger import setup_logging
@@ -65,9 +64,8 @@ def create_app(config: AppConfig) -> FastAPI:
         # ── 启动 ──────────────────────────
         door = DoorClient(config.angel)
         zone = ZoneClient(config.zone)
-        rcs = RcsReporter(config.rcs)
-        sm = StateMachine(config, door, zone, rcs)
-        zsm = ZoneStateMachine(config, zone, rcs)
+        translator = AirShowerTranslator(config, door)
+        zsm = ZoneStateMachine(config, zone)
 
         # ── 模拟器状态 ────────────────────
         app.state.sim_controller = _app_sim
@@ -83,8 +81,10 @@ def create_app(config: AppConfig) -> FastAPI:
         app.state.request_log = []
         app.state.request_log_counter = 0
 
-        async def _on_event(event):
-            payload = event.model_dump_json()
+        # ── SSE 事件回调 ──────────────────
+
+        async def _on_event(event: dict):
+            payload = json.dumps(event, ensure_ascii=False)
             dead = []
             for q in sse_clients:
                 try:
@@ -94,7 +94,7 @@ def create_app(config: AppConfig) -> FastAPI:
             for q in dead:
                 sse_clients.remove(q)
 
-        sm.on_event = _on_event
+        translator.on_event = _on_event
 
         # ZoneStateMachine SSE 回调
         async def _zone_on_event():
@@ -117,8 +117,7 @@ def create_app(config: AppConfig) -> FastAPI:
         # 存入 app.state 供路由使用
         app.state.door = door
         app.state.zone = zone
-        app.state.rcs = rcs
-        app.state.sm = sm
+        app.state.translator = translator
         app.state.zone_sm = zsm
         app.state.config = config
 
@@ -133,11 +132,6 @@ def create_app(config: AppConfig) -> FastAPI:
                         interval = 300
                     if config.zone.status_url:
                         status = await zone.get_status()
-                        sm._status.zone.zone_id = config.zone.zone_id
-                        sm._status.zone.status = status.status
-                        sm._status.zone.occupied_by = status.occupied_by
-                        sm._status.zone.last_check = datetime.now().isoformat()
-                        # 同步到 ZoneStateMachine
                         zsm._status.zone_status = status.status
                         zsm._status.zone_occupied_by = status.occupied_by
                         zsm._status.last_check = datetime.now().isoformat()
@@ -158,17 +152,16 @@ def create_app(config: AppConfig) -> FastAPI:
         # 取消后台轮询任务
         if hasattr(app.state, '_zone_poll_task'):
             app.state._zone_poll_task.cancel()
-        await sm.cancel()
+        await translator.cancel()
         await zsm.cancel()
         await door.close()
         await zone.close()
-        await rcs.close()
         logger.info("ASAP Adapter 已关闭")
 
     app = FastAPI(
         title="ASAP Adapter",
         description="风淋门-区域管控协议适配器",
-        version="1.0.0",
+        version="3.0.0",
         lifespan=lifespan,
     )
 

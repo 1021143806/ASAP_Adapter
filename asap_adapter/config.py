@@ -431,6 +431,7 @@ def save_unified_config(data: dict) -> dict:
         content = "\n".join(sections)
 
         # 备份（版本化: data/config.toml.v{version}，最多保留20个）
+        import shutil
         backup = ""
         if os.path.exists(UNIFIED_CONFIG_PATH):
             backup = UNIFIED_CONFIG_PATH + f".v{old_version}"
@@ -524,6 +525,7 @@ def list_config_versions() -> list:
     """列出所有版本备份"""
     import glob
     import os as _os
+    from datetime import datetime
     pattern = UNIFIED_CONFIG_PATH + ".v*"
     files = sorted(glob.glob(pattern), reverse=True)
     versions = []

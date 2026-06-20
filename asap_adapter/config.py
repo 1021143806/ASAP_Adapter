@@ -1,13 +1,11 @@
 """
 配置加载模块
-从 TOML 文件加载配置，运行时配置覆盖静态配置。
-优先级: /data/config.toml > runtime.toml > env.toml > 默认值
+从 TOML 文件加载配置，优先级: data/config.toml > env.toml > 默认值
 
 文件说明:
-  - config/env.toml       — 静态项目配置（server/log），修改需重启
-  - /data/config.toml     — 统一运行时配置（含版本号），修改即时生效
-  - config/runtime.toml   — 运行时配置（兼容旧版），修改即时生效
-  - config/overrides.json — 运行时覆盖（兼容旧版），可视化编辑器写入
+  - config/env.toml       — 系统基础配置（server/log），修改需重启
+  - /data/config.toml     — 业务配置（angel/zone/rcs/sim），修改即时生效
+                           首次启动无此文件时自动从模板生成
 """
 
 import os
@@ -52,14 +50,14 @@ class AngelConfig:
 
 @dataclass
 class ZoneConfig:
-    enter_url: str = ""
-    exit_url: str = ""
-    status_url: str = ""
+    enter_url: str = "http://127.0.0.1:5012/sim/api/zones/enter"
+    exit_url: str = "http://127.0.0.1:5012/sim/api/zones/exit"
+    status_url: str = "http://127.0.0.1:5012/sim/api/zones/status"
     zone_id: str = "zone_001"
     client_id: str = "asap_adapter_01"
     entry_door_code: str = "q001"
-    retry_interval: float = 3.0
-    max_retries: int = 10
+    retry_interval: float = 1.0
+    max_retries: int = 30
     enter_retry_max: int = 30
     exit_retry_interval: float = 1.0
     exit_max_retries: int = 30
@@ -116,97 +114,30 @@ def _apply_section(cfg: AppConfig, data: dict, section: str, keys: list):
 
 
 def load_config(path: Optional[str] = None) -> AppConfig:
-    """加载全部配置: env.toml → runtime.toml → overrides.json"""
+    """加载配置: env.toml (系统) → data/config.toml (业务, 自动生成)"""
     base_dir = _project_dir()
     if path is None:
         path = os.path.join(base_dir, "config", "env.toml")
     cfg = AppConfig()
 
-    # 1. env.toml（静态）
+    # 1. env.toml — 仅系统基础配置 (server/log)
     if os.path.exists(path):
         try:
             with open(path, "rb") as f:
                 data = tomllib.load(f)
             _apply_section(cfg, data, "server", ("host", "port", "reload"))
             _apply_section(cfg, data, "log", ("level", "file", "rotation", "backup_count"))
-            _apply_section(cfg, data, "angel",
-                           ("base_url", "outer_door_id", "inner_door_id",
-                            "poll_interval", "poll_timeout"))
-            _apply_section(cfg, data, "zone",
-                            ("enter_url", "exit_url", "status_url", "zone_id",
-                             "client_id", "entry_door_code",
-                             "retry_interval", "max_retries",
-                             "enter_retry_max",
-                             "exit_retry_interval", "exit_max_retries",
-                             "zone_poll_interval"))
-            _apply_section(cfg, data, "air_shower",
-                           ("duration", "agv_enter_timeout", "agv_exit_timeout"))
-            _apply_section(cfg, data, "rcs",
-                           ("change_status_url", "report_interval", "door_code_mapping"))
-            _apply_section(cfg, data, "sim",
-                           ("auto_open_delay", "auto_close_delay",
-                            "zone_always_busy", "zone_id"))
         except Exception as e:
             logger.error("加载 env.toml 失败: %s", e)
 
-    # 2. runtime.toml（运行时，覆盖 env.toml）
-    _load_runtime(cfg, os.path.join(base_dir, "config", "runtime.toml"))
-
-    # 3. overrides.json（向后兼容，覆盖前两者）
-    _load_overrides(cfg, os.path.join(base_dir, "config", "overrides.json"))
-
-    # 4. /data/config.toml（统一运行时配置，最高优先级）
+    # 2. data/config.toml — 业务配置，不存在则自动从模板生成
     _load_unified(cfg)
 
     return cfg
 
 
-def _load_runtime(cfg: AppConfig, path: str):
-    if not os.path.exists(path):
-        return
-    try:
-        with open(path, "rb") as f:
-            data = tomllib.load(f)
-        _apply_section(cfg, data, "angel", ("base_url", "outer_door_id", "inner_door_id"))
-        _apply_section(cfg, data, "zone",
-                       ("enter_url", "exit_url", "status_url",
-                        "zone_poll_interval", "entry_door_code"))
-        _apply_section(cfg, data, "rcs", ("change_status_url", "report_interval", "door_code_mapping"))
-        _apply_section(cfg, data, "air_shower",
-                       ("duration", "agv_enter_timeout", "agv_exit_timeout"))
-        _apply_section(cfg, data, "sim",
-                       ("auto_open_delay", "auto_close_delay",
-                        "zone_always_busy", "zone_id"))
-        logger.info("已加载 runtime.toml")
-    except Exception as e:
-        logger.error("加载 runtime.toml 失败: %s", e)
-
-
-def _load_overrides(cfg: AppConfig, path: str):
-    if not os.path.exists(path):
-        return
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            ov = json.load(f)
-        _apply_section(cfg, ov.get("rcs", {}), None,
-                       ("change_status_url", "report_interval", "door_code_mapping"))
-        # 手动处理各段
-        rcs_ov = ov.get("rcs", {})
-        for key in ("change_status_url", "report_interval", "door_code_mapping"):
-            if key in rcs_ov:
-                setattr(cfg.rcs, key, rcs_ov[key])
-        angel_ov = ov.get("angel", {})
-        for key in ("base_url", "outer_door_id", "inner_door_id"):
-            if key in angel_ov:
-                setattr(cfg.angel, key, angel_ov[key])
-        zone_ov = ov.get("zone", {})
-        for key in ("enter_url", "exit_url", "status_url"):
-            if key in zone_ov:
-                setattr(cfg.zone, key, zone_ov[key])
-    except Exception as e:
-        logger.error("加载 overrides.json 失败: %s", e)
-
-
+# ═══════════════════════════════════════════
+#  env.toml 系统配置读写
 # ═══════════════════════════════════════════
 #  运行时配置管理
 # ═══════════════════════════════════════════
@@ -297,25 +228,94 @@ def save_env(content: str) -> dict:
 
 def save_override(section: str, key: str, value):
     """
-    保存单条运行时覆盖到 overrides.json（可视化编辑器用）
-    同时尝试更新 runtime.toml（追加键值对）
+    保存单条运行时配置到 /data/config.toml
+    读取现有配置 → 修改 → 写回
     """
-    base_dir = _project_dir()
-    overrides_path = os.path.join(base_dir, "config", "overrides.json")
-    overrides = {}
-    if os.path.exists(overrides_path):
+    # 读取现有
+    old_data = {}
+    if os.path.exists(UNIFIED_CONFIG_PATH):
         try:
-            with open(overrides_path, "r", encoding="utf-8") as f:
-                overrides = json.load(f)
+            with open(UNIFIED_CONFIG_PATH, "rb") as f:
+                old_data = tomllib.load(f)
         except Exception:
-            overrides = {}
-    if section not in overrides:
-        overrides[section] = {}
-    overrides[section][key] = value
-    os.makedirs(os.path.dirname(overrides_path), exist_ok=True)
-    with open(overrides_path, "w", encoding="utf-8") as f:
-        json.dump(overrides, f, ensure_ascii=False, indent=2)
-    logger.info("运行时配置已更新: [%s] %s = %s", section, key, value)
+            old_data = {}
+    # 更新
+    if section not in old_data:
+        old_data[section] = {}
+    old_data[section][key] = value
+    # 写回（复用 save_unified_config 逻辑，但不递增版本号）
+    _write_unified_file(old_data)
+    logger.info("配置已持久化到 /data/config.toml: [%s] %s = %s", section, key, value)
+
+
+def _write_unified_file(data: dict):
+    """将数据写入 /data/config.toml"""
+    from datetime import datetime
+    os.makedirs(os.path.dirname(UNIFIED_CONFIG_PATH), exist_ok=True)
+    sections = ["# ASAP Adapter 业务配置", "# 可通过 WebUI 修改，即时生效", ""]
+    for sec_key in ("angel", "zone", "rcs", "air_shower", "sim"):
+        sec = data.get(sec_key, {})
+        if sec:
+            sections.append(f"[{sec_key}]")
+            for k, v in sec.items():
+                sections.append(_toml_kv(k, v))
+            sections.append("")
+    # meta
+    ver = data.get("meta", {}).get("version", 1)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sections.append("[meta]")
+    sections.append(f'version = {ver}')
+    sections.append(f'updated = "{now}"')
+    sections.append("")
+    with open(UNIFIED_CONFIG_PATH, "w", encoding="utf-8") as f:
+        f.write("\n".join(sections))
+
+
+def _generate_unified_file():
+    """在 /data/config.toml 不存在时从模板生成"""
+    template = (
+        "# ASAP Adapter 业务配置\n"
+        "# 可通过 WebUI 修改，即时生效\n\n"
+        "[angel]\n"
+        'base_url = "http://127.0.0.1:5012/sim"\n'
+        'outer_door_id = "DOOR01"\n'
+        'inner_door_id = "DOOR02"\n'
+        "poll_interval = 1.0\n"
+        "poll_timeout = 30.0\n\n"
+        "[zone]\n"
+        'enter_url = "http://127.0.0.1:5012/sim/api/zones/enter"\n'
+        'exit_url = "http://127.0.0.1:5012/sim/api/zones/exit"\n'
+        'status_url = "http://127.0.0.1:5012/sim/api/zones/status"\n'
+        'zone_id = "zone_001"\n'
+        'client_id = "asap_adapter_01"\n'
+        'entry_door_code = "q001"\n'
+        "retry_interval = 1.0\n"
+        "max_retries = 30\n"
+        "enter_retry_max = 30\n"
+        "exit_retry_interval = 1.0\n"
+        "exit_max_retries = 30\n"
+        "zone_poll_interval = 300.0\n\n"
+        "[rcs]\n"
+        'change_status_url = "http://rcs-host/changeDoorStatus"\n'
+        "report_interval = 0.5\n"
+        'door_code_mapping = {DOOR01 = "1001", DOOR02 = "1002"}\n\n'
+        "[air_shower]\n"
+        "duration = 4.0\n"
+        "agv_enter_timeout = 30.0\n"
+        "agv_exit_timeout = 30.0\n\n"
+        "[sim]\n"
+        "auto_open_delay = 2.0\n"
+        "auto_close_delay = 2.0\n"
+        "zone_always_busy = false\n"
+        'zone_id = "zone_001"\n\n'
+        "[meta]\n"
+        "version = 1\n"
+        f'updated = "{__import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")}"\n'
+    )
+    os.makedirs(os.path.dirname(UNIFIED_CONFIG_PATH), exist_ok=True)
+    with open(UNIFIED_CONFIG_PATH, "w", encoding="utf-8") as f:
+        f.write(template)
+    logger.info("已自动生成 /data/config.toml")
 
 
 # ═══════════════════════════════════════════
@@ -327,9 +327,10 @@ UNIFIED_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspa
 
 
 def _load_unified(cfg: AppConfig):
-    """加载 /data/config.toml 统一配置（最高优先级）"""
+    """加载 /data/config.toml 业务配置，不存在时自动从模板生成"""
     if not os.path.exists(UNIFIED_CONFIG_PATH):
-        return
+        logger.info("/data/config.toml 不存在，从模板自动生成...")
+        _generate_unified_file()
     try:
         with open(UNIFIED_CONFIG_PATH, "rb") as f:
             data = tomllib.load(f)
@@ -350,7 +351,6 @@ def _load_unified(cfg: AppConfig):
         _apply_section(cfg, data, "sim",
                        ("auto_open_delay", "auto_close_delay",
                         "zone_always_busy", "zone_id"))
-        # 读取版本号
         version = data.get("meta", {}).get("version", 0)
         global CONFIG_VERSION
         CONFIG_VERSION = version if version > CONFIG_VERSION else CONFIG_VERSION

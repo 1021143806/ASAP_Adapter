@@ -121,19 +121,10 @@
       </div>
     </div>
 
-    <!-- 运行时配置 -->
+    <!-- 系统配置 -->
     <div class="glass log-panel-full">
       <div class="card-title" style="display:flex;justify-content:space-between;">
-        <span>⚡ 运行时配置 (runtime.toml)</span>
-        <button class="btn btn-success btn-sm" onclick="saveRuntimeConfig()">保存</button>
-      </div>
-      <textarea id="cfgRuntimeEditor" style="width:100%;height:200px;background:rgba(0,0,0,0.2);color:var(--text-primary);font-family:'SF Mono',monospace;font-size:12px;border:1px solid var(--card-border);border-radius:8px;padding:10px;resize:vertical;"></textarea>
-    </div>
-
-    <!-- 静态配置 -->
-    <div class="glass log-panel-full">
-      <div class="card-title" style="display:flex;justify-content:space-between;">
-        <span>🔧 静态配置 (env.toml)</span>
+        <span>🔧 系统配置 (env.toml)</span>
         <button class="btn btn-success btn-sm" onclick="saveEnvConfig()">保存</button>
         <span style="font-size:10px;color:var(--warning);">需重启</span>
       </div>
@@ -147,7 +138,6 @@ function init() {
   initTheme();
   initNav("/config");
   loadAllConfig();
-  loadRuntimeConfig();
   loadEnvConfig();
 }
 
@@ -215,22 +205,7 @@ async function saveAllConfig() {
   } catch (e) { console.error("保存失败:", e); }
 }
 
-// ══ 运行时/静态配置 ══
-async function loadRuntimeConfig() {
-  try {
-    const r = await fetch("/api/asap/config/runtime");
-    const d = await r.json();
-    document.getElementById("cfgRuntimeEditor").value = d.content || "";
-  } catch (e) {}
-}
-async function saveRuntimeConfig() {
-  const content = document.getElementById("cfgRuntimeEditor").value;
-  await fetch("/api/asap/config/runtime", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
-  });
-}
+// ══ 系统配置 ══
 async function loadEnvConfig() {
   try {
     const r = await fetch("/api/asap/config/env");

@@ -580,19 +580,15 @@ def create_router(app: FastAPI) -> APIRouter:
 
     @router.post("/api/asap/config/all")
     async def save_unified_config(request: Request):
-        """保存统一配置到 /data/config.toml（自动版本递增，热更新）"""
-        from .config import save_unified_config, apply_runtime_string, UNIFIED_CONFIG_PATH, read_unified_config
+        """保存业务配置到 /data/config.toml（热更新）"""
+        from .config import save_unified_config
         data = await request.json()
         result = save_unified_config(data)
         if result.get("success"):
-            # 热更新到内存
-            try:
-                raw = read_unified_config().get("raw", "")
-                if raw:
-                    apply_runtime_string(request.app.state.config, raw)
-            except Exception as e:
-                logger.warning("热更新统一配置失败: %s", e)
-            # 同步到 SimController
+            # 从保存后的文件重新加载业务配置到内存
+            from .config import _load_unified
+            _load_unified(request.app.state.config)
+            # 同步 zone_id 到 SimController
             sim_ctrl = getattr(request.app.state, 'sim_controller', None)
             if sim_ctrl:
                 sim_ctrl.config.auto_open_delay = request.app.state.config.sim.auto_open_delay
@@ -792,44 +788,6 @@ def create_router(app: FastAPI) -> APIRouter:
 
     class ConfigFileContent(BaseModel):
         content: str
-
-    # ── 运行时配置（热更新） ────────────────
-
-    @router.get("/api/asap/config/runtime")
-    async def get_runtime_config():
-        """获取运行时配置 (config/runtime.toml) — 修改即时生效"""
-        from .config import read_runtime
-        content = read_runtime()
-        return {"success": True, "content": content}
-
-    @router.post("/api/asap/config/runtime")
-    async def save_runtime_config(req: ConfigFileContent, request: Request):
-        """保存运行时配置 — 写入后自动热更新，无需重启"""
-        from .config import save_runtime, apply_runtime_string
-        result = save_runtime(req.content)
-        if not result.get("success"):
-            return result
-        try:
-            # 热更新到内存
-            apply_runtime_string(request.app.state.config, req.content)
-            # 重建 DoorClient（base_url 变化时 httpx client 需重建）
-            request.app.state.door.set_sim_mode(False)
-            # 同步门ID到模拟器
-            if request.app.state._sim_available and request.app.state.sim_controller:
-                request.app.state.sim_controller.set_door_ids(
-                    request.app.state.config.angel.outer_door_id,
-                    request.app.state.config.angel.inner_door_id,
-                )
-            logger.info("运行时配置已热更新: base_url=%s, doors=%s/%s",
-                        request.app.state.config.angel.base_url,
-                        request.app.state.config.angel.outer_door_id,
-                        request.app.state.config.angel.inner_door_id)
-            result["hot_reloaded"] = True
-        except Exception as e:
-            logger.error("运行时配置热更新失败: %s", e)
-            result["hot_reloaded"] = False
-            result["warning"] = f"文件已保存，但热更新部分失败: {e}"
-        return result
 
     # ── 静态配置（需重启） ──────────────────
 

@@ -210,16 +210,26 @@ sequenceDiagram
 ### 配置优先级
 
 ```
-data/config.toml > runtime.toml > overrides.json > env.toml > dataclass默认值
+data/config.toml > dataclass 默认值
 ```
 
-### env.toml (静态配置，修改需重启)
+首次启动时 `/data/config.toml` 自动从模板生成，无需手动创建。
+
+### env.toml (系统配置，修改需重启)
 
 | 段 | 键 | 默认值 | 说明 |
 |:---|:---|:---|:---|
 | `server` | `port` | `5012` | 服务端口 |
+| `server` | `host` | `0.0.0.0` | 监听地址 |
 | `log` | `level` | `INFO` | 日志级别 |
 | `log` | `file` | `logs/asap.log` | 日志文件 |
+
+### data/config.toml (业务配置，即时生效)
+
+WebUI 配置页 `/config` 可可视化编辑。也可直接修改 TOML 文件。
+
+| 段 | 键 | 默认值 | 说明 |
+|:---|:---|:---|:---|
 | `angel` | `base_url` | `http://127.0.0.1:5012/sim` | 风淋门地址 |
 | `angel` | `outer_door_id` | `DOOR01` | 外门 ID |
 | `angel` | `inner_door_id` | `DOOR02` | 内门 ID |

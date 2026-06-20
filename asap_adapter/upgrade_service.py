@@ -25,6 +25,7 @@ SERVICE_NAME = "asap_adapter"
 EXCLUDE_PATTERNS = [
     "config/env.toml",
     "config/old/",
+    "data/config.toml",
     "venv/",
     "logs/",
     "backup/",

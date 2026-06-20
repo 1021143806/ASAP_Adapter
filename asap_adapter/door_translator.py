@@ -7,7 +7,6 @@
 参考文档: doc/风淋门逻辑梳理.md
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime

@@ -5,7 +5,6 @@
 以及模拟器管理端点（供 WebUI 调用）。
 """
 
-import json
 import logging
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse
@@ -106,7 +105,6 @@ def create_router(sim: SimController) -> APIRouter:
     @router.post("/api/sim/door/set")
     async def set_door_state(request: Request):
         """手动设置门状态 (支持JSON body或query params)"""
-        import json as _json
         body = {}
         try:
             body = await request.json()
@@ -125,7 +123,6 @@ def create_router(sim: SimController) -> APIRouter:
     @router.post("/api/sim/door/fault")
     async def inject_fault(request: Request):
         """注入/清除门故障"""
-        import json as _json
         body = {}
         try:
             body = await request.json()
@@ -141,7 +138,6 @@ def create_router(sim: SimController) -> APIRouter:
     @router.post("/api/sim/zone/busy")
     async def set_zone_busy(request: Request):
         """强制设置区域占用/释放"""
-        import json as _json
         body = {}
         try:
             body = await request.json()
@@ -157,7 +153,6 @@ def create_router(sim: SimController) -> APIRouter:
     @router.post("/api/sim/config/delays")
     async def set_delays(request: Request):
         """设置门过渡延时"""
-        import json as _json
         body = {}
         try:
             body = await request.json()

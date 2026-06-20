@@ -42,8 +42,11 @@ class DoorClient:
 
     def set_sim_mode(self, enabled: bool):
         """切换模拟模式，重定向到本地模拟端点"""
+        import os
+        # 动态端口：从环境或模块默认取，不硬编码 5012
+        base_port = os.environ.get("ASAP_PORT", "5012")
         if enabled:
-            new_base = "http://127.0.0.1:5012/sim"
+            new_base = f"http://127.0.0.1:{base_port}/sim"
         else:
             new_base = self.config.base_url
         # 重新创建 httpx 客户端以更新 base_url（httpx 的 base_url 不可变）

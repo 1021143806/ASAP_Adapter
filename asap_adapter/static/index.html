@@ -809,6 +809,57 @@ body {
     </div>
   </div>
 </div>    <!-- view-simulator -->
+
+<!-- ════════════════════════════════════
+      升级管理视图
+      ════════════════════════════════════ -->
+<div id="view-upgrade" style="display:none;">
+  <div class="upgrade-grid">
+
+    <!-- 当前版本 -->
+    <div class="glass">
+      <div class="card-title">当前版本</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">应用版本</div>
+          <div style="font-size:18px;font-weight:600;font-family:monospace;" id="upgradeAppVersion">加载中...</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">项目路径</div>
+          <div style="font-size:13px;font-family:monospace;" id="upgradeProjectDir">加载中...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 上传升级 -->
+    <div class="glass">
+      <div class="card-title">📦 上传升级包</div>
+      <div class="upload-zone" id="upgradeUploadZone">
+        <div class="upload-icon">📦</div>
+        <div><strong>点击选择或拖拽 .zip 文件到此处</strong></div>
+        <div class="hint">仅支持 .zip 格式</div>
+        <input type="file" id="upgradeFileInput" accept=".zip" title="选择升级包文件(.zip)">
+      </div>
+      <div class="file-info" id="upgradeFileInfo">
+        <span>📦</span>
+        <span class="name" id="upgradeFileName"></span>
+        <span class="size" id="upgradeFileSize"></span>
+        <button class="btn btn-sm" id="upgradeBtnClearFile">✕</button>
+      </div>
+      <button class="btn btn-success" id="upgradeBtnUpload" disabled style="margin-top:10px;">⬆ 开始升级</button>
+      <div class="progress-bar" id="upgradeProgressBar"><div class="bar"></div></div>
+      <div class="result-box" id="upgradeResultBox"></div>
+      <div class="exclude-tags" id="upgradeExcludeTags"></div>
+    </div>
+
+    <!-- 升级记录 -->
+    <div class="glass">
+      <div class="card-title">📋 升级记录</div>
+      <div id="upgradeRecordsContainer"><div style="padding:20px;text-align:center;color:var(--text-muted);">加载中...</div></div>
+    </div>
+  </div>
+</div>    <!-- view-upgrade -->
+
 </div>    <!-- app-container -->
 
 <script>
@@ -1361,39 +1412,37 @@ function loadZoneConfig() {
 
 async function loadAllConfig() {
   const statusEl = document.getElementById("cfgSaveStatus");
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   try {
     const resp = await fetch("/api/asap/config/all");
     const data = await resp.json();
     if (data.error) { console.error(data.error); return; }
 
     // 版本号
-    document.getElementById("cfgVersion").textContent = "版本 " + (data.version || 0);
+    setText("cfgVersion", "版本 " + (data.version || 0));
 
     // RCS
     const rcs = data.rcs || {};
-    document.getElementById("rcsReportUrlInput").value = rcs.change_status_url || "";
+    setVal("rcsReportUrlInput", rcs.change_status_url || "");
     const rcsMap = rcs.door_code_mapping || {};
-    const outerRcsId = document.getElementById("rcsOuterDoorId");
     const outerCode = rcsMap[doorIds.door1 || "DOOR01"] || Object.values(rcsMap)[0] || "1001";
     const innerCode = rcsMap[doorIds.door2 || "DOOR02"] || Object.values(rcsMap)[1] || "1002";
-    document.getElementById("rcsOuterCodeInput").value = outerCode;
-    if (outerRcsId) outerRcsId.textContent = doorIds.door1 || "DOOR01";
-    document.getElementById("rcsInnerCodeInput").value = innerCode;
-    const innerRcsEl = document.getElementById("rcsInnerDoorId");
-    if (innerRcsEl) innerRcsEl.textContent = doorIds.door2 || "DOOR02";
+    setVal("rcsOuterCodeInput", outerCode);
+    setVal("rcsInnerCodeInput", innerCode);
 
     // Angel
     const angel = data.angel || {};
-    document.getElementById("angelBaseUrlInput").value = angel.base_url || "";
-    document.getElementById("angelOuterDoorIdInput").value = angel.outer_door_id || "DOOR_OUTER";
-    document.getElementById("angelInnerDoorIdInput").value = angel.inner_door_id || "DOOR_INNER";
+    setVal("angelBaseUrlInput", angel.base_url || "");
+    setVal("angelOuterDoorIdInput", angel.outer_door_id || "DOOR_OUTER");
+    setVal("angelInnerDoorIdInput", angel.inner_door_id || "DOOR_INNER");
 
     // Zone
     const zone = data.zone || {};
-    document.getElementById("cfgZoneEnterInput").value = zone.enter_url || "";
-    document.getElementById("cfgZoneExitInput").value = zone.exit_url || "";
-    document.getElementById("cfgZoneStatusInput").value = zone.status_url || "";
-    document.getElementById("cfgZoneEntryCodeInput").value = zone.entry_door_code || "q001";
+    setVal("cfgZoneEnterInput", zone.enter_url || "");
+    setVal("cfgZoneExitInput", zone.exit_url || "");
+    setVal("cfgZoneStatusInput", zone.status_url || "");
+    setVal("cfgZoneEntryCodeInput", zone.entry_door_code || "q001");
 
     // Air shower
     const ash = data.air_shower || {};
@@ -1807,12 +1856,16 @@ async function loadUpgradeVersion() {
   try {
     const resp = await fetch("/api/asap/upgrade/version");
     const data = await resp.json();
+    const el = document.getElementById("upgradeAppVersion");
+    if (!el) return;
     if (data.success) {
-      document.getElementById("upgradeAppVersion").textContent = data.info.app_version || "unknown";
-      if (data.info.project_dir) document.getElementById("upgradeProjectDir").textContent = data.info.project_dir;
+      el.textContent = data.info.app_version || "unknown";
+      const dirEl = document.getElementById("upgradeProjectDir");
+      if (dirEl && data.info.project_dir) dirEl.textContent = data.info.project_dir;
     }
   } catch (e) {
-    document.getElementById("upgradeAppVersion").textContent = "加载失败";
+    const el = document.getElementById("upgradeAppVersion");
+    if (el) el.textContent = "加载失败";
   }
 }
 
@@ -1829,16 +1882,19 @@ async function loadUpgradeRecords() {
 
     // 排除标签
     const tagsContainer = document.getElementById("upgradeExcludeTags");
-    tagsContainer.innerHTML = '<span style="font-size:10px;color:var(--text-muted);width:100%;margin-bottom:4px;">以下文件/目录将保留，不受升级影响：</span>';
-    excludePatterns.forEach(p => {
-      const tag = document.createElement("span");
-      tag.className = "tag";
-      tag.textContent = p;
-      tagsContainer.appendChild(tag);
-    });
+    if (tagsContainer) {
+      tagsContainer.innerHTML = '<span style="font-size:10px;color:var(--text-muted);width:100%;margin-bottom:4px;">以下保留不受升级影响：</span>';
+      excludePatterns.forEach(p => {
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = p;
+        tagsContainer.appendChild(tag);
+      });
+    }
 
     // 记录表格
     const container = document.getElementById("upgradeRecordsContainer");
+    if (!container) return;
     if (records.length === 0) {
       container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">📭 暂无升级记录</div>';
       return;

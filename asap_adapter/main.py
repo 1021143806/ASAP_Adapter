@@ -123,7 +123,7 @@ def create_app(config: AppConfig) -> FastAPI:
 
         # ── 后台区域状态轮询 ──────────────
         async def _zone_poll_loop():
-            """定时轮询区域管控状态"""
+            """定时轮询区域管控状态，检测外部释放"""
             await asyncio.sleep(5)  # 启动后稍等再开始
             while True:
                 try:
@@ -135,6 +135,19 @@ def create_app(config: AppConfig) -> FastAPI:
                         zsm._status.zone_status = status.status
                         zsm._status.zone_occupied_by = status.occupied_by
                         zsm._status.last_check = datetime.now().isoformat()
+
+                        # 如果状态机在 INSIDE 但区域被外部释放 → 重置本地状态
+                        if (zsm.state.value == "inside"
+                                and status.status == "available"
+                                and not status.occupied_by):
+                            logger.info("区域被外部释放(%s), 重置门状态为关闭", config.zone.zone_id)
+                            try:
+                                await zsm.cancel()
+                            except Exception:
+                                pass
+                            zsm._status.door_status = "2"
+                            zsm._publish()
+
                         logger.debug("区域状态轮询: %s → %s (by %s)",
                                      config.zone.zone_id, status.status, status.occupied_by)
                 except Exception as e:

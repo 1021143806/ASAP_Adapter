@@ -291,8 +291,31 @@ def create_router(app: FastAPI) -> APIRouter:
 
     @router.get("/api/asap/zone-status")
     async def get_zone_status(request: Request):
-        """获取区域管控状态"""
+        """获取区域管控状态（实时查询区域占用状态）"""
         zsm = request.app.state.zone_sm
+        zone = request.app.state.zone
+
+        # 实时查询区域状态
+        try:
+            status = await zone.get_status()
+            zsm._status.zone_status = status.status
+            zsm._status.zone_occupied_by = status.occupied_by
+            zsm._status.last_check = datetime.now().isoformat()
+
+            # 如果状态机在 INSIDE 但区域已被外部释放 → 重置
+            if (zsm.state.value == "inside"
+                    and status.status == "available"
+                    and not status.occupied_by):
+                logger.info("区域被外部释放, 重置门状态")
+                try:
+                    await zsm.cancel()
+                except Exception:
+                    pass
+                zsm._status.door_status = "2"
+                zsm._publish()
+        except Exception as e:
+            logger.warning("实时查询区域状态失败: %s", e)
+
         return zsm.status.dump()
 
     @router.post("/api/asap/zone/force-door")

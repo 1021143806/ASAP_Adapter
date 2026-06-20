@@ -1009,74 +1009,8 @@ function updateDashboard(data) {
     dirEl.style.color = data.direction ? "var(--accent)" : "var(--text-muted)";
   }
 }
-}
 
-async function cancelFlow() {
-  try {
-    await fetch("/api/asap/cancel", { method: "POST" });
-    addLog({ event_type: "command", data: { msg: "手动取消风淋流程" } });
-    await fetchStatus();
-  } catch (e) {
-    console.error("取消失败:", e);
-  }
-}
-
-// ── SSE 事件流 + 步骤节点 ────────────────
-
-function updateDashboard(data) {
-  // 更新步骤节点
-  updateStepNodes(data);
-  // 更新门状态
-  if (data.outer_door) updateDoorCard("outer", data.outer_door);
-  if (data.inner_door) updateDoorCard("inner", data.inner_door);
-  // 更新区域状态（区域管控视图）
-  if (data.zone) {
-    const zsEl = document.getElementById("zoneStatus");
-    const zbyEl = document.getElementById("zoneOccupiedBy");
-    const zidEl = document.getElementById("zoneId");
-    const agvEl = document.getElementById("currentAgv");
-    const simZsEl = document.getElementById("simZoneState");
-    if (zidEl) zidEl.textContent = data.zone.zone_id || "--";
-    if (zsEl) {
-      const s = data.zone.status || "unknown";
-      zsEl.textContent = s === "occupied" ? "占用中" : s === "granted" ? "已授权" : s === "available" ? "可用" : s;
-      zsEl.className = "zone-value " + (s === "occupied" ? "occupied" : s === "granted" ? "active" : "unknown");
-    }
-    if (zbyEl) zbyEl.textContent = data.zone.occupied_by || "--";
-    if (agvEl) agvEl.textContent = data.current_agv || "--";
-    const zlcEl = document.getElementById("zoneLastCheck");
-    if (zlcEl) zlcEl.textContent = data.zone.last_check
-      ? new Date(data.zone.last_check + "Z").toLocaleTimeString()
-      : "等待中...";
-    if (simZsEl) {
-      const simS = data.zone.status || "unknown";
-      simZsEl.textContent = simS === "occupied" ? "被占用" : simS === "granted" ? "已授权" : "空闲";
-      simZsEl.style.color = simS === "occupied" ? "var(--warning)" : simS === "granted" ? "var(--accent)" : "var(--success)";
-    }
-  }
-  currentState = data.state || "IDLE";
-  currentStep = data.current_step || 0;
-  currentShowerDuration = data.shower_duration || 4.0;
-  currentElapsed = data.elapsed || 0;
-  updateShowerTimer();
-}
-
-function updateShowerTimer() {
-  const panel = document.getElementById("showerTimerPanel");
-  const countdown = document.getElementById("showerCountdown");
-  const progress = document.getElementById("showerProgress");
-  if (!panel || !countdown || !progress) return;
-
-  if (currentStep === 7) {
-    panel.style.display = "";
-    const remaining = Math.max(0, currentShowerDuration - currentElapsed);
-    countdown.textContent = remaining.toFixed(1) + "s";
-    const pct = Math.min(100, (currentElapsed / currentShowerDuration) * 100);
-    progress.style.width = pct + "%";
-  } else {
-    panel.style.display = "none";
-  }
-}
+// ── 区域视图 ────────────────────────────
 
 function updateZoneDashboard(data) {
   try {

@@ -330,23 +330,23 @@ def create_router(app: FastAPI) -> APIRouter:
     @router.get("/api/asap/config/rcs")
     async def get_rcs_config(request: Request):
         """获取 RCS 配置"""
-        rcs = request.app.state.rcs
+        cfg = request.app.state.config
         return {
-            "change_status_url": rcs.config.change_status_url,
-            "report_interval": rcs.config.report_interval,
-            "door_code_mapping": rcs.config.door_code_mapping,
+            "change_status_url": cfg.rcs.change_status_url,
+            "report_interval": cfg.rcs.report_interval,
+            "door_code_mapping": cfg.rcs.door_code_mapping,
         }
 
     @router.post("/api/asap/config/rcs")
     async def update_rcs_config(request: Request, cfg: RcsConfigUpdate):
         """更新 RCS 配置（运行时生效，持久化到 overrides.json）"""
-        rcs = request.app.state.rcs
-        rcs.config.change_status_url = cfg.change_status_url
+        config = request.app.state.config
+        config.rcs.change_status_url = cfg.change_status_url
         if cfg.report_interval > 0:
-            rcs.config.report_interval = cfg.report_interval
+            config.rcs.report_interval = cfg.report_interval
         # 门编码映射
         if cfg.door_code_mapping is not None:
-            rcs.config.door_code_mapping = cfg.door_code_mapping
+            config.rcs.door_code_mapping = cfg.door_code_mapping
         # 持久化到 overrides.json（重启后保留）
         from .config import save_override
         save_override("rcs", "change_status_url", cfg.change_status_url)
@@ -358,9 +358,9 @@ def create_router(app: FastAPI) -> APIRouter:
                      cfg.change_status_url, cfg.door_code_mapping)
         return {
             "status": "ok",
-            "change_status_url": rcs.config.change_status_url,
-            "report_interval": rcs.config.report_interval,
-            "door_code_mapping": rcs.config.door_code_mapping,
+            "change_status_url": config.rcs.change_status_url,
+            "report_interval": config.rcs.report_interval,
+            "door_code_mapping": config.rcs.door_code_mapping,
         }
 
     # ── AB 门配置管理 ───────────────────────

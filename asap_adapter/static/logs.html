@@ -7,54 +7,50 @@
 <link rel="stylesheet" href="/static/common.css">
 <script src="/static/common.js"></script>
 <style>
-  .log-container { min-height: 60vh; overflow-y: auto; }
+  /* 覆盖 dashboard grid */
+  .logs-dash > * { grid-column: 1 / -1; }
+  .logs-dash > .log-grid { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .logs-dash > .log-grid > * { min-width: 0; }
 
-  /* 覆盖 common.css 的 dashboard grid */
-  .logs-dash { display: flex !important; flex-direction: column; gap: 12px; }
-
-  /* ── 筛选tab ── */
-  .filter-bar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-  .filter-tab { padding: 5px 14px; border-radius: 14px; font-size: 12px; cursor: pointer; border: 1px solid transparent; background: var(--card-bg); color: var(--text-secondary); transition: all .2s; }
-  .filter-tab:hover { border-color: var(--accent); }
-  .filter-tab.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .log-panel { background: var(--card-bg); backdrop-filter: blur(20px); border: 1px solid var(--card-border); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; }
+  .log-panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-shrink: 0; }
+  .log-panel-body { flex: 1; overflow-y: auto; min-height: 300px; max-height: 450px; }
 
   /* ── 气泡卡片 ── */
-  .bubble { margin: 8px 0; border-radius: 12px; overflow: hidden; }
-  .bubble-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px; font-size: 13px; }
-  .bubble-time { font-size: 11px; opacity: .7; white-space: nowrap; min-width: 85px; }
-  .bubble-tag { font-size: 11px; padding: 3px 10px; border-radius: 10px; font-weight: 600; letter-spacing: .5px; }
-  .bubble-method { font-size: 11px; opacity: .7; font-family: monospace; min-width: 40px; }
-  .bubble-ep { font-size: 12px; font-weight: 500; word-break: break-all; }
-  .bubble-status { font-size: 11px; margin-left: auto; opacity: .7; min-width: 30px; text-align: right; }
-
-  /* ── 请求/响应上下堆叠 ── */
-  .bubble-body { display: flex; flex-direction: column; gap: 6px; padding: 0 14px 10px; }
-  .bubble-section { padding: 8px 10px; border-radius: 8px; }
-  .bubble-label { font-size: 10px; text-transform: uppercase; opacity: .5; margin-bottom: 4px; }
-  .bubble-json { font-size: 11px; font-family: 'SF Mono','Fira Code',monospace; white-space: pre-wrap; word-break: break-all; line-height: 1.6; }
+  .bubble { margin: 6px 0; border-radius: 10px; overflow: hidden; }
+  .bubble-head { display: flex; align-items: center; gap: 8px; padding: 5px 10px; font-size: 12px; }
+  .bubble-time { font-size: 10px; opacity: .6; white-space: nowrap; min-width: 80px; }
+  .bubble-tag { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 600; }
+  .bubble-method { font-size: 10px; opacity: .6; font-family: monospace; min-width: 36px; }
+  .bubble-ep { font-size: 11px; font-weight: 500; word-break: break-all; flex: 1; }
+  .bubble-status { font-size: 10px; opacity: .6; }
+  .bubble-body { padding: 0 10px 8px; display: flex; flex-direction: column; gap: 4px; }
+  .bubble-section { padding: 5px 8px; border-radius: 6px; }
+  .bubble-label { font-size: 9px; text-transform: uppercase; opacity: .4; margin-bottom: 2px; }
+  .bubble-json { font-size: 10px; font-family: 'SF Mono','Fira Code',monospace; white-space: pre-wrap; word-break: break-all; line-height: 1.5; }
 
   /* ── 着色 ── */
-  .bubble.rcs { background: rgba(255,140,0,.06); border: 1px solid rgba(255,140,0,.15); }
-  .bubble.rcs .bubble-head { background: rgba(255,140,0,.08); }
-  .bubble-tag.rcs { background: rgba(255,140,0,.35); color: #ff8c00; }
-  .bubble.rcs .bubble-section { background: rgba(255,140,0,.06); }
+  .bubble.rcs { background: rgba(255,140,0,.05); border: 1px solid rgba(255,140,0,.12); }
+  .bubble.rcs .bubble-head { background: rgba(255,140,0,.07); }
+  .bubble-tag.rcs { background: rgba(255,140,0,.3); color: #ff8c00; }
+  .bubble.rcs .bubble-section { background: rgba(255,140,0,.05); }
 
-  .bubble.acs { background: rgba(70,130,255,.06); border: 1px solid rgba(70,130,255,.15); }
-  .bubble.acs .bubble-head { background: rgba(70,130,255,.08); }
-  .bubble-tag.acs { background: rgba(70,130,255,.35); color: #4a90ff; }
-  .bubble.acs .bubble-section { background: rgba(70,130,255,.06); }
+  .bubble.acs { background: rgba(70,130,255,.05); border: 1px solid rgba(70,130,255,.12); }
+  .bubble.acs .bubble-head { background: rgba(70,130,255,.07); }
+  .bubble-tag.acs { background: rgba(70,130,255,.3); color: #4a90ff; }
+  .bubble.acs .bubble-section { background: rgba(70,130,255,.05); }
 
-  .bubble.zone { background: rgba(0,200,120,.06); border: 1px solid rgba(0,200,120,.15); }
-  .bubble.zone .bubble-head { background: rgba(0,200,120,.08); }
-  .bubble-tag.zone { background: rgba(0,200,120,.35); color: #00c878; }
-  .bubble.zone .bubble-section { background: rgba(0,200,120,.06); }
+  .bubble.zone { background: rgba(0,200,120,.05); border: 1px solid rgba(0,200,120,.12); }
+  .bubble.zone .bubble-head { background: rgba(0,200,120,.07); }
+  .bubble-tag.zone { background: rgba(0,200,120,.3); color: #00c878; }
+  .bubble.zone .bubble-section { background: rgba(0,200,120,.05); }
 
-  .bubble.system { background: rgba(150,150,150,.04); border: 1px solid rgba(150,150,150,.1); }
-  .bubble.system .bubble-head { background: rgba(150,150,150,.05); }
-  .bubble-tag.system { background: rgba(150,150,150,.2); color: #999; }
-  .bubble.system .bubble-section { background: rgba(150,150,150,.04); }
+  .bubble.system { background: rgba(150,150,150,.04); border: 1px solid rgba(150,150,150,.08); }
+  .bubble.system .bubble-head { background: rgba(150,150,150,.04); }
+  .bubble-tag.system { background: rgba(150,150,150,.15); color: #999; }
+  .bubble.system .bubble-section { background: rgba(150,150,150,.03); }
 
-  .no-data { text-align: center; padding: 40px; color: var(--text-muted); }
+  .empty { text-align: center; padding: 30px; color: var(--text-muted); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -65,123 +61,112 @@
     <div style="display:flex;align-items:center;gap:16px;">
       <h1>📋 ASAP Adapter</h1>
       <nav style="display:flex;gap:4px;">
-        <a href="/" class="nav-tab">🚪 风淋门</a>
-        <a href="/zone" class="nav-tab">📡 区域管控</a>
-        <a href="/config" class="nav-tab">⚙ 配置</a>
-        <a href="/upgrade" class="nav-tab">⬆ 升级</a>
-        <a href="/sim" class="nav-tab">🎮 模拟器</a>
-        <a href="/logs" class="nav-tab nav-tab-active">📋 日志</a>
+        <a href="/" class="nav-tab">🚪 风淋门</a><a href="/zone" class="nav-tab">📡 区域管控</a>
+        <a href="/config" class="nav-tab">⚙ 配置</a><a href="/upgrade" class="nav-tab">⬆ 升级</a>
+        <a href="/sim" class="nav-tab">🎮 模拟器</a><a href="/logs" class="nav-tab nav-tab-active">📋 日志</a>
       </nav>
     </div>
-    <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span style="font-size:10px;color:var(--text-muted);" id="logTotal">--</span>
+      <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
+    </div>
   </header>
 
   <div class="dashboard logs-dash">
-    <!-- ══ 筛选栏 ══ -->
-    <div class="glass" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;">
-      <div class="filter-bar" id="filterBar">
-        <span class="filter-tab on" data-src="all">全部</span>
-        <span class="filter-tab" data-src="rcs">🟠 RCS</span>
-        <span class="filter-tab" data-src="acs">🔵 ACS</span>
-        <span class="filter-tab" data-src="zone">🟢 Zone</span>
-        <span class="filter-tab" data-src="system">⚪ System</span>
+
+    <!-- ══ 上排: RCS (左) + ACS+Zone (右) ══ -->
+    <div class="log-grid">
+      <div class="log-panel">
+        <div class="log-panel-head">
+          <span style="font-size:13px;font-weight:600;color:#ff8c00;">🔺 RCS 上游</span>
+          <span style="font-size:9px;color:var(--text-muted);" id="rcsCount">0</span>
+        </div>
+        <div class="log-panel-body" id="rcsPanel"></div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <span style="font-size:10px;color:var(--text-muted);" id="logCount">0条</span>
-        <label style="font-size:10px;cursor:pointer;display:flex;align-items:center;gap:4px;">
-          <input type="checkbox" id="logAutoScroll" checked> 自动滚
-        </label>
-        <button class="btn btn-sm" onclick="poll();document.getElementById('logList').scrollTop=document.getElementById('logList').scrollHeight;">⬇ 底部</button>
+
+      <div class="log-panel">
+        <div class="log-panel-head">
+          <span style="font-size:13px;font-weight:600;color:#4a90ff;">🔻 ACS / Zone 下游</span>
+          <span style="font-size:9px;color:var(--text-muted);" id="acsCount">0</span>
+        </div>
+        <div class="log-panel-body" id="acsPanel"></div>
       </div>
     </div>
 
-    <!-- ══ 日志流 ══ -->
-    <div class="log-container" id="logList">
-      <div class="no-data">等待数据...</div>
+    <!-- ══ 下排: System ══ -->
+    <div class="log-panel">
+      <div class="log-panel-head">
+        <span style="font-size:13px;font-weight:600;color:#999;">⚙ System 内部</span>
+        <span style="font-size:9px;color:var(--text-muted);" id="sysCount">0</span>
+      </div>
+      <div class="log-panel-body" id="sysPanel" style="max-height:200px;"></div>
     </div>
+
   </div>
 </div>
 
 <script>
 let _all = [];
-let _filter = "all";
 
 function init() { initTheme(); initNav("/logs"); setInterval(poll, 2000); poll(); }
-
-// ── 筛选 ──
-document.getElementById("filterBar").addEventListener("click", e => {
-  const t = e.target.closest(".filter-tab");
-  if (!t) return;
-  document.querySelectorAll(".filter-tab").forEach(el => el.classList.remove("on"));
-  t.classList.add("on");
-  _filter = t.dataset.src;
-  render();
-});
 
 async function poll() {
   try {
     const r = await fetch("/api/asap/logs?limit=200&source=all");
     const d = await r.json();
     _all = d.logs || [];
+    document.getElementById("logTotal").textContent = "共" + d.total + "条";
     render();
-  } catch (e) { console.error(e); }
+  } catch (e) {}
 }
 
 function render() {
-  let logs = _all;
-  if (_filter !== "all") logs = _all.filter(l => {
-    if (_filter === "rcs") return l.source === "rcs";
-    if (_filter === "acs") return l.source === "acs" || l.source === "zone";
-    return l.source === _filter;
+  const rcs = [], acs = [], sys = [];
+  _all.forEach(l => {
+    if (l.source === "rcs") rcs.push(l);
+    else if (l.source === "acs" || l.source === "zone") acs.push(l);
+    else sys.push(l);
   });
+  renderPanel("rcsPanel", rcs, "rcs");  document.getElementById("rcsCount").textContent = rcs.length + "条";
+  renderPanel("acsPanel", acs, "acs");  document.getElementById("acsCount").textContent = acs.length + "条";
+  renderPanel("sysPanel", sys, "system"); document.getElementById("sysCount").textContent = sys.length + "条";
+}
 
-  const el = document.getElementById("logList");
-  document.getElementById("logCount").textContent = logs.length + "条";
+function renderPanel(id, entries, css) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!entries.length) { el.innerHTML = '<div class="empty">暂无</div>'; return; }
 
-  if (!logs.length) {
-    el.innerHTML = '<div class="no-data">无匹配日志</div>';
-    return;
-  }
-
-  el.innerHTML = logs.map(l => {
+  el.innerHTML = entries.map(l => {
     const src = l.source || "system";
     const t = l.time || "";
-    const method = l.method || "";
     const ep = escHtml(l.endpoint || "");
-    const st = l.status !== undefined ? l.status : "";
 
     const reqObj = l.request;
     const reqJson = reqObj ? jsonHighlight(JSON.stringify(reqObj, null, 2)) : "";
 
     const respObj = l.response;
-    let respStr = "";
-    if (respObj) respStr = typeof respObj === "object" ? JSON.stringify(respObj) : String(respObj);
+    let respStr = respObj ? (typeof respObj === "object" ? JSON.stringify(respObj) : String(respObj)) : "";
     const respJson = respStr ? (() => {
-      try { return jsonHighlight(JSON.stringify(JSON.parse(respStr), null, 2)); }
-      catch(e) { return escHtml(respStr); }
+      try { return jsonHighlight(JSON.stringify(JSON.parse(respStr), null, 2)); } catch(e){ return escHtml(respStr); }
     })() : "";
 
-    const hasReq = reqJson.length > 0;
-    const hasResp = respJson.length > 0;
-
-    return '<div class="bubble ' + src + '">' +
+    return '<div class="bubble ' + css + '">' +
       '<div class="bubble-head">' +
         '<span class="bubble-time">' + t + '</span>' +
-        '<span class="bubble-tag ' + src + '">' + (l.source || "SYS").toUpperCase() + '</span>' +
-        '<span class="bubble-method">' + method + '</span>' +
+        '<span class="bubble-tag ' + css + '">' + (l.source || "SYS").toUpperCase() + '</span>' +
+        '<span class="bubble-method">' + (l.method || "") + '</span>' +
         '<span class="bubble-ep">' + ep + '</span>' +
-        '<span class="bubble-status">' + st + '</span>' +
+        '<span class="bubble-status">' + (l.status !== undefined ? l.status : "") + '</span>' +
       '</div>' +
-      (hasReq || hasResp ? '<div class="bubble-body">' +
-        (hasReq ? '<div class="bubble-section"><div class="bubble-label">📤 请求</div><div class="bubble-json">' + reqJson + '</div></div>' : '') +
-        (hasResp ? '<div class="bubble-section"><div class="bubble-label">📥 响应</div><div class="bubble-json">' + respJson + '</div></div>' : '') +
+      (reqJson || respJson ? '<div class="bubble-body">' +
+        (reqJson ? '<div class="bubble-section"><div class="bubble-label">📤 请求</div><div class="bubble-json">' + reqJson + '</div></div>' : '') +
+        (respJson ? '<div class="bubble-section"><div class="bubble-label">📥 响应</div><div class="bubble-json">' + respJson + '</div></div>' : '') +
       '</div>' : '') +
     '</div>';
   }).join("");
 
-  if (document.getElementById("logAutoScroll")?.checked) {
-    el.scrollTop = el.scrollHeight;
-  }
+  el.scrollTop = el.scrollHeight;
 }
 
 (function() { init(); })();

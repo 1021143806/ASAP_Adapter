@@ -18,13 +18,16 @@
 
   /* ── 气泡卡片 ── */
   .bubble { margin: 6px 0; border-radius: 10px; overflow: hidden; }
-  .bubble-head { display: flex; align-items: center; gap: 8px; padding: 5px 10px; font-size: 12px; }
+  .bubble-head { display: flex; align-items: center; gap: 8px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+  .bubble-expand { font-size: 9px; opacity: .4; min-width: 16px; text-align: center; transition: transform .2s; }
+  .bubble.open .bubble-expand { transform: rotate(180deg); }
   .bubble-time { font-size: 10px; opacity: .6; white-space: nowrap; min-width: 80px; }
   .bubble-tag { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 600; }
   .bubble-method { font-size: 10px; opacity: .6; font-family: monospace; min-width: 36px; }
   .bubble-ep { font-size: 11px; font-weight: 500; word-break: break-all; flex: 1; }
   .bubble-status { font-size: 10px; opacity: .6; }
-  .bubble-body { padding: 0 10px 8px; display: flex; flex-direction: column; gap: 4px; }
+  .bubble-body { padding: 0 10px 8px; display: none; flex-direction: column; gap: 4px; }
+  .bubble.open .bubble-body { display: flex; }
   .bubble-section { padding: 5px 8px; border-radius: 6px; }
   .bubble-label { font-size: 9px; text-transform: uppercase; opacity: .4; margin-bottom: 2px; }
   .bubble-json { font-size: 10px; font-family: 'SF Mono','Fira Code',monospace; white-space: pre-wrap; word-break: break-all; line-height: 1.5; }
@@ -193,8 +196,9 @@ function renderPanel(id, entries) {
       try { return jsonHighlight(JSON.stringify(JSON.parse(respStr), null, 2)); } catch(e){ return escHtml(respStr); }
     })() : "";
 
-    return '<div class="bubble ' + cls + '">' +
+    return '<div class="bubble ' + cls + '" onclick="this.classList.toggle(\'open\')">' +
       '<div class="bubble-head">' +
+        '<span class="bubble-expand">▼</span>' +
         '<span class="bubble-time">' + t + '</span>' +
         '<span class="bubble-tag ' + cls + '">' + (l.source || "SYS").toUpperCase() + '</span>' +
         '<span class="bubble-method">' + (l.method || "") + '</span>' +

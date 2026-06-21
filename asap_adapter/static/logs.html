@@ -133,6 +133,7 @@
 <script>
 let _all = [];
 let _activeFilters = new Set(["rcs-ctl","rcs-qry","acs-ctl","acs-qry","zone-in","zone-out","zone-st","sys"]);
+let _expanded = new Set();  // 记录已展开的卡片
 
 function init() { initTheme(); initNav("/logs"); setInterval(poll, 2000); poll(); }
 
@@ -186,6 +187,13 @@ function render() {
   const el = document.getElementById("logPanel");
   if (!el) return;
 
+  // 保存当前展开状态
+  _expanded = new Set();
+  el.querySelectorAll(".bubble.open").forEach(b => {
+    const id = b.dataset.logId;
+    if (id) _expanded.add(id);
+  });
+
   // 按激活的筛选器过滤
   const filtered = _all.filter(l => _activeFilters.has(bubbleClass(l)));
 
@@ -193,6 +201,8 @@ function render() {
 
   el.innerHTML = filtered.map(l => {
     const cls = bubbleClass(l);
+    const logId = (l.source || "x") + "-" + (l.id || "0");
+    const openClass = _expanded.has(logId) ? " open" : "";
     const t = l.time || "";
     const ep = escHtml(l.endpoint || "");
 
@@ -205,7 +215,7 @@ function render() {
       try { return jsonHighlight(JSON.stringify(JSON.parse(respStr), null, 2)); } catch(e){ return escHtml(respStr); }
     })() : "";
 
-    return '<div class="bubble ' + cls + '" onclick="this.classList.toggle(\'open\')">' +
+    return '<div class="bubble' + openClass + ' ' + cls + '" data-log-id="' + logId + '" onclick="toggleBubble(this)">' +
       '<div class="bubble-head">' +
         '<span class="bubble-expand">▼</span>' +
         '<span class="bubble-time">' + t + '</span>' +
@@ -222,6 +232,13 @@ function render() {
   }).join("");
 
   el.scrollTop = el.scrollHeight;
+}
+
+function toggleBubble(el) {
+  el.classList.toggle("open");
+  // 追踪展开状态
+  if (el.classList.contains("open")) _expanded.add(el.dataset.logId);
+  else _expanded.delete(el.dataset.logId);
 }
 
 (function() { init(); })();

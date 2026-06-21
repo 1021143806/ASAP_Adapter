@@ -84,6 +84,11 @@
   .bubble.sys .bubble-section { background: rgba(150,150,150,.03); }
 
   .empty { text-align: center; padding: 30px; color: var(--text-muted); font-size: 12px; }
+
+  /* 浮动滚动按钮 */
+  .scroll-btn { position: sticky; bottom: 12px; float: right; z-index: 10; padding: 6px 14px; border-radius: 20px; font-size: 12px; cursor: pointer; border: 1px solid var(--accent); background: var(--card-bg); color: var(--accent); backdrop-filter: blur(10px); transition: all .2s; display: none; }
+  .scroll-btn.show { display: inline-block; }
+  .scroll-btn:hover { background: var(--accent); color: #fff; }
 </style>
 </head>
 <body>
@@ -125,6 +130,7 @@
     <!-- ══ 日志流 ══ -->
     <div class="log-panel">
       <div class="log-panel-body" id="logPanel"></div>
+      <button class="scroll-btn" id="scrollBtn" onclick="scrollToBottom()">⬇ 滚动到底部</button>
     </div>
 
   </div>
@@ -229,7 +235,7 @@ function render() {
     _renderedIds = currentIds;
     if (!filtered.length) { el.innerHTML = '<div class="empty">无匹配日志</div>'; return; }
     el.innerHTML = filtered.map(l => buildBubble(l, l.id || 0)).join("");
-    el.scrollTop = el.scrollHeight;
+    autoScrollOrPause(el);
     return;
   }
 
@@ -243,7 +249,25 @@ function render() {
     div.innerHTML = buildBubble(l, l.id || 0);
     el.appendChild(div.firstElementChild);
   });
-  el.scrollTop = el.scrollHeight;
+  autoScrollOrPause(el);
+}
+
+function autoScrollOrPause(el) {
+  const expanded = el.querySelectorAll(".bubble.open").length;
+  const btn = document.getElementById("scrollBtn");
+  if (expanded > 0) {
+    // 有展开的卡片 → 暂停自动滚动，显示按钮
+    if (btn) btn.classList.add("show");
+  } else {
+    // 无展开 → 自动滚动
+    if (btn) btn.classList.remove("show");
+    el.scrollTop = el.scrollHeight;
+  }
+}
+
+function scrollToBottom() {
+  const el = document.getElementById("logPanel");
+  if (el) el.scrollTop = el.scrollHeight;
 }
 
 function makeLogId(l) { return (l.source || "x") + "-" + (l.id || l.time || "0"); }

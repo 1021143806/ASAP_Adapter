@@ -125,6 +125,8 @@
       <span class="flt-btn sys on" data-cls="sys" title="系统内部">⚪ 系统</span>
       <span style="margin-left:8px;font-size:10px;color:var(--accent);cursor:pointer;" onclick="selectAll()">全选</span>
       <span style="font-size:10px;color:var(--text-muted);cursor:pointer;" onclick="selectNone()">清空</span>
+      <span style="margin-left:auto;"></span>
+      <button class="flt-btn" id="pauseBtn" onclick="togglePause()" style="font-size:12px;">⏸ 暂停</button>
     </div>
 
     <!-- ══ 日志流 ══ -->
@@ -140,8 +142,10 @@
 let _all = [];
 let _activeFilters = new Set(["rcs-ctl","rcs-qry","acs-ctl","acs-qry","zone-in","zone-out","zone-st","sys"]);
 let _renderedIds = new Set();  // 已渲染到DOM的ID, 用于增量更新
+let _timer = null;             // 轮询定时器
+let _paused = false;           // 暂停状态
 
-function init() { initTheme(); initNav("/logs"); setInterval(poll, 2000); poll(); }
+function init() { initTheme(); initNav("/logs"); _timer = setInterval(poll, 2000); poll(); }
 
 // ── 筛选按钮 ──
 document.getElementById("filterBar").addEventListener("click", e => {
@@ -162,7 +166,24 @@ function selectNone() {
   render();
 }
 
+function togglePause() {
+  const btn = document.getElementById("pauseBtn");
+  _paused = !_paused;
+  if (_paused) {
+    clearInterval(_timer);
+    _timer = null;
+    btn.textContent = "▶ 继续";
+    btn.classList.add("on");
+  } else {
+    _timer = setInterval(poll, 2000);
+    btn.textContent = "⏸ 暂停";
+    btn.classList.remove("on");
+    poll();  // 立即刷新
+  }
+}
+
 async function poll() {
+  if (_paused) return;
   try {
     const r = await fetch("/api/asap/logs?limit=200&source=all");
     const d = await r.json();
@@ -255,11 +276,9 @@ function render() {
 function autoScrollOrPause(el) {
   const expanded = el.querySelectorAll(".bubble.open").length;
   const btn = document.getElementById("scrollBtn");
-  if (expanded > 0) {
-    // 有展开的卡片 → 暂停自动滚动，显示按钮
+  if (_paused || expanded > 0) {
     if (btn) btn.classList.add("show");
   } else {
-    // 无展开 → 自动滚动
     if (btn) btn.classList.remove("show");
     el.scrollTop = el.scrollHeight;
   }

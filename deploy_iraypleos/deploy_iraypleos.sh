@@ -234,7 +234,7 @@ verify_deps() {
     step "6" "验证安装"
 
     source "$VENV_PATH/bin/activate" 2>/dev/null || true
-    for pkg in fastapi uvicorn httpx pydantic; do
+    for pkg in fastapi uvicorn httpx pydantic tomli; do
         if python -c "import $pkg; print(f'   ✅ $pkg 导入成功')" 2>/dev/null; then
             :
         else
@@ -249,10 +249,11 @@ configure_supervisor() {
 
     VENV_PYTHON="$VENV_PATH/bin/python"
 
-    # ⚠️ 这些日志目录必须在 supervisor 启动前确保权限，即使配置已存在也要执行
-    mkdir -p "$LOG_DIR" "$PROJECT_DIR/logs" 2>/dev/null || true
+    # ⚠️ 这些目录必须在 supervisor 启动前确保权限
+    mkdir -p "$LOG_DIR" "$PROJECT_DIR/logs" "$PROJECT_DIR/data" 2>/dev/null || true
     chown -R "${SUPERVISOR_USER}:${SUPERVISOR_USER}" "$LOG_DIR" 2>/dev/null || true
     chown -R "${SUPERVISOR_USER}:${SUPERVISOR_USER}" "$PROJECT_DIR/logs" 2>/dev/null || true
+    chown -R "${SUPERVISOR_USER}:${SUPERVISOR_USER}" "$PROJECT_DIR/data" 2>/dev/null || true
 
     if [ -f "$SUPERVISOR_CONF" ]; then
         # 检查配置是否指向当前 venv 的 python

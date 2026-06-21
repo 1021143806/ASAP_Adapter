@@ -1,4 +1,4 @@
-# ASAP Adapter v3.3
+# ASAP Adapter v3.5
 
 **Air Shower Access Protocol Adapter** · 风淋门-区域管控协议适配器
 
@@ -19,7 +19,7 @@ flowchart TB
             M["/api/rcs/doorStatus<br/>控制+查询合并入口"]
             L["/api/asap/logs<br/>统一请求日志"]
             C["/api/asap/manual/*<br/>手动开门/关门"]
-            W["WebUI 5页面<br/>door · zone · config · upgrade · sim"]
+            W["WebUI 6页面<br/>door · zone · config · upgrade · sim · logs"]
         end
         subgraph Core["核心层"]
             T["AirShowerTranslator<br/>RCS⇄ACS 协议翻译<br/>Direction 先开门判定"]
@@ -68,9 +68,9 @@ flowchart TB
 ```
 ASAP_Adapter/
 ├── asap_adapter/                   # 核心包
-│   ├── __init__.py                 # __version__ = "3.3.0"
+│   ├── __init__.py                 # __version__ = "3.5.1"
 │   ├── main.py                     # FastAPI 入口 + 生命周期 + 后台轮询
-│   ├── config.py                   # TOML 配置加载 (多优先级)
+│   ├── config.py                   # TOML 配置加载 (双层: env+data)
 │   ├── models.py                   # Pydantic 数据模型 (RCS/Angel/Zone 协议)
 │   ├── door_client.py              # Angel 风淋门 HTTP 客户端 (httpx)
 │   ├── door_translator.py          # 协议翻译器 (RCS⇄ACS + Direction)
@@ -85,16 +85,16 @@ ASAP_Adapter/
 │       ├── index.html              # 风淋门页面
 │       ├── zone.html               # 区域管控页面
 │       ├── config.html             # 配置管理页面
-│       └── upgrade.html            # 升级管理页面
+│       ├── upgrade.html            # 升级管理页面
+│       └── logs.html               # 统一日志页面
 ├── sim_controller/                 # 内置模拟器 (挂载到 /sim)
 │   ├── state.py                    # 模拟状态管理 (门+区域)
 │   ├── models.py                   # 模拟器 Pydantic 模型
 │   ├── router.py                   # 模拟器 API 路由
 │   └── static/index.html           # 模拟器 WebUI
 ├── config/
-│   ├── env.toml                    # 静态配置 (gitignore)
+│   ├── env.toml                    # 系统配置 (gitignore)
 │   ├── env.template.toml           # 配置模板
-│   ├── runtime.toml                # 运行时配置 (注释模板)
 │   └── old/                        # 配置备份
 ├── data/
 │   └── config.toml                 # 统一运行时配置 (WebUI 可视化编辑)
@@ -164,12 +164,15 @@ sequenceDiagram
 | 端点 | 方法 | 用途 |
 |:---|:---|:---|
 | `/api/asap/config/all` | GET/POST | 统一配置 (data/config.toml) |
-| `/api/asap/config/runtime` | GET/POST | 运行时配置编辑 |
-| `/api/asap/config/env` | GET/POST | 静态配置编辑 (需重启) |
+| `/api/asap/config/env` | GET/POST | 系统配置编辑 (需重启) |
 | `/api/asap/config/zone` | GET/POST | 区域配置 |
 | `/api/asap/config/angel` | GET/POST | Angel 门配置 |
 | `/api/asap/config/rcs` | GET/POST | RCS 配置 |
 | `/api/asap/config/sim` | GET/POST | 模拟器配置 |
+| `/api/asap/config/export` | GET | 导出配置为 TOML 文件 |
+| `/api/asap/config/import` | POST | 导入配置 |
+| `/api/asap/config/versions` | GET | 配置版本历史 |
+| `/api/asap/config/rollback/{v}` | POST | 回滚配置到指定版本 |
 
 ### 模拟器控制
 
@@ -241,7 +244,6 @@ WebUI 配置页 `/config` 可可视化编辑。也可直接修改 TOML 文件。
 | `zone` | `entry_door_code` | `q001` | 区域门 RCS 编码 |
 | `zone` | `zone_poll_interval` | `300.0` | 区域状态轮询间隔 (秒) |
 | `zone` | `exit_max_retries` | `30` | 退出重试次数 |
-| `rcs` | `change_status_url` | - | RCS 状态上报地址 |
 | `rcs` | `door_code_mapping` | `{DOOR01="1001", DOOR02="1002"}` | 门编码映射 |
 | `sim` | `zone_id` | `zone_001` | 模拟器区域 ID |
 | `sim` | `auto_open_delay` | `2.0` | 门开过渡延时 |
@@ -262,6 +264,7 @@ http://localhost:5012/sim       # 模拟器
 http://localhost:5012/zone      # 区域管控
 http://localhost:5012/config    # 配置
 http://localhost:5012/upgrade   # 升级
+http://localhost:5012/logs      # 日志
 ```
 
 ### 模拟器 WebUI 功能

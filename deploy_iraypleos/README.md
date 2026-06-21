@@ -1,8 +1,8 @@
-# 离线部署模块 — IRAYPLEOS
+# 离线部署模块 — IRAYPLEOS / CentOS 7
 
 ## 概述
 
-本目录包含 AIRSHOWER Adapter 的离线部署脚本和依赖包，目标服务器为 **IRAYPLEOS**（离线环境，Python 3.9）。
+本目录包含 ASAP Adapter 的离线部署脚本和依赖包，目标服务器为 **IRAYPLEOS**（离线环境，Python 3.9）。
 
 ## 目录结构
 

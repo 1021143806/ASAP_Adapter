@@ -49,6 +49,7 @@ http://localhost:5012/sim        # 模拟器
 http://localhost:5012/zone       # 区域管控
 http://localhost:5012/config     # 配置
 http://localhost:5012/upgrade    # 升级
+http://localhost:5012/logs       # 日志
 
 # 启用模拟器 (WebUI 风淋门页右上角按钮)
 curl -X POST http://localhost:5012/api/asap/sim/enable
@@ -116,12 +117,12 @@ curl http://10.68.2.10:5012/api/asap/upgrade/version
 
 ### 配置优先级
 ```
-data/config.toml > runtime.toml > overrides.json > env.toml > dataclass 默认值
+data/config.toml > dataclass 默认值
 ```
-所有默认值: DOOR01/DOOR02, zone_001, 端口 5012
+首次启动自动从模板生成 `data/config.toml`。
 
 ### excluded files (升级保护)
-`config/env.toml`, `venv/`, `logs/`, `backup/`, `test/`, `.git/`, `.gitignore`, `skill.md`, `README.md`, `deploy_iraypleos/`, `__pycache__/`, `*.pyc`
+`config/env.toml`, `data/config.toml`, `venv/`, `logs/`, `backup/`, `test/`, `.git/`, `.gitignore`, `skill.md`, `README.md`, `deploy_iraypleos/`, `__pycache__/`, `*.pyc`
 
 ## 依赖管理
 
@@ -140,18 +141,17 @@ echo "<pkg>==<ver>" >> requirements_asap_fixed.txt
 - Supervisor: `supervisorctl status asap_adapter`
 - 端口: 5012
 
-### 172.31.43.181 — 生产备机
-- 用户: a1 (同 ymsk 网络)
+### 172.31.43.181 — 生产备机 (IRAYPLEOS)
+- 用户: ymsk
 - 项目: /main/app/github/ASAP_Adapter
 - Supervisor: `supervisorctl status asap_adapter`
-- 端口: 5012
 
 ## ds 说
 
 - 架构: 纯协议翻译层 (AirShowerTranslator) + 区域状态机 (ZoneStateMachine)。无风淋计时/编排
 - Direction: 先开门判定，两门全关重置。这是唯一的"状态记忆"
-- 日志: POST 轮询 `/api/asap/logs` (500条缓冲区)。删除了 SSE 避免复杂
-- 前端: 5 独立页面，common.js 共享主题/JSON高亮/日志渲染/轮询
+- 日志: POST 轮询 `/api/asap/logs` (300条缓冲区, RCS控制/查询各100上限)。删除了 SSE 避免复杂
+- 前端: 6 独立页面 (含 `/logs`)，common.js 共享主题/JSON高亮/日志渲染/轮询
 - 模拟器: 挂载到主端口 /sim，通过 WebUI 启用/禁用切换 Door/Zone URL
 - 升级包必须含 `version.json` (非 v.json)，否则升级记录无变更说明
 - 升级服务通过 `asap_adapter/__init__.py` 存在即视为合法包

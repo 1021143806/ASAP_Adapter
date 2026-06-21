@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/static/common.css">
 <script src="/static/common.js"></script>
 <style>
-  .log-container { max-height: calc(100vh - 160px); overflow-y: auto; }
+  .log-container { min-height: 60vh; overflow-y: auto; }
 
   /* 覆盖 common.css 的 dashboard grid */
   .logs-dash { display: flex !important; flex-direction: column; gap: 12px; }
@@ -31,7 +31,7 @@
   .bubble-body { display: flex; flex-direction: column; gap: 6px; padding: 0 14px 10px; }
   .bubble-section { padding: 8px 10px; border-radius: 8px; }
   .bubble-label { font-size: 10px; text-transform: uppercase; opacity: .5; margin-bottom: 4px; }
-  .bubble-json { font-size: 11px; font-family: 'SF Mono','Fira Code',monospace; white-space: pre-wrap; word-break: break-all; line-height: 1.6; max-height: 280px; overflow-y: auto; }
+  .bubble-json { font-size: 11px; font-family: 'SF Mono','Fira Code',monospace; white-space: pre-wrap; word-break: break-all; line-height: 1.6; max-height: 500px; overflow-y: auto; }
 
   /* ── 着色 ── */
   .bubble.rcs { background: rgba(255,140,0,.06); border: 1px solid rgba(255,140,0,.15); }

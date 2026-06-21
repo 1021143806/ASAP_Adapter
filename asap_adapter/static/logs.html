@@ -9,6 +9,9 @@
 <style>
   .log-container { max-height: calc(100vh - 160px); overflow-y: auto; }
 
+  /* 覆盖 common.css 的 dashboard grid */
+  .logs-dash { display: flex !important; flex-direction: column; gap: 12px; }
+
   /* ── 筛选tab ── */
   .filter-bar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
   .filter-tab { padding: 5px 14px; border-radius: 14px; font-size: 12px; cursor: pointer; border: 1px solid transparent; background: var(--card-bg); color: var(--text-secondary); transition: all .2s; }
@@ -73,7 +76,7 @@
     <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
   </header>
 
-  <div class="dashboard">
+  <div class="dashboard logs-dash">
     <!-- ══ 筛选栏 ══ -->
     <div class="glass" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;">
       <div class="filter-bar" id="filterBar">

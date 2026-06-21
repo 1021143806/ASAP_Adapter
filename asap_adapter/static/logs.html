@@ -29,26 +29,46 @@
   .bubble-label { font-size: 9px; text-transform: uppercase; opacity: .4; margin-bottom: 2px; }
   .bubble-json { font-size: 10px; font-family: 'SF Mono','Fira Code',monospace; white-space: pre-wrap; word-break: break-all; line-height: 1.5; }
 
-  /* ── 着色 ── */
-  .bubble.rcs { background: rgba(255,140,0,.05); border: 1px solid rgba(255,140,0,.12); }
-  .bubble.rcs .bubble-head { background: rgba(255,140,0,.07); }
-  .bubble-tag.rcs { background: rgba(255,140,0,.3); color: #ff8c00; }
-  .bubble.rcs .bubble-section { background: rgba(255,140,0,.05); }
+  /* ── 着色: 按接口细分 ── */
+  .bubble.rcs-ctl { background: rgba(255,107,53,.05); border: 1px solid rgba(255,107,53,.12); }
+  .bubble.rcs-ctl .bubble-head { background: rgba(255,107,53,.07); }
+  .bubble-tag.rcs-ctl { background: rgba(255,107,53,.3); color: #ff6b35; }
+  .bubble.rcs-ctl .bubble-section { background: rgba(255,107,53,.05); }
 
-  .bubble.acs { background: rgba(70,130,255,.05); border: 1px solid rgba(70,130,255,.12); }
-  .bubble.acs .bubble-head { background: rgba(70,130,255,.07); }
-  .bubble-tag.acs { background: rgba(70,130,255,.3); color: #4a90ff; }
-  .bubble.acs .bubble-section { background: rgba(70,130,255,.05); }
+  .bubble.rcs-qry { background: rgba(240,160,48,.05); border: 1px solid rgba(240,160,48,.12); }
+  .bubble.rcs-qry .bubble-head { background: rgba(240,160,48,.07); }
+  .bubble-tag.rcs-qry { background: rgba(240,160,48,.3); color: #f0a030; }
+  .bubble.rcs-qry .bubble-section { background: rgba(240,160,48,.05); }
 
-  .bubble.zone { background: rgba(0,200,120,.05); border: 1px solid rgba(0,200,120,.12); }
-  .bubble.zone .bubble-head { background: rgba(0,200,120,.07); }
-  .bubble-tag.zone { background: rgba(0,200,120,.3); color: #00c878; }
-  .bubble.zone .bubble-section { background: rgba(0,200,120,.05); }
+  .bubble.acs-ctl { background: rgba(74,144,255,.05); border: 1px solid rgba(74,144,255,.12); }
+  .bubble.acs-ctl .bubble-head { background: rgba(74,144,255,.07); }
+  .bubble-tag.acs-ctl { background: rgba(74,144,255,.3); color: #4a90ff; }
+  .bubble.acs-ctl .bubble-section { background: rgba(74,144,255,.05); }
 
-  .bubble.system { background: rgba(150,150,150,.04); border: 1px solid rgba(150,150,150,.08); }
-  .bubble.system .bubble-head { background: rgba(150,150,150,.04); }
-  .bubble-tag.system { background: rgba(150,150,150,.15); color: #999; }
-  .bubble.system .bubble-section { background: rgba(150,150,150,.03); }
+  .bubble.acs-qry { background: rgba(96,165,250,.05); border: 1px solid rgba(96,165,250,.12); }
+  .bubble.acs-qry .bubble-head { background: rgba(96,165,250,.07); }
+  .bubble-tag.acs-qry { background: rgba(96,165,250,.3); color: #60a5fa; }
+  .bubble.acs-qry .bubble-section { background: rgba(96,165,250,.05); }
+
+  .bubble.zone-in { background: rgba(34,197,94,.05); border: 1px solid rgba(34,197,94,.12); }
+  .bubble.zone-in .bubble-head { background: rgba(34,197,94,.07); }
+  .bubble-tag.zone-in { background: rgba(34,197,94,.3); color: #22c55e; }
+  .bubble.zone-in .bubble-section { background: rgba(34,197,94,.05); }
+
+  .bubble.zone-out { background: rgba(168,85,247,.05); border: 1px solid rgba(168,85,247,.12); }
+  .bubble.zone-out .bubble-head { background: rgba(168,85,247,.07); }
+  .bubble-tag.zone-out { background: rgba(168,85,247,.3); color: #a855f7; }
+  .bubble.zone-out .bubble-section { background: rgba(168,85,247,.05); }
+
+  .bubble.zone-st { background: rgba(6,182,212,.05); border: 1px solid rgba(6,182,212,.12); }
+  .bubble.zone-st .bubble-head { background: rgba(6,182,212,.07); }
+  .bubble-tag.zone-st { background: rgba(6,182,212,.3); color: #06b6d4; }
+  .bubble.zone-st .bubble-section { background: rgba(6,182,212,.05); }
+
+  .bubble.sys { background: rgba(150,150,150,.04); border: 1px solid rgba(150,150,150,.08); }
+  .bubble.sys .bubble-head { background: rgba(150,150,150,.04); }
+  .bubble-tag.sys { background: rgba(150,150,150,.15); color: #999; }
+  .bubble.sys .bubble-section { background: rgba(150,150,150,.03); }
 
   .empty { text-align: center; padding: 30px; color: var(--text-muted); font-size: 12px; }
 </style>
@@ -67,6 +87,11 @@
       </nav>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
+      <span style="font-size:9px;display:flex;gap:8px;align-items:center;">
+        <span style="color:#ff6b35;">■ 控制</span><span style="color:#f0a030;">■ 查询</span>
+        <span style="color:#4a90ff;">■ ACS控</span><span style="color:#60a5fa;">■ ACS查</span>
+        <span style="color:#22c55e;">■ 进入</span><span style="color:#a855f7;">■ 退出</span><span style="color:#06b6d4;">■ 状态</span>
+      </span>
       <span style="font-size:10px;color:var(--text-muted);" id="logTotal">--</span>
       <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
     </div>
@@ -127,18 +152,35 @@ function render() {
     else if (l.source === "acs" || l.source === "zone") acs.push(l);
     else sys.push(l);
   });
-  renderPanel("rcsPanel", rcs, "rcs");  document.getElementById("rcsCount").textContent = rcs.length + "条";
-  renderPanel("acsPanel", acs, "acs");  document.getElementById("acsCount").textContent = acs.length + "条";
-  renderPanel("sysPanel", sys, "system"); document.getElementById("sysCount").textContent = sys.length + "条";
+  renderPanel("rcsPanel", rcs);  document.getElementById("rcsCount").textContent = rcs.length + "条";
+  renderPanel("acsPanel", acs);  document.getElementById("acsCount").textContent = acs.length + "条";
+  renderPanel("sysPanel", sys);  document.getElementById("sysCount").textContent = sys.length + "条";
 }
 
-function renderPanel(id, entries, css) {
+// 按 source + endpoint 细分颜色
+function bubbleClass(l) {
+  const s = l.source, m = l.method || "", ep = l.endpoint || "";
+  if (s === "rcs") {
+    const req = l.request || {};
+    return (req.status === 1 || req.status === 2 || req.status === "1" || req.status === "2") ? "rcs-ctl" : "rcs-qry";
+  }
+  if (s === "acs") return m === "POST" ? "acs-ctl" : "acs-qry";
+  if (s === "zone") {
+    if (ep.includes("enter")) return "zone-in";
+    if (ep.includes("exit")) return "zone-out";
+    if (ep.includes("status")) return "zone-st";
+    return "zone-in";
+  }
+  return "sys";
+}
+
+function renderPanel(id, entries) {
   const el = document.getElementById(id);
   if (!el) return;
   if (!entries.length) { el.innerHTML = '<div class="empty">暂无</div>'; return; }
 
   el.innerHTML = entries.map(l => {
-    const src = l.source || "system";
+    const cls = bubbleClass(l);
     const t = l.time || "";
     const ep = escHtml(l.endpoint || "");
 
@@ -151,10 +193,10 @@ function renderPanel(id, entries, css) {
       try { return jsonHighlight(JSON.stringify(JSON.parse(respStr), null, 2)); } catch(e){ return escHtml(respStr); }
     })() : "";
 
-    return '<div class="bubble ' + css + '">' +
+    return '<div class="bubble ' + cls + '">' +
       '<div class="bubble-head">' +
         '<span class="bubble-time">' + t + '</span>' +
-        '<span class="bubble-tag ' + css + '">' + (l.source || "SYS").toUpperCase() + '</span>' +
+        '<span class="bubble-tag ' + cls + '">' + (l.source || "SYS").toUpperCase() + '</span>' +
         '<span class="bubble-method">' + (l.method || "") + '</span>' +
         '<span class="bubble-ep">' + ep + '</span>' +
         '<span class="bubble-status">' + (l.status !== undefined ? l.status : "") + '</span>' +

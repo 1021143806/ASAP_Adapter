@@ -467,6 +467,55 @@ def save_unified_config(data: dict) -> dict:
 
 MAX_CONFIG_VERSIONS = 20
 
+# ═══════════════════════════════════════════
+#  统一日志缓冲区管理
+# ═══════════════════════════════════════════
+
+MAX_LOG_SIZE = 300        # 日志总条数上限
+MAX_RCS_QUERY = 100       # RCS 查询日志最大保留
+MAX_RCS_CONTROL = 100     # RCS 控制日志最大保留
+
+
+def _is_rcs_control(entry: dict) -> bool:
+    """判断是否为 RCS 控制日志 (doorCode + status=1/2)"""
+    if entry.get("source") != "rcs":
+        return False
+    req = entry.get("request", {})
+    if isinstance(req, dict):
+        s = req.get("status")
+        return s == 1 or s == 2 or s == "1" or s == "2"
+    return False
+
+
+def _is_rcs_query(entry: dict) -> bool:
+    """判断是否为 RCS 查询日志 (doorCode only)"""
+    return entry.get("source") == "rcs" and not _is_rcs_control(entry)
+
+
+def trim_log_buffer(log: list):
+    """智能清理日志缓冲区:
+    - RCS 控制日志最多 MAX_RCS_CONTROL 条
+    - RCS 查询日志最多 MAX_RCS_QUERY 条
+    - 总计最多 MAX_LOG_SIZE 条
+    """
+    rcs_ctl, rcs_qry, other = [], [], []
+    for e in log:
+        if _is_rcs_control(e): rcs_ctl.append(e)
+        elif _is_rcs_query(e): rcs_qry.append(e)
+        else: other.append(e)
+
+    while len(rcs_ctl) > MAX_RCS_CONTROL:
+        rcs_ctl.pop(0)
+    while len(rcs_qry) > MAX_RCS_QUERY:
+        rcs_qry.pop(0)
+
+    merged = rcs_ctl + rcs_qry + other
+    merged.sort(key=lambda e: (e.get("time",""), e.get("id", 0)))
+    while len(merged) > MAX_LOG_SIZE:
+        merged.pop(0)
+
+    log[:] = merged
+
 
 def _cleanup_versioned_backups():
     """清理超出 MAX_CONFIG_VERSIONS 的旧版本备份"""

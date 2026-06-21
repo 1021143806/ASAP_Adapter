@@ -87,9 +87,8 @@ def _log_req(request: Request, category: str, endpoint: str,
         "status": resp_status,
     }
     log.append(entry)
-    # 超过 500 条时丢弃最早的
-    while len(log) > 500:
-        log.pop(0)
+    from .config import trim_log_buffer
+    trim_log_buffer(log)
 
 
 logger = logging.getLogger(__name__)

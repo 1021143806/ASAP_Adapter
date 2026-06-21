@@ -57,8 +57,8 @@ class ZoneClient:
             "status": resp_status,
         }
         self._log_target.append(entry)
-        while len(self._log_target) > 500:
-            self._log_target.pop(0)
+        from .config import trim_log_buffer
+        trim_log_buffer(self._log_target)
 
     async def close(self):
         await self._client.aclose()

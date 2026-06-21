@@ -133,7 +133,7 @@
 <script>
 let _all = [];
 let _activeFilters = new Set(["rcs-ctl","rcs-qry","acs-ctl","acs-qry","zone-in","zone-out","zone-st","sys"]);
-let _expanded = new Set();  // 记录已展开的卡片
+let _renderedIds = new Set();  // 已渲染到DOM的ID, 用于增量更新
 
 function init() { initTheme(); initNav("/logs"); setInterval(poll, 2000); poll(); }
 
@@ -183,63 +183,70 @@ function bubbleClass(l) {
   return "sys";
 }
 
+function buildBubble(l, idx) {
+  const cls = bubbleClass(l);
+  const logId = makeLogId(l);
+  const t = l.time || "";
+  const ep = escHtml(l.endpoint || "");
+
+  const reqObj = l.request;
+  const reqJson = reqObj ? jsonHighlight(JSON.stringify(reqObj, null, 2)) : "";
+
+  const respObj = l.response;
+  let respStr = respObj ? (typeof respObj === "object" ? JSON.stringify(respObj) : String(respObj)) : "";
+  const respJson = respStr ? (() => {
+    try { return jsonHighlight(JSON.stringify(JSON.parse(respStr), null, 2)); } catch(e){ return escHtml(respStr); }
+  })() : "";
+
+  return '<div class="bubble ' + cls + '" data-log-id="' + logId + '" onclick="this.classList.toggle(\'open\')">' +
+    '<div class="bubble-head">' +
+      '<span class="bubble-expand">▼</span>' +
+      '<span class="bubble-time">' + t + '</span>' +
+      '<span class="bubble-tag ' + cls + '">' + (l.source || "SYS").toUpperCase() + '</span>' +
+      '<span class="bubble-method">' + (l.method || "") + '</span>' +
+      '<span class="bubble-ep">' + ep + '</span>' +
+      '<span class="bubble-status">' + (l.status !== undefined ? l.status : "") + '</span>' +
+    '</div>' +
+    (reqJson || respJson ? '<div class="bubble-body">' +
+      (reqJson ? '<div class="bubble-section"><div class="bubble-label">📤 请求</div><div class="bubble-json">' + reqJson + '</div></div>' : '') +
+      (respJson ? '<div class="bubble-section"><div class="bubble-label">📥 响应</div><div class="bubble-json">' + respJson + '</div></div>' : '') +
+    '</div>' : '') +
+  '</div>';
+}
+
 function render() {
   const el = document.getElementById("logPanel");
   if (!el) return;
 
-  // 保存当前展开状态
-  _expanded = new Set();
-  el.querySelectorAll(".bubble.open").forEach(b => {
-    const id = b.dataset.logId;
-    if (id) _expanded.add(id);
-  });
-
-  // 按激活的筛选器过滤
   const filtered = _all.filter(l => _activeFilters.has(bubbleClass(l)));
 
-  if (!filtered.length) { el.innerHTML = '<div class="empty">无匹配日志</div>'; return; }
+  // 全量重建: 筛选条件变了 OR 条目减少(清理了旧日志)
+  const currentIds = new Set(filtered.map(l => makeLogId(l)));
+  const needRebuild = [...currentIds].some(id => !_renderedIds.has(id) && _renderedIds.size > 0)
+                   || filtered.length < _renderedIds.size;
 
-  el.innerHTML = filtered.map(l => {
-    const cls = bubbleClass(l);
-    const logId = (l.source || "x") + "-" + (l.id || "0");
-    const openClass = _expanded.has(logId) ? " open" : "";
-    const t = l.time || "";
-    const ep = escHtml(l.endpoint || "");
+  if (needRebuild || _renderedIds.size === 0) {
+    _renderedIds = currentIds;
+    if (!filtered.length) { el.innerHTML = '<div class="empty">无匹配日志</div>'; return; }
+    el.innerHTML = filtered.map(l => buildBubble(l, l.id || 0)).join("");
+    el.scrollTop = el.scrollHeight;
+    return;
+  }
 
-    const reqObj = l.request;
-    const reqJson = reqObj ? jsonHighlight(JSON.stringify(reqObj, null, 2)) : "";
+  // 增量添加: 只追加新条目
+  const newEntries = filtered.filter(l => !_renderedIds.has(makeLogId(l)));
+  if (newEntries.length === 0) return;
 
-    const respObj = l.response;
-    let respStr = respObj ? (typeof respObj === "object" ? JSON.stringify(respObj) : String(respObj)) : "";
-    const respJson = respStr ? (() => {
-      try { return jsonHighlight(JSON.stringify(JSON.parse(respStr), null, 2)); } catch(e){ return escHtml(respStr); }
-    })() : "";
-
-    return '<div class="bubble' + openClass + ' ' + cls + '" data-log-id="' + logId + '" onclick="toggleBubble(this)">' +
-      '<div class="bubble-head">' +
-        '<span class="bubble-expand">▼</span>' +
-        '<span class="bubble-time">' + t + '</span>' +
-        '<span class="bubble-tag ' + cls + '">' + (l.source || "SYS").toUpperCase() + '</span>' +
-        '<span class="bubble-method">' + (l.method || "") + '</span>' +
-        '<span class="bubble-ep">' + ep + '</span>' +
-        '<span class="bubble-status">' + (l.status !== undefined ? l.status : "") + '</span>' +
-      '</div>' +
-      (reqJson || respJson ? '<div class="bubble-body">' +
-        (reqJson ? '<div class="bubble-section"><div class="bubble-label">📤 请求</div><div class="bubble-json">' + reqJson + '</div></div>' : '') +
-        (respJson ? '<div class="bubble-section"><div class="bubble-label">📥 响应</div><div class="bubble-json">' + respJson + '</div></div>' : '') +
-      '</div>' : '') +
-    '</div>';
-  }).join("");
-
+  newEntries.forEach(l => {
+    _renderedIds.add(makeLogId(l));
+    const div = document.createElement("div");
+    div.innerHTML = buildBubble(l, l.id || 0);
+    el.appendChild(div.firstElementChild);
+  });
   el.scrollTop = el.scrollHeight;
 }
 
-function toggleBubble(el) {
-  el.classList.toggle("open");
-  // 追踪展开状态
-  if (el.classList.contains("open")) _expanded.add(el.dataset.logId);
-  else _expanded.delete(el.dataset.logId);
-}
+function makeLogId(l) { return (l.source || "x") + "-" + (l.id || l.time || "0"); }
 
 (function() { init(); })();
 </script>

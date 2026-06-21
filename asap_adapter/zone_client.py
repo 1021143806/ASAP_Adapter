@@ -9,6 +9,7 @@
 
 import asyncio
 import logging
+from datetime import datetime
 from typing import Optional
 
 import httpx
@@ -35,6 +36,29 @@ class ZoneClient:
         self.config = config
         self._client = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
         self._permission_id: Optional[str] = None
+        self._log_target: Optional[list] = None
+
+    def set_log_target(self, target: list):
+        """设置统一日志缓冲区（由 main.py 注入）"""
+        self._log_target = target
+
+    def _log_req(self, source: str, method: str, endpoint: str,
+                 req_body, resp_body, resp_status: int = 200):
+        """记录 Zone API 请求到统一日志缓冲区"""
+        if self._log_target is None:
+            return
+        entry = {
+            "time": datetime.now().strftime("%H:%M:%S.%f")[:12],
+            "source": source,
+            "method": method,
+            "endpoint": endpoint,
+            "request": req_body if isinstance(req_body, dict) else str(req_body),
+            "response": resp_body if isinstance(resp_body, dict) else str(resp_body),
+            "status": resp_status,
+        }
+        self._log_target.append(entry)
+        while len(self._log_target) > 500:
+            self._log_target.pop(0)
 
     async def close(self):
         await self._client.aclose()
@@ -56,14 +80,13 @@ class ZoneClient:
             zone_id=self.config.zone_id,
             client_id=self.config.client_id,
         )
+        req_dict = request.model_dump()
         try:
-            resp = await self._client.post(
-                self.config.enter_url,
-                json=request.model_dump(),
-            )
+            resp = await self._client.post(self.config.enter_url, json=req_dict)
 
             if resp.status_code == 409:
                 err = resp.json()
+                self._log_req("zone", "POST", self.config.enter_url, req_dict, err, 409)
                 raise ZoneClientError(
                     f"区域[{self.config.zone_id}]被占用: {err.get('occupied_by', 'unknown')}"
                 )
@@ -72,15 +95,19 @@ class ZoneClient:
             data = resp.json()
             result = ZoneEnterResponse(**data)
             self._permission_id = result.permission_id
+            self._log_req("zone", "POST", self.config.enter_url, req_dict, data, 200)
             logger.info("获得区域占用: zone=%s permission=%s",
                         self.config.zone_id, self._permission_id)
             return result
 
         except httpx.TimeoutException as e:
+            self._log_req("zone", "POST", self.config.enter_url, req_dict, str(e), 0)
             raise ZoneClientError(f"请求区域超时: {self.config.zone_id}") from e
         except httpx.HTTPError as e:
+            self._log_req("zone", "POST", self.config.enter_url, req_dict, str(e), 0)
             raise ZoneClientError(f"请求区域 HTTP错误: {e}") from e
         except (ValueError, KeyError) as e:
+            self._log_req("zone", "POST", self.config.enter_url, req_dict, str(e), 0)
             raise ZoneClientError(f"请求区域 响应解析失败: {e}") from e
 
     # ── 带重试的进入 ──────────────────────────
@@ -121,23 +148,25 @@ class ZoneClient:
             zone_id=self.config.zone_id,
             client_id=self.config.client_id,
         )
+        req_dict = request.model_dump()
         try:
-            resp = await self._client.post(
-                self.config.exit_url,
-                json=request.model_dump(),
-            )
+            resp = await self._client.post(self.config.exit_url, json=req_dict)
             resp.raise_for_status()
             data = resp.json()
             result = ZoneExitResponse(**data)
             self._permission_id = None
+            self._log_req("zone", "POST", self.config.exit_url, req_dict, data, 200)
             logger.info("释放区域成功: zone=%s", self.config.zone_id)
             return result
 
         except httpx.TimeoutException as e:
+            self._log_req("zone", "POST", self.config.exit_url, req_dict, str(e), 0)
             raise ZoneClientError(f"退出区域超时: {self.config.zone_id}") from e
         except httpx.HTTPError as e:
+            self._log_req("zone", "POST", self.config.exit_url, req_dict, str(e), 0)
             raise ZoneClientError(f"退出区域 HTTP错误: {e}") from e
         except (ValueError, KeyError) as e:
+            self._log_req("zone", "POST", self.config.exit_url, req_dict, str(e), 0)
             raise ZoneClientError(f"退出区域 响应解析失败: {e}") from e
 
     # ── 带重试的退出 ──────────────────────────
@@ -175,11 +204,19 @@ class ZoneClient:
             resp = await self._client.get(self.config.status_url, params=params)
             resp.raise_for_status()
             data = resp.json()
+            self._log_req("zone", "GET", self.config.status_url,
+                         {"zone_id": self.config.zone_id}, data, 200)
             return ZoneStatusResponse(**data)
 
         except httpx.TimeoutException as e:
+            self._log_req("zone", "GET", self.config.status_url,
+                         {"zone_id": self.config.zone_id}, str(e), 0)
             raise ZoneClientError(f"查询区域状态超时: {self.config.zone_id}") from e
         except httpx.HTTPError as e:
+            self._log_req("zone", "GET", self.config.status_url,
+                         {"zone_id": self.config.zone_id}, str(e), 0)
             raise ZoneClientError(f"查询区域状态 HTTP错误: {e}") from e
         except (ValueError, KeyError) as e:
+            self._log_req("zone", "GET", self.config.status_url,
+                         {"zone_id": self.config.zone_id}, str(e), 0)
             raise ZoneClientError(f"查询区域状态 响应解析失败: {e}") from e

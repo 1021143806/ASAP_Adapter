@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>系统日志 — ASAP Adapter</title>
+<link rel="stylesheet" href="/static/common.css">
+<script src="/static/common.js"></script>
+<style>
+  .log-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .log-panel { background: var(--card-bg); border-radius: 12px; padding: 12px; }
+  .log-panel-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+  .log-scroll { max-height: 350px; overflow-y: auto; font-size: 11px; font-family: 'SF Mono','Fira Code',monospace; }
+  .log-full { max-height: 250px; }
+  .log-entry { margin: 3px 0; padding: 4px 8px; border-radius: 4px; border-left: 3px solid transparent; cursor: pointer; transition: background .15s; }
+  .log-entry:hover { background: rgba(255,255,255,0.03); }
+  .log-entry.rcs { border-left-color: var(--warning); }
+  .log-entry.acs { border-left-color: var(--accent); }
+  .log-entry.zone { border-left-color: var(--success); }
+  .log-entry.system { border-left-color: var(--text-muted); }
+  .log-detail { display: none; font-size: 10px; margin-top: 4px; }
+  .log-time { color: var(--text-muted); font-size: 9px; margin-right: 8px; white-space: nowrap; }
+  .log-tag { font-size: 9px; padding: 0 4px; border-radius: 3px; margin-right: 6px; }
+  .log-tag.rcs { background: rgba(255,165,0,0.2); color: var(--warning); }
+  .log-tag.acs { background: rgba(100,149,237,0.2); color: var(--accent); }
+  .log-tag.zone { background: rgba(0,200,83,0.2); color: var(--success); }
+  .log-tag.system { background: rgba(150,150,150,0.2); color: var(--text-muted); }
+  .log-method { font-size: 9px; color: var(--text-muted); margin-right: 6px; }
+  .log-endpoint { font-size: 10px; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<div id="jsErrorBar" style="display:none;background:var(--danger);color:#fff;padding:8px 16px;font-size:12px;text-align:center;position:sticky;top:0;z-index:9999;" onclick="this.style.display='none'"></div>
+
+<div class="app-container">
+  <header class="header">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <h1>📋 ASAP Adapter</h1>
+      <nav style="display:flex;gap:4px;">
+        <a href="/" class="nav-tab">🚪 风淋门</a>
+        <a href="/zone" class="nav-tab">📡 区域管控</a>
+        <a href="/config" class="nav-tab">⚙ 配置</a>
+        <a href="/upgrade" class="nav-tab">⬆ 升级</a>
+        <a href="/sim" class="nav-tab">🎮 模拟器</a>
+        <a href="/logs" class="nav-tab nav-tab-active">📋 日志</a>
+      </nav>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="header-badge"><span class="status-dot online"></span><span id="connStatus">已连接</span></div>
+      <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
+    </div>
+  </header>
+
+  <div class="dashboard">
+
+    <!-- ══ 顶部控制栏 ══ -->
+    <div class="glass" style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:12px;font-weight:600;">📋 全量日志</span>
+        <span style="font-size:10px;color:var(--text-muted);" id="logTotal">--</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <label style="font-size:10px;cursor:pointer;display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" id="logAutoScroll" checked> 自动滚
+        </label>
+        <button class="btn btn-sm" onclick="scrollAllBottom()">⬇ 底部</button>
+        <button class="btn btn-sm" onclick="location.reload()">🔄 刷新</button>
+      </div>
+    </div>
+
+    <!-- ══ 上下两列: RCS vs ACS ══ -->
+    <div class="log-grid">
+      <!-- 左侧: RCS -->
+      <div class="log-panel">
+        <div class="log-panel-title">
+          <span style="color:var(--warning);">🔺 RCS 上游</span>
+          <span style="font-size:9px;color:var(--text-muted);" id="rcsCount">0条</span>
+        </div>
+        <div class="log-scroll" id="rcsPanel"></div>
+      </div>
+
+      <!-- 右侧: ACS+Zone -->
+      <div class="log-panel">
+        <div class="log-panel-title">
+          <span style="color:var(--accent);">🔻 ACS 下游</span>
+          <span style="font-size:9px;color:var(--text-muted);" id="acsCount">0条</span>
+        </div>
+        <div class="log-scroll" id="acsPanel"></div>
+      </div>
+    </div>
+
+    <!-- ══ 底部: System ══ -->
+    <div class="log-panel">
+      <div class="log-panel-title">
+        <span style="color:var(--text-muted);">⚙ System 内部</span>
+        <span style="font-size:9px;color:var(--text-muted);" id="sysCount">0条</span>
+      </div>
+      <div class="log-scroll log-full" id="sysPanel"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let _entries = [];
+let _timer = null;
+
+function init() {
+  initTheme();
+  initNav("/logs");
+  _timer = setInterval(poll, 2000);
+  poll();
+}
+
+async function poll() {
+  try {
+    const r = await fetch("/api/asap/logs?limit=200&source=all");
+    const d = await r.json();
+    const logs = d.logs || [];
+    document.getElementById("logTotal").textContent = "共" + d.total + "条";
+    if (logs.length === _entries.length && _entries.length > 0) return;
+
+    _entries = logs;
+    renderPanels(logs);
+    const auto = document.getElementById("logAutoScroll");
+    if (auto?.checked) scrollAllBottom();
+  } catch (e) { console.error(e); }
+}
+
+function renderPanels(logs) {
+  const rcs = [], acs = [], sys = [];
+
+  logs.forEach(l => {
+    const s = l.source || "";
+    if (s === "rcs") rcs.push(l);
+    else if (s === "acs" || s === "zone") acs.push(l);
+    else sys.push(l);
+  });
+
+  renderPanel("rcsPanel", rcs, "rcs");
+  renderPanel("acsPanel", acs, "acs");
+  renderPanel("sysPanel", sys, "system");
+
+  document.getElementById("rcsCount").textContent = rcs.length + "条";
+  document.getElementById("acsCount").textContent = acs.length + "条";
+  document.getElementById("sysCount").textContent = sys.length + "条";
+}
+
+function renderPanel(id, entries, cssClass) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (entries.length === 0) {
+    el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:20px;">暂无</div>';
+    return;
+  }
+  el.innerHTML = entries.map(l => {
+    const t = l.time || "";
+    const method = l.method || "";
+    const ep = l.endpoint || "";
+    const reqSummary = l.request ? escHtml(JSON.stringify(l.request)).slice(0, 120) : "";
+    const reqJson = l.request ? JSON.stringify(l.request, null, 2) : "";
+    const respJson = l.response
+      ? (typeof l.response === "string" ? escHtml(l.response) : JSON.stringify(l.response, null, 2))
+      : "";
+
+    return '<div class="log-entry ' + cssClass + '" onclick="var d=this.querySelector(\'.log-detail\');d.style.display=d.style.display===\'none\'?\'block\':\'none\'">' +
+      '<div style="display:flex;align-items:center;">' +
+        '<span class="log-time">' + t + '</span>' +
+        '<span class="log-tag ' + cssClass + '">' + (l.source || "").toUpperCase() + '</span>' +
+        '<span class="log-method">' + method + '</span>' +
+        '<span class="log-endpoint">' + escHtml(ep) + '</span>' +
+        '<span style="margin-left:auto;color:var(--text-muted);font-size:9px;">' + (l.status || "") + '</span>' +
+      '</div>' +
+      '<div style="font-size:10px;">' + escHtml(reqSummary) + '</div>' +
+      '<div class="log-detail">' +
+        (reqJson ? '<div style="color:var(--warning);">📤</div><pre style="background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;max-height:100px;overflow:auto;">' + jsonHighlight(reqJson) + '</pre>' : '') +
+        (respJson ? '<div style="color:var(--success);">📥</div><pre style="background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;max-height:100px;overflow:auto;">' + jsonHighlight(respJson) + '</pre>' : '') +
+      '</div>' +
+    '</div>';
+  }).join("");
+}
+
+function scrollAllBottom() {
+  ["rcsPanel","acsPanel","sysPanel"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.scrollTop = el.scrollHeight;
+  });
+}
+
+(function() { init(); })();
+</script>
+</body>
+</html>

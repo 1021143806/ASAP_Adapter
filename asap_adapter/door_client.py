@@ -8,6 +8,7 @@ Angel 风淋门协议客户端
 
 import asyncio
 import logging
+from datetime import datetime
 from urllib.parse import urljoin
 from typing import Optional
 
@@ -36,6 +37,32 @@ class DoorClient:
             timeout=httpx.Timeout(10.0),
             base_url=config.base_url,
         )
+        self._log_target: Optional[list] = None      # 统一日志缓冲区引用
+        self._log_counter = 0
+
+    def set_log_target(self, target: list):
+        """设置统一日志缓冲区（由 main.py 注入）"""
+        self._log_target = target
+
+    def _log_req(self, source: str, method: str, endpoint: str,
+                 req_body, resp_body, resp_status: int = 200):
+        """记录 ACS 请求到统一日志缓冲区"""
+        if self._log_target is None:
+            return
+        self._log_counter += 1
+        entry = {
+            "id": self._log_counter,
+            "time": datetime.now().strftime("%H:%M:%S.%f")[:12],
+            "source": source,
+            "method": method,
+            "endpoint": endpoint,
+            "request": req_body if isinstance(req_body, dict) else str(req_body),
+            "response": resp_body if isinstance(resp_body, dict) else str(resp_body),
+            "status": resp_status,
+        }
+        self._log_target.append(entry)
+        while len(self._log_target) > 500:
+            self._log_target.pop(0)
 
     async def close(self):
         await self._client.aclose()
@@ -96,18 +123,21 @@ class DoorClient:
     ) -> AngelControlResponse:
         """调用 POST /acs/door/{door_id}"""
         url = self._build_url(door_id)
+        req_dict = request.model_dump(exclude_none=True)
         try:
-            resp = await self._client.post(
-                url,
-                json=request.model_dump(exclude_none=True),
-            )
+            resp = await self._client.post(url, json=req_dict)
             data = resp.json()
-            return AngelControlResponse(**data)
+            result = AngelControlResponse(**data)
+            self._log_req("acs", "POST", url, req_dict, data, resp.status_code)
+            return result
         except httpx.TimeoutException as e:
+            self._log_req("acs", "POST", url, req_dict, str(e), 0)
             raise DoorClientError(f"控制门超时: {door_id}") from e
         except httpx.HTTPError as e:
+            self._log_req("acs", "POST", url, req_dict, str(e), 0)
             raise DoorClientError(f"控制门 HTTP错误: {door_id} -> {e}") from e
         except (ValueError, KeyError) as e:
+            self._log_req("acs", "POST", url, req_dict, str(e), 0)
             raise DoorClientError(f"控制门 响应解析失败: {door_id} -> {e}") from e
 
     # ── 状态查询 ──────────────────────────────
@@ -118,12 +148,17 @@ class DoorClient:
         try:
             resp = await self._client.get(url)
             data = resp.json()
-            return AngelStatusResponse(**data)
+            result = AngelStatusResponse(**data)
+            self._log_req("acs", "GET", url, {"door_id": door_id}, data, resp.status_code)
+            return result
         except httpx.TimeoutException as e:
+            self._log_req("acs", "GET", url, {"door_id": door_id}, str(e), 0)
             raise DoorClientError(f"查询门状态超时: {door_id}") from e
         except httpx.HTTPError as e:
+            self._log_req("acs", "GET", url, {"door_id": door_id}, str(e), 0)
             raise DoorClientError(f"查询门状态 HTTP错误: {door_id} -> {e}") from e
         except (ValueError, KeyError) as e:
+            self._log_req("acs", "GET", url, {"door_id": door_id}, str(e), 0)
             raise DoorClientError(f"查询门状态 响应解析失败: {door_id} -> {e}") from e
 
     # ── 轮询直到门开 ──────────────────────────

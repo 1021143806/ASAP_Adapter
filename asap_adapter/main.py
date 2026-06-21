@@ -62,9 +62,16 @@ def create_app(config: AppConfig) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         """应用生命周期：启动→运行→关闭"""
-        # ── 启动 ──────────────────────────
+        # ── 统一请求日志（循环缓冲区，保留最近 500 条）──
+        request_log = []
+        app.state.request_log = request_log
+        app.state.request_log_counter = 0
+
+        # ── 客户端 ──────────────────────────
         door = DoorClient(config.angel)
+        door.set_log_target(request_log)
         zone = ZoneClient(config.zone)
+        zone.set_log_target(request_log)
         translator = AirShowerTranslator(config, door)
         zsm = ZoneStateMachine(config, zone)
 
@@ -80,10 +87,6 @@ def create_app(config: AppConfig) -> FastAPI:
             "status_url": config.zone.status_url,
         }
         app.state._orig_door_base_url = config.angel.base_url
-
-        # 初始化统一请求日志（循环缓冲区，保留最近 500 条）
-        app.state.request_log = []
-        app.state.request_log_counter = 0
 
         # 存入 app.state 供路由使用
         app.state.door = door
@@ -196,6 +199,14 @@ def create_app(config: AppConfig) -> FastAPI:
         async def upgrade_page():
             return FileResponse(
                 str(static_dir / "upgrade.html"),
+                media_type="text/html; charset=utf-8",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+            )
+
+        @app.get("/logs")
+        async def logs_page():
+            return FileResponse(
+                str(static_dir / "logs.html"),
                 media_type="text/html; charset=utf-8",
                 headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
             )

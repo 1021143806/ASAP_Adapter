@@ -78,7 +78,7 @@ def _log_req(request: Request, category: str, endpoint: str,
     entry = {
         "id": ctr,
         "time": datetime.now().strftime("%H:%M:%S.%f")[:12],
-        "source": category,
+        "source": "rcs",
         "category": category,
         "endpoint": endpoint,
         "method": method,
